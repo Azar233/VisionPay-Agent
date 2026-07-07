@@ -155,3 +155,5 @@ $RECYCLE.BIN/
 dmypy.json
 docs/
 .LiuCheng/
+logs/
+*.log
