@@ -18,11 +18,13 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import App from './App.vue'
 import router from './router'
 import pinia from './stores'
+import { setupErrorReporting } from "@/utils/errorReporter";
 
 // ── 创建并配置应用 ────────────────────────────────────
 const app = createApp(App)
 
 // 注册插件
+setupErrorReporting(app);               // 注册全局错误监控
 app.use(pinia)                          // 状态管理
 app.use(router)                         // 路由
 app.use(ElementPlus, { locale: zhCn })  // UI 组件库（中文语言包）

@@ -5,11 +5,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import settings
 from app.api.auth import router as auth_router
+from app.api.health import router as health_router
+
+from app.core.exceptions import register_exception_handlers
+from app.middleware.request_logger import RequestLogMiddleware
 
 
 def init_minio():
     """初始化 MinIO 存储桶"""
     from app.storage.minio_client import MinIOClient
+
     try:
         minio_client = MinIOClient()
         print(f"MinIO 存储桶 '{minio_client.bucket_name}' 初始化完成")
@@ -41,6 +46,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ── 注册全局异常处理器 ───────────────────────────────
+register_exception_handlers(app)
+
 # ── CORS 中间件配置 ──────────────────────────────────
 # 允许前端跨域请求后端 API
 app.add_middleware(
@@ -51,8 +59,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 2. 请求日志中间件(在 CORS 之后注册)
+app.add_middleware(RequestLogMiddleware)
+
 # ── 注册路由 ─────────────────────────────────────────
 app.include_router(auth_router)
+app.include_router(health_router)
 
 
 @app.get("/")
@@ -65,26 +77,7 @@ def root():
     }
 
 
-@app.get("/api/health")
-def health_check():
-    return {"status": "healthy", "app_name": "My Agent Platform", "version": "0.1.0"}
-
-
-@app.get("/api/health/database")
-def database_health():
-    return {"status": "healthy", "database": "postgresql", "message": "数据库连接正常"}
-
-
-@app.get("/api/health/redis")
-def redis_health():
-    return {"status": "healthy", "redis": "connected", "message": "Redis 连接正常"}
-
-
-@app.get("/api/health/minio")
-def minio_health():
-    return {"status": "healthy", "minio": "connected", "message": "MinIO 连接正常"}
-
-
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

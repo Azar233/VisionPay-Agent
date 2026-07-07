@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     """应用全局配置"""
 
@@ -20,6 +21,11 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         """构造 PostgreSQL 连接字符串"""
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    # ── 日志配置 ────────────────────────────────────
+    LOG_DIR: str = "logs"  # 日志目录(相对于 backend/)
+    LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 单文件最大 10MB
+    LOG_BACKUP_COUNT: int = 5  # 保留 5 份历史日志
 
     # ── Redis 配置 ────────────────────────────────────
     REDIS_HOST: str = "localhost"
