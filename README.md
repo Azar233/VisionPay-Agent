@@ -34,7 +34,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Azar233/agent-platform
 cd agent-platform
 ```
 
@@ -201,22 +201,41 @@ agent-platform/
 │   ├── .env.example            # 环境变量模板（提交 Git）
 │   ├── alembic.ini             # Alembic 配置
 │   ├── alembic/                # 数据库迁移脚本
+│   ├── tests/                  # 后端测试（pytest）
+│   │   ├── conftest.py         # 全局 fixtures
+│   │   ├── test_auth.py        # 认证接口测试（11 tests）
+│   │   └── test_health.py      # 健康检查测试（2 tests）
+│   ├── logs/                   # 日志文件存放
+│   │   └── .gitkeep
 │   └── app/
 │       ├── api/                # API 路由
+│       │   ├── auth.py         # 认证接口
+│       │   └── health.py       # 健康检查接口
 │       ├── config/             # 配置管理
 │       ├── core/               # 核心逻辑
+│       │   ├── security.py     # JWT + bcrypt
+│       │   ├── logger.py       # 日志配置（RotatingFileHandler）
+│       │   └── exceptions.py   # 全局异常处理
 │       ├── database/           # 数据库层
 │       ├── entity/             # 数据实体
+│       ├── middleware/         # 中间件
+│       │   └── request_logger.py  # 请求日志记录
 │       ├── services/           # 业务服务
 │       └── storage/            # 存储层
 └── frontend/                   # Vue 3 + Vite 前端
     ├── index.html              # HTML 入口
-    ├── vite.config.js          # Vite 配置（别名、代理、SCSS）
+    ├── vite.config.js          # Vite 配置（别名、代理、SCSS、Vitest）
     ├── package.json            # 项目依赖
     ├── .env                    # 环境变量（不提交 Git）
     ├── .env.example            # 环境变量模板（提交 Git）
     ├── public/
     │   └── favicon.svg         # 网站图标
+    ├── tests/                  # 前端测试（Vitest）
+    │   ├── setup.js            # 全局 setup（Mock ElMessage）
+    │   ├── components/
+    │   │   └── AppHeader.test.js   # 布局组件测试
+    │   └── utils/
+    │       └── request.test.js     # Axios 封装测试
     └── src/
         ├── main.js             # 应用入口（注册插件）
         ├── App.vue             # 根组件（路由出口）
@@ -241,7 +260,8 @@ agent-platform/
         ├── utils/              # 工具函数
         │   ├── request.js      # Axios 封装
         │   ├── stream.js       # SSE 流式处理
-        │   └── markdown.js     # Markdown 渲染
+        │   ├── markdown.js     # Markdown 渲染
+        │   └── errorReporter.js    # 全局错误监控与上报
         └── views/              # 页面组件
             ├── LoginPage.vue       # 登录页
             ├── RegisterPage.vue    # 注册页
@@ -253,6 +273,7 @@ agent-platform/
 ```
 
 ---
+
 
 ## 常用命令
 
@@ -318,21 +339,33 @@ docker compose ps              # ✅ 所有服务状态为 Up / healthy
 ### API 接口验证（PowerShell）
 
 ```powershell
-# 1. 健康检查
+# 1. 基础健康检查
 Invoke-RestMethod -Uri http://localhost:8000/api/health
 # 预期：{"status":"healthy","app_name":"My Agent Platform","version":"0.1.0"}
 
-# 2. 注册用户
-$body = @{username="verify_user";email="verify@test.com";password="123456"} | ConvertTo-Json; Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register -ContentType "application/json" -Body $body
+# 2. 详细健康检查（数据库 + Redis + MinIO 连通性）
+Invoke-RestMethod -Uri http://localhost:8000/api/health/detail
+# 预期：{"code":200,"message":"ok","data":{"status":"healthy",...}}
+
+# 3. 注册用户
+$body = @{username="verify_user";email="verify@test.com";password="123456"} | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register -ContentType "application/json" -Body $body
 # 预期：返回 201，包含用户信息
 
-# 3. 登录获取 Token
-$body = @{username="verify_user";password="123456"} | ConvertTo-Json; $resp = Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/login -ContentType "application/json" -Body $body; $resp.access_token
+# 4. 登录获取 Token
+$body = @{username="verify_user";password="123456"} | ConvertTo-Json
+$resp = Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/login -ContentType "application/json" -Body $body
+$resp.access_token
 # 预期：输出 access_token 字符串
 
-# 4. 用 Token 获取当前用户信息（用上一步输出的 Token 替换 YOUR_TOKEN）
+# 5. 用 Token 获取当前用户信息（用上一步输出的 Token 替换 YOUR_TOKEN）
 Invoke-RestMethod -Uri http://localhost:8000/api/auth/me -Headers @{"Authorization"="Bearer YOUR_TOKEN"}
 # 预期：返回当前用户信息
+
+# 6. 全局异常处理验证 — 故意发送过短的用户名（不足 3 字符）
+$body = @{username="ab";email="test@test.com";password="123456"} | ConvertTo-Json
+try { Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register -ContentType "application/json" -Body $body } catch { $_.Exception.Message }
+# 预期：返回 422 + 友好 JSON 错误（非原始 500 错误）
 ```
 
 ### 服务连通验证
@@ -344,6 +377,31 @@ docker compose exec redis redis-cli ping
 
 # 验证 MinIO — 浏览器访问 http://localhost:9001
 # 用户名：minioadmin  密码：minioadmin
+```
+
+### 测试框架验证
+
+```bash
+# 后端测试（pytest）
+cd backend
+pytest
+# 预期：13 passed（11 auth + 2 health）
+
+# 前端测试（Vitest）
+cd frontend
+npm run test:run
+# 预期：5 passed（4 request.test.js + 1 AppHeader.test.js）
+```
+
+### 日志系统验证
+
+```bash
+# 查看后端日志文件（发起几次 API 请求后检查）
+cat backend/logs/app.log
+# 预期：看到格式化日志，包含时间戳 | 级别 | 模块:函数:行号 | 消息
+
+# 观察请求日志中间件输出（后端终端中应包含）
+# 预期格式：POST /api/auth/login from 127.0.0.1 → 200 (12.34ms)
 ```
 
 ### 前端页面验证
