@@ -175,8 +175,10 @@ class DetectionTaskResponse(BaseModel):
     created_at: datetime
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True,
+        "protected_namespaces": (),
+    }
 
 
 class DetectionResultResponse(BaseModel):
@@ -236,6 +238,10 @@ class TrainingTaskCreate(BaseModel):
     lr0: float = Field(default=0.01, description="初始学习率")
     augment_config: Optional[dict] = Field(None, description="数据增强配置")
 
+    model_config = {
+        "protected_namespaces": (),
+    }
+
 
 class TrainingTaskResponse(BaseModel):
     """训练任务响应"""
@@ -258,8 +264,10 @@ class TrainingTaskResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True,
+        "protected_namespaces": (),
+    }
 
 
 class TrainingMetricResponse(BaseModel):
@@ -290,8 +298,10 @@ class ModelVersionBrief(BaseModel):
     is_default: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True,
+        "protected_namespaces": (),
+    }
 
 
 class ModelVersionResponse(BaseModel):
@@ -316,8 +326,10 @@ class ModelVersionResponse(BaseModel):
     is_default: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True,
+        "protected_namespaces": (),
+    }
 
 
 class ModelVersionCreate(BaseModel):
@@ -327,6 +339,10 @@ class ModelVersionCreate(BaseModel):
     model_name: str = Field(..., description="模型名称")
     model_type: str = Field(default="yolov11n", description="模型类型")
     description: Optional[str] = None
+
+    model_config = {
+        "protected_namespaces": (),
+    }
 
 
 # ══════════════════════════════════════════════════════════════
