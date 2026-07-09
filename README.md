@@ -1,11 +1,19 @@
 # VisionPay Agent Platform
 
-基于 YOLOv11 的零售商品自动结账智能体平台（ACO）。融合 LangChain/LangGraph 智能体框架与 YOLOv11 目标检测模型，依托 Retail Product Checkout Dataset 提供的细粒度图像数据，实现收银台多商品堆叠场景下的自动定位、精准品类识别与购物结算清单生成。
+VisionPay 是一个基于 YOLOv11 的零售商品自动结账智能体平台（ACO）。项目面向收银台多商品堆叠场景，使用 Retail Product Checkout Dataset 训练视觉检测模型，实现商品定位、细粒度品类识别，并为后续购物结算清单生成提供视觉识别能力。
 
 **核心能力：**
 - 🔍 **商品定位** — 输入收银台真实多商品堆叠图像，自动定位图像中每个商品
 - 🏷️ **品类识别** — 精准识别商品的细分品类（种类繁多、外观相似、相互遮挡）
 - 🧾 **自动结算** — 生成最终购物结算清单，实现高效准确的自动化结算
+
+当前进度已完成：
+
+- 后端 FastAPI 基础架构、认证、健康检查和数据库迁移。
+- Retail Product Checkout Dataset 的 COCO 到 YOLO 格式转换、划分、验证、bbox 修复和标注可视化。
+- YOLOv11 本地训练服务 `TrainingService`。
+- 训练任务 API：启动、列表、状态、指标、停止、结果下载。
+- 前端模型训练监控页面：任务列表、创建训练任务、ECharts loss/mAP 曲线。
 
 ## 技术栈
 
@@ -31,8 +39,6 @@
 
 ## 快速启动
 
-所有命令默认在项目根目录执行：
-
 ### 1. 克隆项目
 
 ```bash
@@ -40,7 +46,9 @@ git clone https://github.com/Azar233/agent-platform
 cd agent-platform
 ```
 
-### 1. 启动基础服务
+### 2. 启动基础服务
+
+确保 Docker Desktop 已启动：
 
 ```powershell
 docker compose up -d postgres redis minio
@@ -53,10 +61,10 @@ docker compose ps
 | ---- | ---- | ---- |
 | PostgreSQL | `localhost:5432` | 用户、场景、训练任务和指标 |
 | Redis | `localhost:6379` | 缓存和后续对话历史 |
-| MinIO API | `localhost:9000` | 图片和模型文件存储 |
-| MinIO Console | <http://localhost:9001> | 存储桶管理，默认 `minioadmin/minioadmin` |
+| MinIO API | `localhost:9000` | 图片、模型等对象存储 |
+| MinIO Console | <http://localhost:9001> | 存储桶管理，默认账号 `minioadmin/minioadmin` |
 
-后端 `.env` 中的 `DB_NAME`、`DB_USER`、`DB_PASSWORD` 必须和当前 PostgreSQL 容器实际创建的数据库一致。当前代码默认偏向 Vision Pay 配置：
+当前 `docker-compose.yml` 使用的数据库配置：
 
 ```env
 DB_HOST=localhost
@@ -64,27 +72,52 @@ DB_PORT=5432
 DB_NAME=vp_agent
 DB_USER=vp_admin
 DB_PASSWORD=vp_admin
-DATABASE_URL=postgresql://vp_admin:vp_admin@localhost:5432/vp_agent
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# MinIO
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=vp-images
 ```
 
-如果你不修改 `docker-compose.yml`，但 compose 中仍是 `my_agent/my_admin`，就要么把 `backend/.env` 改回 `my_agent/my_admin`，要么重建数据库容器并确保里面存在 `vp_agent/vp_admin`。
+后端 `backend/.env` 必须与上面的数据库名、用户名和密码一致。PostgreSQL 容器的数据卷只会在首次创建时初始化数据库；如果你改过数据库名或用户，但旧 volume 还在，需要同步 `.env` 或重建数据库 volume。
 
-### 2. 启动后端
+### 3. 配置并启动后端
 
 ```powershell
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
+
+复制并修改环境变量：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`backend/.env` 中至少确认这些值：
+
+```env
+APP_NAME=VisionPay Agent Platform
+APP_VERSION=0.1.0
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=vp_agent
+DB_USER=vp_admin
+DB_PASSWORD=vp_admin
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET=vp-images
+MINIO_SECURE=false
+
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8080
+```
+
+执行数据库迁移并启动后端：
+
+```powershell
 alembic upgrade head
 uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
@@ -96,13 +129,13 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health
 Invoke-RestMethod http://127.0.0.1:8000/api/health/detail
 ```
 
-接口文档：
+API 文档：
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-### 3. 启动前端
+### 4. 启动前端
 
 ```powershell
 cd frontend
@@ -116,44 +149,21 @@ npm run dev -- --host 127.0.0.1
 http://127.0.0.1:5173
 ```
 
-**`.env` 关键配置项**：
+前端请求封装使用 `baseURL: /api`，Vite 代理会把 `/api/*` 转发到 `http://localhost:8000`。
 
-```env
-# 后端 API 地址（Vite 开发服务器代理目标）
-VITE_API_BASE_URL=http://localhost:8000
+前端路由：
 
-# 应用名称
-VITE_APP_TITLE=VisionPay Agent Platform
+| 路由 | 页面 | 当前状态 |
+| ---- | ---- | -------- |
+| `/login` | 登录 | 已完成 |
+| `/register` | 注册 | 已完成 |
+| `/training` | 模型训练 | Day 6 已完成 |
+| `/chat` | 智能对话 | 后续完善 |
+| `/detection` | 检测工作台 | 后续完善 |
+| `/history` | 历史记录 | 后续完善 |
+| `/dashboard` | 数据看板 | 后续完善 |
 
-# MinIO 文件访问地址
-VITE_MINIO_URL=http://localhost:9000
-```
-
-启动前端开发服务器：
-
-```bash
-npm run dev
-```
-
-访问：<http://localhost:5173>
-
-**前端页面路由**：
-
-| 路由 | 页面 | 说明 |
-| ---- | ---- | ---- |
-| `/login` | 登录页 | 用户登录表单 |
-| `/register` | 注册页 | 用户注册表单 |
-| `/chat` | 智能对话 | Day 11 完善 |
-| `/detection` | 检测工作台 | Day 8 完善 |
-| `/training` | 模型训练 | Day 6 完善 |
-| `/history` | 历史记录 | Day 10 完善 |
-| `/dashboard` | 数据看板 | Day 10 完善 |
-
-> 未登录状态下访问任何受保护页面会自动跳转到 `/login`；已登录用户访问登录/注册页会自动跳转到首页。
-
----
-
-## 数据集导入流程
+## 数据集导入
 
 训练数据统一放在：
 
@@ -189,10 +199,10 @@ dataset/
 执行：
 
 ```powershell
-cd D:\code\Git\Agent\agent-platform\backend
+cd backend
 
 python tools\convert_coco.py `
-  --source D:\path\to\dataset `
+  --source C:\path\to\dataset `
   --json instances_train2019.json `
   --output datasets\vision_pay `
   --train-ratio 0.8 `
@@ -219,10 +229,10 @@ dataset/
 执行：
 
 ```powershell
-cd D:\code\Git\Agent\agent-platform\backend
+cd backend
 
 python tools\convert_coco_splits.py `
-  --source D:\path\to\dataset `
+  --source C:\path\to\dataset `
   --train-dir train2019 `
   --val-dir val2019 `
   --test-dir test2019 `
@@ -238,7 +248,7 @@ python tools\convert_coco_splits.py `
 导入完成后先验证：
 
 ```powershell
-cd D:\code\Git\Agent\agent-platform\backend
+cd backend
 python tools\verify_dataset.py datasets\vision_pay
 ```
 
@@ -262,15 +272,15 @@ python tools\visualize_annotations.py --grid --output datasets\vision_pay\vis_ou
 backend/datasets/vision_pay/data.yaml
 ```
 
-如果合作者从其他电脑复制了已经生成好的 `datasets/vision_pay`，需要确认 `data.yaml` 里的 `path` 指向当前电脑真实路径；最稳妥的方式是重新运行导入脚本生成。
+如果从其他电脑复制了已经生成好的 `datasets/vision_pay`，需要确认 `data.yaml` 里的 `path` 指向当前电脑真实路径。最稳妥的方式是重新运行导入脚本生成。
 
 ## 跑通一次训练
 
-训练链路依赖 4 个前置条件：
+训练前置条件：
 
-1. Docker 中 PostgreSQL、Redis、MinIO 已启动。
+1. PostgreSQL、Redis、MinIO 已启动。
 2. 后端已执行 `alembic upgrade head`。
-3. `backend/datasets/vision_pay/data.yaml` 存在且 `verify_dataset.py` 通过。
+3. `backend/datasets/vision_pay/data.yaml` 存在，且 `verify_dataset.py` 无格式错误。
 4. 数据库中存在一个 `DetectionScene`，前端创建训练任务时需要填写它的 `scene_id`。
 
 ### 1. 创建 Vision Pay 场景
@@ -281,7 +291,7 @@ backend/datasets/vision_pay/data.yaml
 python -c "from app.database.session import SessionLocal; from app.entity.db_models import DetectionScene; db=SessionLocal(); s=db.query(DetectionScene).filter_by(name='vision_pay').first(); s=s or DetectionScene(name='vision_pay', display_name='Vision Pay', description='视觉识别购物结算系统', category='retail', class_names=['product']); db.add(s); db.commit(); db.refresh(s); print('scene_id=', s.id); db.close()"
 ```
 
-记录输出的 `scene_id`，后面前端新建训练任务要用。这里的 `class_names` 只是场景元信息；YOLO 训练实际使用的类别数量和类别名来自 `datasets/vision_pay/data.yaml`。
+记录输出的 `scene_id`。这里的 `class_names` 只是场景元信息；YOLO 训练实际使用的类别数量和类别名来自 `datasets/vision_pay/data.yaml`。
 
 ### 2. 注册和登录
 
@@ -296,7 +306,7 @@ $login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/auth/logi
 $token = $login.access_token
 ```
 
-### 3. 用 API 启动一次小训练
+### 3. 用 API 启动小训练
 
 第一次建议只跑 1 个 epoch，先验证流程：
 
@@ -317,9 +327,9 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/training/start -Headers $headers -ContentType "application/json" -Body $body
 ```
 
-把 `scene_id = 1` 换成上一节实际输出的值。
+把 `scene_id = 1` 换成实际场景 ID。
 
-训练服务会在后台线程中调用 Ultralytics，项目内部模型名 `yolov11n` 会映射为 Ultralytics 权重 `yolo11n.pt`。首次训练可能需要联网下载权重；如果下载失败，可以手动把 `yolo11n.pt` 放到后端工作目录或 Ultralytics 缓存位置后重试。
+项目内部模型名 `yolov11n` 会映射为 Ultralytics 权重 `yolo11n.pt`。首次训练可能需要联网下载权重；如果下载失败，可以手动把 `yolo11n.pt` 放到后端工作目录或 Ultralytics 缓存目录后重试。
 
 训练输出目录：
 
@@ -332,7 +342,7 @@ backend/runs/train/task_<task_uuid>/
 └── ...
 ```
 
-### 4. 前端启动训练并查看图表
+### 4. 在前端启动训练并查看图表
 
 1. 启动后端：`cd backend && uvicorn main:app --host 127.0.0.1 --port 8000 --reload`
 2. 启动前端：`cd frontend && npm run dev -- --host 127.0.0.1`
@@ -357,7 +367,7 @@ backend/runs/train/task_<task_uuid>/
 8. 点击「启动训练」。
 9. 在任务列表点击「监控」。
 
-前端训练监控页会每 5 秒轮询：
+训练监控页每 5 秒轮询状态和指标：
 
 | 接口 | 作用 |
 | ---- | ---- |
@@ -374,7 +384,7 @@ backend/runs/train/task_<task_uuid>/
 
 训练完成后，任务状态会变为「已完成」，可以点击「结果」下载 `results.csv`。
 
-### 5. 训练相关 API
+### 5. 训练 API
 
 | 方法 | 路径 | 说明 |
 | ---- | ---- | ---- |
@@ -465,7 +475,6 @@ agent-platform/
 
 `backend/datasets/`、`backend/runs/`、`backend/.ultralytics/`、模型权重和日志属于本地运行产物，不提交 Git。
 
-
 ## 常用命令
 
 ### Docker
@@ -479,87 +488,6 @@ docker compose logs -f minio
 docker compose down
 ```
 
-### 后端开发
-
-```bash
-cd backend
-.venv\Scripts\activate         # 激活虚拟环境（Windows）
-python main.py                 # 启动后端（端口 8000）
-alembic revision --autogenerate -m "描述"  # 生成迁移
-alembic upgrade head           # 执行迁移
-alembic downgrade -1           # 回滚上一版本
-```
-
-### 前端开发
-
-```bash
-cd frontend
-npm install                    # 安装依赖
-npm run dev                    # 启动开发服务器（端口 5173）
-npm run build                  # 构建生产版本
-npm run preview                # 预览生产构建
-```
-
-### 服务验证
-
-```bash
-# 验证 Redis
-docker compose exec redis redis-cli ping
-# 期望：PONG
-
-# 验证 PostgreSQL
-docker compose exec postgres psql -U vp_admin -d vp_agent -c "SELECT version();"
-
-# 验证 MinIO — 浏览器访问 http://localhost:9001 （见下方 MinIO Console 链接）
-```
-
----
-
-## 环境验证清单
-
-### 基础环境
-
-```bash
-git --version                  # ✅ git version 2.x.x
-python --version               # ✅ Python 3.10+
-node --version                 # ✅ v18+
-docker --version               # ✅ Docker version 24.0+
-docker compose version         # ✅ Docker Compose v2.x+
-docker compose ps              # ✅ 所有服务状态为 Up / healthy
-```
-
-### API 接口验证（PowerShell）
-
-```powershell
-# 1. 基础健康检查
-Invoke-RestMethod -Uri http://localhost:8000/api/health
-# 预期：{"status":"healthy","app_name":"VisionPay Agent Platform","version":"0.1.0"}
-
-# 2. 详细健康检查（数据库 + Redis + MinIO 连通性）
-Invoke-RestMethod -Uri http://localhost:8000/api/health/detail
-# 预期：{"code":200,"message":"ok","data":{"status":"healthy",...}}
-
-# 3. 注册用户
-$body = @{username="verify_user";email="verify@test.com";password="123456"} | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register -ContentType "application/json" -Body $body
-# 预期：返回 201，包含用户信息
-
-# 4. 登录获取 Token
-$body = @{username="verify_user";password="123456"} | ConvertTo-Json
-$resp = Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/login -ContentType "application/json" -Body $body
-$resp.access_token
-# 预期：输出 access_token 字符串
-
-# 5. 用 Token 获取当前用户信息（用上一步输出的 Token 替换 YOUR_TOKEN）
-Invoke-RestMethod -Uri http://localhost:8000/api/auth/me -Headers @{"Authorization"="Bearer YOUR_TOKEN"}
-# 预期：返回当前用户信息
-
-# 6. 全局异常处理验证 — 故意发送过短的用户名（不足 3 字符）
-$body = @{username="ab";email="test@test.com";password="123456"} | ConvertTo-Json
-try { Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/auth/register -ContentType "application/json" -Body $body } catch { $_.Exception.Message }
-# 预期：返回 422 + 友好 JSON 错误（非原始 500 错误）
-```
-
 ### 后端
 
 ```powershell
@@ -571,32 +499,7 @@ uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 pytest -q
 ```
 
-### 测试框架验证
-
-```bash
-# 后端测试（pytest）
-cd backend
-pytest
-# 预期：13 passed（11 auth + 2 health）
-
-# 前端测试（Vitest）
-cd frontend
-npm run test:run
-# 预期：5 passed（4 request.test.js + 1 AppHeader.test.js）
-```
-
-### 日志系统验证
-
-```bash
-# 查看后端日志文件（发起几次 API 请求后检查）
-cat backend/logs/app.log
-# 预期：看到格式化日志，包含时间戳 | 级别 | 模块:函数:行号 | 消息
-
-# 观察请求日志中间件输出（后端终端中应包含）
-# 预期格式：POST /api/auth/login from 127.0.0.1 → 200 (12.34ms)
-```
-
-### 前端页面验证
+### 前端
 
 ```powershell
 cd frontend
@@ -619,10 +522,10 @@ python tools\visualize_annotations.py --count 10 --output datasets\vision_pay\vi
 提交 Day6 更新前建议至少跑：
 
 ```powershell
-cd D:\code\Git\Agent\agent-platform\backend
+cd backend
 pytest -q
 
-cd D:\code\Git\Agent\agent-platform\frontend
+cd ..\frontend
 npm run build
 ```
 
@@ -631,7 +534,7 @@ npm run build
 | 检查项 | 命令或页面 | 预期 |
 | ------ | ---------- | ---- |
 | Docker 服务 | `docker compose ps` | PostgreSQL、Redis、MinIO 为 Up/healthy |
-| 后端健康 | `http://127.0.0.1:8000/api/health` | 返回 `status=healthy` |
+| 后端健康 | `http://127.0.0.1:8000/api/health` | 返回健康状态 |
 | 详细健康 | `http://127.0.0.1:8000/api/health/detail` | database、redis、minio 正常 |
 | 前端 | `http://127.0.0.1:5173` | 可打开登录页 |
 | 数据集 | `python tools\verify_dataset.py datasets\vision_pay` | 无格式错误 |
@@ -649,7 +552,7 @@ backend/.env 中 DB_NAME / DB_USER / DB_PASSWORD
 当前 Docker volume 里已经初始化过的数据库
 ```
 
-PostgreSQL 官方镜像只会在数据卷第一次创建时初始化数据库。修改 `docker-compose.yml` 后，如果旧 volume 还在，数据库名和用户不会自动变化。
+如果旧 volume 中仍是旧数据库，修改 `.env` 不会自动创建新数据库。
 
 ### `/api/training/start` 返回 `data.yaml 不存在`
 
