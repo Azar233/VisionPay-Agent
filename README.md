@@ -193,6 +193,151 @@ npm run dev
 
 ---
 
+## 数据集导入流程
+
+数据集不需要启动单独的 Docker 容器，导入目标统一为：
+
+```text
+backend/datasets/vision_pay/
+```
+
+导入完成后的标准 YOLO 目录结构为：
+
+```text
+backend/datasets/vision_pay/
+├── data.yaml
+├── images/
+│   ├── train/
+│   ├── val/
+│   └── test/
+└── labels/
+    ├── train/
+    ├── val/
+    └── test/
+```
+
+所有命令建议在 `backend/` 目录下执行：
+
+```powershell
+cd D:\code\Git\Agent\agent-platform\backend
+```
+
+### 方式一：单个 COCO JSON + images 目录
+
+适用于下载后的数据结构类似：
+
+```text
+dataset/
+├── images/
+└── instances_train2019.json
+```
+
+执行转换、划分训练集/验证集/测试集：
+
+```powershell
+python tools\convert_coco.py `
+  --source D:\path\to\dataset `
+  --json instances_train2019.json `
+  --output datasets\vision_pay `
+  --train-ratio 0.8 `
+  --val-ratio 0.1 `
+  --test-ratio 0.1 `
+  --seed 42 `
+  --clean
+```
+
+说明：
+
+- `--source` 指向下载后的数据集根目录。
+- `--json` 指向 COCO 标注文件名；如果文件名不同，需要替换。
+- `--output datasets\vision_pay` 表示导入到本项目默认训练数据目录。
+- `--train-ratio 0.8 --val-ratio 0.1 --test-ratio 0.1` 表示按 8:1:1 划分。
+- `--seed 42` 用于保证不同合作者划分结果一致。
+- `--clean` 会清空旧的 `datasets/vision_pay/images` 和 `datasets/vision_pay/labels` 后重新导入。
+
+导入完成后验证：
+
+```powershell
+python tools\verify_dataset.py datasets\vision_pay
+```
+
+如果验证报告提示 bbox 越界或格式错误，可修复后再次验证：
+
+```powershell
+python tools\fix_bbox.py datasets\vision_pay
+python tools\verify_dataset.py datasets\vision_pay
+```
+
+### 方式二：COCO 已分好 train/val/test
+
+适用于下载后的数据结构类似：
+
+```text
+dataset/
+├── train2019/
+├── val2019/
+├── test2019/
+├── instances_train2019.json
+├── instances_val2019.json
+└── instances_test2019.json
+```
+
+这种数据集本身已经划分好了训练集、验证集和测试集，不需要再随机划分。执行：
+
+```powershell
+python tools\convert_coco_splits.py `
+  --source D:\path\to\dataset `
+  --clean
+```
+
+默认对应关系：
+
+```text
+train2019 + instances_train2019.json -> images/train + labels/train
+val2019   + instances_val2019.json   -> images/val   + labels/val
+test2019  + instances_test2019.json  -> images/test  + labels/test
+```
+
+如果目录名或 JSON 文件名不同，可以显式指定：
+
+```powershell
+python tools\convert_coco_splits.py `
+  --source D:\path\to\dataset `
+  --train-dir train2019 `
+  --val-dir val2019 `
+  --test-dir test2019 `
+  --train-json instances_train2019.json `
+  --val-json instances_val2019.json `
+  --test-json instances_test2019.json `
+  --output datasets\vision_pay `
+  --clean
+```
+
+导入完成后验证：
+
+```powershell
+python tools\verify_dataset.py datasets\vision_pay
+```
+
+如果验证报告提示 bbox 越界或格式错误，可修复后再次验证：
+
+```powershell
+python tools\fix_bbox.py datasets\vision_pay
+python tools\verify_dataset.py datasets\vision_pay
+```
+
+### data.yaml 说明
+
+`data.yaml` 是 YOLO 训练入口文件，里面记录数据集根目录、训练/验证/测试图片目录，以及类别数量和类别名称。训练时通常传入这个文件：
+
+```powershell
+datasets\vision_pay\data.yaml
+```
+
+如果合作者从别的电脑复制了已经生成好的 `datasets/vision_pay`，需要确认 `data.yaml` 里的 `path` 指向当前电脑上的实际目录；最稳妥的方式是重新运行上面的导入脚本生成。
+
+---
+
 ## 项目结构
 
 ```
