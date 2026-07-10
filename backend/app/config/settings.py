@@ -23,9 +23,10 @@ class Settings(BaseSettings):
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     # ── 日志配置 ────────────────────────────────────
-    LOG_DIR: str = "logs"  # 日志目录(相对于 backend/)
+    LOG_DIR: str = "../.runtime/backend-logs"  # 日志目录(相对于 backend/)
     LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 单文件最大 10MB
     LOG_BACKUP_COUNT: int = 5  # 保留 5 份历史日志
+    SQL_ECHO: bool = False  # 仅在需要调试 SQL 时打开
 
     # ── 训练配置 ──────────────────────────────────────
     TRAIN_OUTPUT_DIR: str = "runs/train"
