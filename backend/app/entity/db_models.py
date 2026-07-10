@@ -217,7 +217,7 @@ class TrainingTask(Base):
     epochs = Column(Integer, default=100, comment="训练轮数")
     img_size = Column(Integer, default=640, comment="图像尺寸")
     batch_size = Column(Integer, default=16, comment="批次大小")
-    device = Column(String(20), default="0", comment="训练设备：0/1/cpu")
+    device = Column(String(20), default="0", comment="Training device: cpu/0/0,1/0-7")
     optimizer = Column(String(20), default="SGD", comment="优化器：SGD/Adam/AdamW")
     lr0 = Column(Float, default=0.01, comment="初始学习率")
     augment_config = Column(JSON, nullable=True, comment="数据增强配置")

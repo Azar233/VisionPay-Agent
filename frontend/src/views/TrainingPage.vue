@@ -27,7 +27,7 @@
       >
         <el-table-column prop="task_uuid" label="任务 ID" min-width="110" />
         <el-table-column prop="model_name" label="模型" min-width="110" />
-        <el-table-column prop="device" label="设备" width="90" />
+        <el-table-column prop="device" label="设备" width="170" />
         <el-table-column label="进度" min-width="180">
           <template #default="{ row }">
             <el-progress
@@ -137,7 +137,7 @@
         </el-form-item>
 
         <el-form-item label="批次大小">
-          <el-input-number v-model="trainForm.batch_size" :min="1" :max="64" />
+          <el-input-number v-model="trainForm.batch_size" :min="1" :max="512" />
         </el-form-item>
 
         <el-form-item label="图像尺寸">
@@ -150,11 +150,23 @@
         </el-form-item>
 
         <el-form-item label="训练设备">
-          <el-radio-group v-model="trainForm.device">
-            <el-radio value="cpu">CPU</el-radio>
-            <el-radio value="0">GPU 0</el-radio>
-            <el-radio value="1">GPU 1</el-radio>
-          </el-radio-group>
+          <div class="device-field">
+            <el-select
+              v-model="trainForm.device"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择或输入设备，如 0,1,2,3,4,5,6,7"
+            >
+              <el-option
+                v-for="option in deviceOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+            <p class="form-tip">多卡训练使用 Ultralytics DDP；batch_size 是总 batch，会分摊到每张 GPU。</p>
+          </div>
         </el-form-item>
 
         <el-form-item label="优化器">
@@ -222,13 +234,24 @@ let lossChart = null
 let metricChart = null
 let pollTimer = null
 
+const deviceOptions = [
+  { label: 'CPU', value: 'cpu' },
+  ...Array.from({ length: 8 }, (_, index) => ({
+    label: `GPU ${index}`,
+    value: String(index),
+  })),
+  { label: '2 卡 GPU 0-1', value: '0,1' },
+  { label: '4 卡 GPU 0-3', value: '0,1,2,3' },
+  { label: '8 卡 GPU 0-7', value: '0,1,2,3,4,5,6,7' },
+]
+
 const trainForm = ref({
   scene_id: 1,
   model_name: 'yolov11n',
   epochs: 5,
-  batch_size: 4,
+  batch_size: 16,
   img_size: 640,
-  device: 'cpu',
+  device: '0',
   optimizer: 'SGD',
   lr0: 0.01,
   dataset_path: 'datasets/vision_pay',
@@ -500,6 +523,21 @@ onBeforeUnmount(() => {
   gap: 12px;
   font-size: 13px;
   font-weight: 400;
+  color: $text-secondary;
+}
+
+.device-field {
+  width: 100%;
+
+  .el-select {
+    width: 100%;
+  }
+}
+
+.form-tip {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
   color: $text-secondary;
 }
 

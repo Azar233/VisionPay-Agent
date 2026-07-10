@@ -82,6 +82,47 @@ def _weights_name(model_name: str) -> str:
     return model_name + ".pt"
 
 
+def _normalize_device(device: str | int | None) -> str:
+    """Normalize CPU, single-GPU, and multi-GPU device strings for Ultralytics."""
+
+    raw = str(device if device is not None else "cpu").strip().lower().replace(" ", "")
+    if raw in {"", "none"}:
+        return "cpu"
+    if raw in {"cpu", "mps"}:
+        return raw
+    if raw in {"cuda", "gpu"}:
+        return "0"
+    if raw == "all":
+        return "0,1,2,3,4,5,6,7"
+
+    indices: list[int] = []
+    for part in raw.split(","):
+        if not part:
+            raise ValueError("device contains an empty GPU index")
+
+        if "-" in part:
+            bounds = part.split("-", 1)
+            if len(bounds) != 2 or not all(bound.isdigit() for bound in bounds):
+                raise ValueError(f"Invalid device range: {part}")
+            start, end = (int(bound) for bound in bounds)
+            if start > end:
+                raise ValueError(f"Invalid descending device range: {part}")
+            indices.extend(range(start, end + 1))
+            continue
+
+        if not part.isdigit():
+            raise ValueError(
+                "device must be cpu, cuda, all, a GPU index, a comma list, or a range like 0-7"
+            )
+        indices.append(int(part))
+
+    if len(indices) != len(set(indices)):
+        raise ValueError(f"Duplicate GPU indices in device: {device}")
+    if any(index < 0 or index > 7 for index in indices):
+        raise ValueError("Only GPU indices 0-7 are supported from the training UI")
+    return ",".join(str(index) for index in indices)
+
+
 def _resolve_path(path_value: str | Path | None, default_path: Path | None = None) -> Path:
     path = Path(path_value) if path_value else default_path
     if path is None:
@@ -151,6 +192,7 @@ class TrainingService:
         if not data_yaml.exists():
             raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
 
+        device = _normalize_device(config.get("device", "cpu"))
         task_uuid = uuid.uuid4().hex[:8]
         task = TrainingTask(
             user_id=user_id,
@@ -161,7 +203,7 @@ class TrainingService:
             epochs=int(config.get("epochs", 50)),
             img_size=int(config.get("img_size", 640)),
             batch_size=int(config.get("batch_size", 8)),
-            device=str(config.get("device", "cpu")),
+            device=device,
             optimizer=str(config.get("optimizer", "SGD")),
             lr0=float(config.get("lr0", 0.01)),
             augment_config=config.get("augment_config"),
@@ -181,7 +223,7 @@ class TrainingService:
             "epochs": task.epochs,
             "img_size": task.img_size,
             "batch_size": task.batch_size,
-            "device": task.device,
+            "device": device,
             "optimizer": task.optimizer,
             "lr0": task.lr0,
         }
@@ -194,11 +236,12 @@ class TrainingService:
         thread.start()
 
         logger.info(
-            "Training task started | id=%s uuid=%s model=%s epochs=%s",
+            "Training task started | id=%s uuid=%s model=%s epochs=%s device=%s",
             task.id,
             task.task_uuid,
             task.model_name,
             task.epochs,
+            task.device,
         )
         return task
 
@@ -257,7 +300,7 @@ class TrainingService:
                 "epochs": int(config.get("epochs", 50)),
                 "imgsz": int(config.get("img_size", 640)),
                 "batch": int(config.get("batch_size", 8)),
-                "device": str(config.get("device", "cpu")),
+                "device": _normalize_device(config.get("device", "cpu")),
                 "optimizer": str(config.get("optimizer", "SGD")),
                 "lr0": float(config.get("lr0", 0.01)),
                 "project": str(output_dir),
