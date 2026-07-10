@@ -9,9 +9,20 @@ The service owns training task lifecycle management:
 
 from __future__ import annotations
 
+import base64
 import csv
+import contextlib
+import json
+import logging
+import math
 import os
+import platform
+import shutil
+import socket
+import sys
 import threading
+import time
+import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
-from app.entity.db_models import TrainingMetric, TrainingTask
+from app.entity.db_models import ModelVersion, TrainingMetric, TrainingTask
 
 logger = get_logger(__name__)
 
@@ -31,13 +42,31 @@ _running_tasks: dict[str, Any] = {}
 _running_lock = threading.Lock()
 
 
+class _StreamTee:
+    """Write stream output to the original stream and the task log file."""
+
+    def __init__(self, *streams: Any) -> None:
+        self.streams = streams
+
+    def write(self, data: str) -> int:
+        for stream in self.streams:
+            stream.write(data)
+            stream.flush()
+        return len(data)
+
+    def flush(self) -> None:
+        for stream in self.streams:
+            stream.flush()
+
+
 def _safe_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return float(value)
+        result = float(value)
     except (TypeError, ValueError):
         return None
+    return result if math.isfinite(result) else None
 
 
 def _first_existing(row: dict[str, str], keys: list[str]) -> str | None:
@@ -132,6 +161,166 @@ def _resolve_path(path_value: str | Path | None, default_path: Path | None = Non
     return (PROJECT_ROOT / path).resolve()
 
 
+def _task_log_path(task_uuid: str) -> Path:
+    return _resolve_path(settings.LOG_DIR) / "training" / f"task_{task_uuid}.log"
+
+
+def _task_dir(task_uuid: str) -> Path:
+    return _resolve_path(settings.TRAIN_OUTPUT_DIR) / f"task_{task_uuid}"
+
+
+def _best_weights_path(task_uuid: str) -> Path:
+    return _task_dir(task_uuid) / "weights" / "best.pt"
+
+
+def _latest_eval_report_path(task_uuid: str) -> Path | None:
+    task_path = _task_dir(task_uuid)
+    if not task_path.exists():
+        return None
+    reports = sorted(
+        task_path.rglob("eval_report.json"),
+        key=lambda file: file.stat().st_mtime,
+        reverse=True,
+    )
+    return reports[0] if reports else None
+
+
+def _collect_eval_artifacts(output_dir: Path) -> dict[str, str]:
+    artifacts: dict[str, str] = {}
+    if not output_dir.exists():
+        return artifacts
+
+    expected = {
+        "confusion_matrix.png",
+        "confusion_matrix_normalized.png",
+        "PR_curve.png",
+        "F1_curve.png",
+        "P_curve.png",
+        "R_curve.png",
+        "results.png",
+    }
+    for file in output_dir.iterdir():
+        if not file.is_file():
+            continue
+        if file.name in expected or file.name.startswith("val_batch"):
+            artifacts[file.name] = str(file)
+    return artifacts
+
+
+def _class_names(names: Any) -> dict[int, str]:
+    if isinstance(names, dict):
+        return {int(key): str(value) for key, value in names.items()}
+    if isinstance(names, (list, tuple)):
+        return {index: str(value) for index, value in enumerate(names)}
+    return {}
+
+
+def _build_eval_report(
+    task: TrainingTask | None,
+    model: Any,
+    metrics: Any,
+    output_dir: Path,
+    split: str,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    names = _class_names(getattr(model, "names", {}) or {})
+    box_metrics = getattr(metrics, "box", None)
+    overall = {
+        "precision": _safe_float(getattr(box_metrics, "mp", None)),
+        "recall": _safe_float(getattr(box_metrics, "mr", None)),
+        "map50": _safe_float(getattr(box_metrics, "map50", None)),
+        "map50_95": _safe_float(getattr(box_metrics, "map", None)),
+    }
+
+    per_class_ap: dict[str, float | None] = {}
+    maps = getattr(box_metrics, "maps", None)
+    if maps is not None:
+        try:
+            maps = maps.tolist()
+        except AttributeError:
+            maps = list(maps)
+        for index, ap_value in enumerate(maps):
+            class_name = names.get(index, str(index))
+            per_class_ap[class_name] = _safe_float(ap_value)
+
+    weak_classes = sorted(
+        [
+            {"class_name": class_name, "ap": ap}
+            for class_name, ap in per_class_ap.items()
+            if ap is not None
+        ],
+        key=lambda item: item["ap"],
+    )[:10]
+
+    return {
+        "task_id": task.id if task is not None else None,
+        "task_uuid": task.task_uuid if task is not None else None,
+        "scene_id": task.scene_id if task is not None else None,
+        "model_name": task.model_name if task is not None else None,
+        "weights_path": str(_best_weights_path(task.task_uuid)) if task is not None else None,
+        "data_yaml": str(config.get("data_yaml")),
+        "split": split,
+        "device": str(config.get("device")),
+        "img_size": int(config.get("img_size", 640)),
+        "conf": float(config.get("conf", 0.001)),
+        "iou": float(config.get("iou", 0.6)),
+        "output_dir": str(output_dir),
+        "overall": overall,
+        "precision": overall["precision"],
+        "recall": overall["recall"],
+        "map50": overall["map50"],
+        "map50_95": overall["map50_95"],
+        "per_class_ap": per_class_ap,
+        "weak_classes": weak_classes,
+        "artifacts": _collect_eval_artifacts(output_dir),
+        "created_at": datetime.now().isoformat(),
+    }
+
+
+def _append_task_log(task_uuid: str, message: str) -> Path:
+    log_path = _task_log_path(task_uuid)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(f"\n[{timestamp}] {message.rstrip()}\n")
+    return log_path
+
+
+def _training_env_report(config: dict[str, Any]) -> str:
+    lines = [
+        "training environment",
+        f"hostname={socket.gethostname()}",
+        f"python={sys.version.split()[0]}",
+        f"platform={platform.platform()}",
+        f"cwd={os.getcwd()}",
+        f"data_yaml={config.get('data_yaml')}",
+        f"dataset_path={config.get('dataset_path')}",
+        f"model_name={config.get('model_name')}",
+        f"epochs={config.get('epochs')}",
+        f"img_size={config.get('img_size')}",
+        f"batch_size={config.get('batch_size')}",
+        f"device={config.get('device')}",
+        f"optimizer={config.get('optimizer')}",
+        f"lr0={config.get('lr0')}",
+        f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES', '')}",
+    ]
+    try:
+        import torch
+
+        lines.extend(
+            [
+                f"torch={torch.__version__}",
+                f"cuda_available={torch.cuda.is_available()}",
+                f"cuda_device_count={torch.cuda.device_count()}",
+            ]
+        )
+        for index in range(torch.cuda.device_count()):
+            lines.append(f"cuda_device_{index}={torch.cuda.get_device_name(index)}")
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"torch_env_error={exc}")
+    return "\n".join(lines)
+
+
 def _count_dataset_images(dataset_path: Path) -> int:
     image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
     image_root = dataset_path / "images"
@@ -194,6 +383,16 @@ class TrainingService:
 
         device = _normalize_device(config.get("device", "cpu"))
         task_uuid = uuid.uuid4().hex[:8]
+        log_path = _append_task_log(
+            task_uuid,
+            "created training task\n"
+            f"user_id={user_id}\n"
+            f"scene_id={scene_id}\n"
+            f"model_name={model_name}\n"
+            f"data_yaml={data_yaml}\n"
+            f"dataset_path={dataset_path}\n"
+            f"device={device}",
+        )
         task = TrainingTask(
             user_id=user_id,
             scene_id=scene_id,
@@ -243,6 +442,7 @@ class TrainingService:
             task.epochs,
             task.device,
         )
+        logger.info("Training task log initialized | task=%s path=%s", task_uuid, log_path)
         return task
 
     @staticmethod
@@ -257,29 +457,38 @@ class TrainingService:
 
         db = SessionLocal()
         task: TrainingTask | None = None
+        file_handler: logging.Handler | None = None
         try:
+            log_path = _task_log_path(task_uuid)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+
             task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
             if task is None:
                 logger.error("Training task not found | id=%s", task_id)
+                _append_task_log(task_uuid, f"training task not found | id={task_id}")
                 return
 
             data_yaml = Path(config["data_yaml"])
             if not data_yaml.exists():
                 raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
 
+            _append_task_log(task_uuid, _training_env_report(config))
             task.status = "running"
             task.started_at = datetime.now()
             db.commit()
+            _append_task_log(task_uuid, "status=running")
 
             TrainingService._prepare_ultralytics_env()
             from ultralytics import YOLO
 
             model_name = _clean_model_name(config.get("model_name"))
             weights = _weights_name(model_name)
+            _append_task_log(task_uuid, f"loading model weights={weights}")
             model = YOLO(weights)
 
             with _running_lock:
                 _running_tasks[task_uuid] = model
+            _append_task_log(task_uuid, "model registered as running")
 
             def on_train_epoch_end(trainer):
                 TrainingService._record_epoch_from_trainer(
@@ -311,7 +520,19 @@ class TrainingService:
                 "verbose": True,
             }
             logger.info("YOLO training begins | task=%s data=%s", task_uuid, data_yaml)
-            model.train(**train_kwargs)
+            _append_task_log(task_uuid, f"YOLO training begins\ntrain_kwargs={train_kwargs}")
+
+            file_handler = logging.FileHandler(log_path, encoding="utf-8")
+            file_handler.setFormatter(
+                logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+            )
+            logging.getLogger().addHandler(file_handler)
+
+            with log_path.open("a", encoding="utf-8") as log_file:
+                stdout = _StreamTee(sys.stdout, log_file)
+                stderr = _StreamTee(sys.stderr, log_file)
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    model.train(**train_kwargs)
 
             task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
             if task is not None and task.status != "cancelled":
@@ -323,9 +544,14 @@ class TrainingService:
 
             TrainingService._parse_final_results(db, task_id, task_uuid, output_dir)
             logger.info("YOLO training completed | task=%s", task_uuid)
+            _append_task_log(task_uuid, "YOLO training completed")
 
         except Exception as exc:  # noqa: BLE001 - persisted for task status visibility.
             logger.error("YOLO training failed | task=%s error=%s", task_uuid, exc, exc_info=True)
+            _append_task_log(
+                task_uuid,
+                f"YOLO training failed | error={exc}\n{traceback.format_exc()}",
+            )
             db.rollback()
             if task is None:
                 task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
@@ -335,6 +561,9 @@ class TrainingService:
                 task.completed_at = datetime.now()
                 db.commit()
         finally:
+            if file_handler is not None:
+                logging.getLogger().removeHandler(file_handler)
+                file_handler.close()
             with _running_lock:
                 _running_tasks.pop(task_uuid, None)
             db.close()
@@ -438,6 +667,273 @@ class TrainingService:
             db.rollback()
 
     @staticmethod
+    def validate_model(
+        db: Session,
+        task_id: int,
+        split: str = "val",
+        device: str | None = None,
+        img_size: int | None = None,
+        conf: float = 0.001,
+        iou: float = 0.6,
+    ) -> dict[str, Any]:
+        """Run Ultralytics validation for a trained task and persist a JSON report."""
+
+        task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
+        if task is None:
+            raise ValueError("training task not found")
+        if split not in {"train", "val", "test"}:
+            raise ValueError("split must be train, val, or test")
+
+        weights_path = _best_weights_path(task.task_uuid)
+        if not weights_path.exists():
+            raise FileNotFoundError(f"best.pt not found: {weights_path}")
+
+        default_data_yaml = (
+            _resolve_path(task.dataset_path) / "data.yaml" if task.dataset_path else None
+        )
+        data_yaml = _resolve_path(task.data_yaml, default_data_yaml)
+        if not data_yaml.exists():
+            raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
+
+        eval_device = _normalize_device(device if device is not None else task.device or "cpu")
+        eval_img_size = int(img_size or task.img_size or 640)
+        task_path = _task_dir(task.task_uuid)
+        task_path.mkdir(parents=True, exist_ok=True)
+        val_name = f"val_{split}"
+
+        TrainingService._prepare_ultralytics_env()
+        from ultralytics import YOLO
+
+        val_kwargs = {
+            "data": str(data_yaml),
+            "split": split,
+            "conf": float(conf),
+            "iou": float(iou),
+            "imgsz": eval_img_size,
+            "device": eval_device,
+            "project": str(task_path),
+            "name": val_name,
+            "exist_ok": True,
+            "plots": True,
+            "verbose": True,
+        }
+        _append_task_log(task.task_uuid, f"model validation begins\nval_kwargs={val_kwargs}")
+        model = YOLO(str(weights_path))
+        log_path = _task_log_path(task.task_uuid)
+        with log_path.open("a", encoding="utf-8") as log_file:
+            stdout = _StreamTee(sys.stdout, log_file)
+            stderr = _StreamTee(sys.stderr, log_file)
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                metrics = model.val(**val_kwargs)
+
+        output_dir = Path(getattr(metrics, "save_dir", task_path / val_name))
+        report = _build_eval_report(
+            task=task,
+            model=model,
+            metrics=metrics,
+            output_dir=output_dir,
+            split=split,
+            config={
+                "data_yaml": str(data_yaml),
+                "device": eval_device,
+                "img_size": eval_img_size,
+                "conf": conf,
+                "iou": iou,
+            },
+        )
+        report_path = output_dir / "eval_report.json"
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        report["report_path"] = str(report_path)
+        _append_task_log(task.task_uuid, f"model validation completed\nreport_path={report_path}")
+        return report
+
+    @staticmethod
+    def export_model(
+        db: Session,
+        task_id: int,
+        version: str | None = None,
+        description: str | None = None,
+        set_default: bool = True,
+    ) -> dict[str, Any]:
+        """Copy best.pt into backend/models and create a ModelVersion record."""
+
+        task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
+        if task is None:
+            raise ValueError("training task not found")
+        if task.status != "completed":
+            raise ValueError("only completed training tasks can be exported")
+
+        weights_path = _best_weights_path(task.task_uuid)
+        if not weights_path.exists():
+            raise FileNotFoundError(f"best.pt not found: {weights_path}")
+
+        version_value = version or f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        safe_version = "".join(
+            char if char.isalnum() or char in {".", "_", "-"} else "_"
+            for char in version_value
+        )
+        model_dir = PROJECT_ROOT / "models" / f"scene_{task.scene_id}_{safe_version}"
+        model_dir.mkdir(parents=True, exist_ok=True)
+        exported_weights = model_dir / "best.pt"
+        shutil.copy2(weights_path, exported_weights)
+
+        report: dict[str, Any] = {}
+        report_path = _latest_eval_report_path(task.task_uuid)
+        if report_path is not None and report_path.exists():
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            shutil.copy2(report_path, model_dir / "eval_report.json")
+            for artifact_path in (report.get("artifacts") or {}).values():
+                artifact = Path(artifact_path)
+                if artifact.exists() and artifact.is_file():
+                    shutil.copy2(artifact, model_dir / artifact.name)
+
+        latest_metric = (
+            db.query(TrainingMetric)
+            .filter(TrainingMetric.task_id == task_id)
+            .order_by(TrainingMetric.epoch.desc())
+            .first()
+        )
+        overall = report.get("overall") or {}
+        if latest_metric is not None:
+            if overall.get("precision") is None:
+                overall["precision"] = latest_metric.precision
+            if overall.get("recall") is None:
+                overall["recall"] = latest_metric.recall
+            if overall.get("map50") is None:
+                overall["map50"] = latest_metric.map50
+            if overall.get("map50_95") is None:
+                overall["map50_95"] = latest_metric.map50_95
+
+        if set_default:
+            db.query(ModelVersion).filter(ModelVersion.scene_id == task.scene_id).update(
+                {"is_default": False}
+            )
+
+        model_version = ModelVersion(
+            scene_id=task.scene_id,
+            training_task_id=task.id,
+            version=version_value,
+            model_name=f"{task.model_name}_{task.task_uuid}",
+            model_type=task.model_name,
+            status="active",
+            model_path=str(exported_weights),
+            minio_url=None,
+            map50=_safe_float(overall.get("map50")),
+            map50_95=_safe_float(overall.get("map50_95")),
+            precision=_safe_float(overall.get("precision")),
+            recall=_safe_float(overall.get("recall")),
+            per_class_ap=report.get("per_class_ap") or None,
+            description=description,
+            file_size=exported_weights.stat().st_size,
+            is_default=set_default,
+        )
+        db.add(model_version)
+        db.commit()
+        db.refresh(model_version)
+        _append_task_log(
+            task.task_uuid,
+            f"model exported\nmodel_version_id={model_version.id}\nmodel_path={exported_weights}",
+        )
+        return {
+            "message": "model exported",
+            "model_version": TrainingService._serialize_model_version(model_version),
+            "model_path": str(exported_weights),
+            "model_dir": str(model_dir),
+            "report_path": str(model_dir / "eval_report.json") if report else None,
+        }
+
+    @staticmethod
+    def get_model_download_path(db: Session, task_id: int) -> dict[str, Any]:
+        task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
+        if task is None:
+            raise ValueError("training task not found")
+        weights_path = _best_weights_path(task.task_uuid)
+        if not weights_path.exists():
+            raise FileNotFoundError(f"best.pt not found: {weights_path}")
+        return {
+            "path": weights_path,
+            "filename": f"{task.model_name}_{task.task_uuid}_best.pt",
+            "file_size": weights_path.stat().st_size,
+        }
+
+    @staticmethod
+    def predict_test_image(
+        db: Session,
+        task_id: int,
+        image_path: str | Path,
+        conf: float = 0.25,
+        iou: float = 0.45,
+        device: str = "cpu",
+    ) -> dict[str, Any]:
+        """Run the trained best.pt on a single uploaded image and return detections."""
+
+        task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
+        if task is None:
+            raise ValueError("training task not found")
+
+        weights_path = _best_weights_path(task.task_uuid)
+        if not weights_path.exists():
+            raise FileNotFoundError(f"best.pt not found: {weights_path}")
+
+        source_path = Path(image_path)
+        if not source_path.exists():
+            raise FileNotFoundError(f"image not found: {source_path}")
+
+        TrainingService._prepare_ultralytics_env()
+        from ultralytics import YOLO
+        import cv2
+
+        model = YOLO(str(weights_path))
+        started_at = time.perf_counter()
+        results = model.predict(
+            source=str(source_path),
+            conf=float(conf),
+            iou=float(iou),
+            imgsz=int(task.img_size or 640),
+            device=_normalize_device(device),
+            verbose=False,
+        )
+        elapsed = time.perf_counter() - started_at
+        result = results[0]
+        names = _class_names(getattr(result, "names", None) or getattr(model, "names", {}) or {})
+
+        detections: list[dict[str, Any]] = []
+        class_counts: dict[str, int] = {}
+        boxes = getattr(result, "boxes", None)
+        if boxes is not None:
+            for box in boxes:
+                cls_id = int(box.cls.detach().cpu().item())
+                score = float(box.conf.detach().cpu().item())
+                xyxy = [float(value) for value in box.xyxy[0].detach().cpu().tolist()]
+                class_name = names.get(cls_id, str(cls_id))
+                class_counts[class_name] = class_counts.get(class_name, 0) + 1
+                detections.append(
+                    {
+                        "class_id": cls_id,
+                        "class_name": class_name,
+                        "confidence": score,
+                        "bbox": xyxy,
+                    }
+                )
+
+        annotated = result.plot()
+        ok, buffer = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        annotated_image = None
+        if ok:
+            annotated_image = "data:image/jpeg;base64," + base64.b64encode(buffer).decode("ascii")
+
+        return {
+            "task_id": task.id,
+            "task_uuid": task.task_uuid,
+            "model_name": task.model_name,
+            "total_objects": len(detections),
+            "detections": detections,
+            "class_counts": class_counts,
+            "inference_time": elapsed,
+            "annotated_image": annotated_image,
+        }
+
+    @staticmethod
     def get_training_status(db: Session, task_id: int) -> dict[str, Any]:
         task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
         if task is None:
@@ -490,7 +986,23 @@ class TrainingService:
         task.status = "cancelled"
         task.completed_at = datetime.now()
         db.commit()
+        _append_task_log(task.task_uuid, "training task cancelled by user")
         return {"message": "training task cancelled", "task_id": task_id}
+
+    @staticmethod
+    def get_task_log_path(task_uuid: str) -> Path:
+        return _task_log_path(task_uuid)
+
+    @staticmethod
+    def read_task_log(task_uuid: str, max_lines: int = 200) -> dict[str, Any]:
+        path = _task_log_path(task_uuid)
+        if not path.exists():
+            return {"exists": False, "path": str(path), "lines": []}
+
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        if max_lines > 0:
+            lines = lines[-max_lines:]
+        return {"exists": True, "path": str(path), "lines": lines}
 
     @staticmethod
     def get_task_list(
@@ -535,6 +1047,7 @@ class TrainingService:
             "dataset_size": task.dataset_size,
             "dataset_path": task.dataset_path,
             "data_yaml": task.data_yaml,
+            "log_path": str(_task_log_path(task.task_uuid)),
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
@@ -553,6 +1066,33 @@ class TrainingService:
             "map50": metric.map50,
             "map50_95": metric.map50_95,
             "lr": metric.lr,
+        }
+
+    @staticmethod
+    def _serialize_model_version(model_version: ModelVersion) -> dict[str, Any]:
+        scene = getattr(model_version, "scene", None)
+        return {
+            "id": model_version.id,
+            "scene_id": model_version.scene_id,
+            "scene_name": getattr(scene, "name", None),
+            "training_task_id": model_version.training_task_id,
+            "version": model_version.version,
+            "model_name": model_version.model_name,
+            "model_type": model_version.model_type,
+            "status": model_version.status,
+            "model_path": model_version.model_path,
+            "minio_url": model_version.minio_url,
+            "map50": model_version.map50,
+            "map50_95": model_version.map50_95,
+            "precision": model_version.precision,
+            "recall": model_version.recall,
+            "per_class_ap": model_version.per_class_ap,
+            "description": model_version.description,
+            "file_size": model_version.file_size,
+            "is_default": model_version.is_default,
+            "created_at": model_version.created_at.isoformat()
+            if model_version.created_at
+            else None,
         }
 
 
