@@ -50,13 +50,6 @@ def test_training_start_scene_not_found(client):
     _create_scene(client, headers)
 
 
-def test_normalize_training_device_accepts_8_gpus():
-    from app.training.training_service import _normalize_device
-
-    assert _normalize_device("0-7") == "0,1,2,3,4,5,6,7"
-    assert _normalize_device("0,1,2,3,4,5,6,7") == "0,1,2,3,4,5,6,7"
-
-
 def test_training_start_uses_vision_pay_dataset(client, db_session, monkeypatch):
     from app.api import training as training_api
     from app.entity.db_models import DetectionScene, User
@@ -97,8 +90,8 @@ def test_training_start_uses_vision_pay_dataset(client, db_session, monkeypatch)
             "scene_id": scene.id,
             "model_name": "yolov11n",
             "epochs": 5,
-            "batch_size": 128,
-            "device": "0,1,2,3,4,5,6,7",
+            "batch_size": 2,
+            "device": "cpu",
         },
     )
 
@@ -107,8 +100,6 @@ def test_training_start_uses_vision_pay_dataset(client, db_session, monkeypatch)
     assert data["task_uuid"] == "abc123ef"
     assert data["model_name"] == "yolov11n"
     assert data["epochs"] == 5
-    assert captured["batch_size"] == 128
-    assert captured["device"] == "0,1,2,3,4,5,6,7"
     assert captured["data_yaml"].endswith("datasets\\vision_pay\\data.yaml") or captured[
         "data_yaml"
     ].endswith("datasets/vision_pay/data.yaml")

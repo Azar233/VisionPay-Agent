@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -15,7 +14,7 @@ from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import get_db
 from app.entity.db_models import DetectionScene, TrainingTask
-from app.entity.schemas import ModelExportRequest, ModelValidateRequest, TrainingTaskCreate
+from app.entity.schemas import TrainingTaskCreate
 from app.training.training_service import training_service
 
 logger = get_logger(__name__)
@@ -190,158 +189,6 @@ async def get_training_metrics(
     _get_owned_task(db, task_id, current_user.id)
     metrics = training_service.get_training_metrics(db, task_id)
     return {"task_id": task_id, "total": len(metrics), "metrics": metrics}
-
-
-@router.get("/logs/{task_id}")
-async def get_training_log(
-    task_id: int,
-    lines: int = 200,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Read the tail of a task-specific training log file."""
-
-    task = _get_owned_task(db, task_id, current_user.id)
-    max_lines = min(max(lines, 1), 2000)
-    log = training_service.read_task_log(task.task_uuid, max_lines=max_lines)
-    return {
-        "task_id": task.id,
-        "task_uuid": task.task_uuid,
-        "exists": log["exists"],
-        "path": log["path"],
-        "lines": log["lines"],
-    }
-
-
-
-
-@router.post("/validate/{task_id}")
-async def validate_training_task(
-    task_id: int,
-    request: ModelValidateRequest | None = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Run validation for a completed training task and return an evaluation report."""
-
-    _get_owned_task(db, task_id, current_user.id)
-    request = request or ModelValidateRequest()
-    try:
-        return training_service.validate_model(
-            db=db,
-            task_id=task_id,
-            split=request.split,
-            device=request.device,
-            img_size=request.img_size,
-            conf=request.conf,
-            iou=request.iou,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        logger.error("模型评估失败：%s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"模型评估失败：{exc}") from exc
-
-
-@router.post("/export/{task_id}")
-async def export_training_model(
-    task_id: int,
-    request: ModelExportRequest | None = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Export best.pt to backend/models and create a model version record."""
-
-    _get_owned_task(db, task_id, current_user.id)
-    request = request or ModelExportRequest()
-    try:
-        return training_service.export_model(
-            db=db,
-            task_id=task_id,
-            version=request.version,
-            description=request.description,
-            set_default=request.set_default,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        logger.error("模型导出失败：%s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"模型导出失败：{exc}") from exc
-
-
-@router.get("/download/{task_id}")
-async def download_training_model(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Download the best.pt weights file for a training task."""
-
-    _get_owned_task(db, task_id, current_user.id)
-    try:
-        download = training_service.get_model_download_path(db, task_id)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return FileResponse(
-        path=str(download["path"]),
-        media_type="application/octet-stream",
-        filename=download["filename"],
-    )
-
-
-@router.post("/predict")
-async def predict_training_image(
-    task_id: int = Form(...),
-    conf: float = Form(0.25),
-    iou: float = Form(0.45),
-    device: str = Form("cpu"),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Upload a test image and run the trained best.pt for quick visual validation."""
-
-    _get_owned_task(db, task_id, current_user.id)
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}:
-        raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/BMP/WEBP 图片")
-
-    upload_dir = BACKEND_ROOT / settings.LOG_DIR / "predict_uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    upload_path = upload_dir / f"{uuid.uuid4().hex}{suffix}"
-    try:
-        upload_path.write_bytes(await file.read())
-        if upload_path.stat().st_size == 0:
-            raise HTTPException(status_code=400, detail="上传文件为空")
-        return training_service.predict_test_image(
-            db=db,
-            task_id=task_id,
-            image_path=upload_path,
-            conf=conf,
-            iou=iou,
-            device=device,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        logger.error("测试图验证失败：%s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"测试图验证失败：{exc}") from exc
-    finally:
-        try:
-            upload_path.unlink(missing_ok=True)
-        except OSError:
-            logger.warning("清理测试图临时文件失败：%s", upload_path)
 
 
 @router.post("/stop/{task_id}")

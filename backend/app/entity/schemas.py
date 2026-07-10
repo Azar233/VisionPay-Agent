@@ -236,8 +236,8 @@ class TrainingTaskCreate(ProjectBaseModel):
     model_name: str = Field(default="yolov11n", description="基础模型")
     epochs: int = Field(default=100, ge=1, le=500, description="训练轮数")
     img_size: int = Field(default=640, description="图像尺寸")
-    batch_size: int = Field(default=16, ge=1, le=512, description="Global batch size")
-    device: str = Field(default="0", description="Training device: cpu, 0, 0,1,2,3, or 0-7")
+    batch_size: int = Field(default=16, ge=1, le=64, description="批次大小")
+    device: str = Field(default="0", description="训练设备")
     optimizer: str = Field(default="SGD", description="优化器")
     lr0: float = Field(default=0.01, description="初始学习率")
     augment_config: Optional[dict] = Field(None, description="数据增强配置")
@@ -290,30 +290,6 @@ class TrainingMetricResponse(ProjectBaseModel):
 
     class Config:
         from_attributes = True
-
-class ModelValidateRequest(ProjectBaseModel):
-    """模型评估请求"""
-    split: str = Field(default="val", pattern="^(train|val|test)$", description="评估集划分")
-    conf: float = Field(default=0.001, ge=0, le=1, description="置信度阈值")
-    iou: float = Field(default=0.6, ge=0, le=1, description="NMS IoU 阈值")
-    img_size: Optional[int] = Field(default=None, ge=32, description="评估图像尺寸")
-    device: Optional[str] = Field(default=None, description="评估设备，如 cpu 或 0")
-
-
-class ModelExportRequest(ProjectBaseModel):
-    """模型导出请求"""
-    version: Optional[str] = Field(default=None, description="模型版本号，如 v1.0.0")
-    description: Optional[str] = Field(default=None, description="版本说明")
-    set_default: bool = Field(default=True, description="是否设置为场景默认模型")
-
-
-class ModelExportResponse(ProjectBaseModel):
-    """模型导出响应"""
-    message: str
-    model_version: dict
-    model_path: str
-    model_dir: str
-    report_path: Optional[str] = None
 
 
 # --- 模型版本 ---
