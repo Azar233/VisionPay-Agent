@@ -15,7 +15,7 @@ engine = create_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
-    echo=settings.DEBUG,  # DEBUG 模式下打印 SQL 语句
+    echo=settings.SQL_ECHO,  # 仅在需要调试 SQL 时打印 SQL 语句
 )
 
 # 会话工厂
