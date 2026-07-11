@@ -142,6 +142,9 @@ def verify_dataset(dataset_dir: str) -> dict:
             "images": len(image_files),
             "labels": len(label_files),
             "annotations": 0,
+            "annotated_images": 0,
+            "annotations_per_image": 0.0,
+            "class_distribution": Counter(),
             "missing_labels": len(missing_labels),
             "missing_images": len(missing_images),
         }
@@ -156,6 +159,7 @@ def verify_dataset(dataset_dir: str) -> dict:
             if not lines:
                 results["empty_labels"] += 1
                 continue
+            split_result["annotated_images"] += 1
 
             for line_num, line in enumerate(lines, start=1):
                 parts = line.split()
@@ -200,6 +204,7 @@ def verify_dataset(dataset_dir: str) -> dict:
                     continue
 
                 results["class_distribution"][class_id] += 1
+                split_result["class_distribution"][class_id] += 1
                 results["total_annotations"] += 1
                 split_result["annotations"] += 1
                 bbox_widths.append(width)
@@ -221,6 +226,10 @@ def verify_dataset(dataset_dir: str) -> dict:
                 1 for w, h in zip(bbox_widths, bbox_heights) if w * h > 0.5
             )
 
+        if split_result["images"]:
+            split_result["annotations_per_image"] = (
+                split_result["annotations"] / split_result["images"]
+            )
         results["split_stats"][split] = split_result
 
     bbox = results["bbox_stats"]
@@ -230,6 +239,31 @@ def verify_dataset(dataset_dir: str) -> dict:
     else:
         bbox["min_width"] = 0.0
         bbox["min_height"] = 0.0
+
+    train_classes = set(results["split_stats"].get("train", {}).get("class_distribution", {}))
+    results["split_warnings"] = []
+    missing_train_classes = sorted(set(class_names) - train_classes)
+    if missing_train_classes:
+        results["split_warnings"].append(
+            f"train 未覆盖 data.yaml 中的 {len(missing_train_classes)} 个类别: "
+            f"{missing_train_classes[:20]}"
+        )
+
+    train_density = results["split_stats"].get("train", {}).get("annotations_per_image", 0.0)
+    for split in ["val", "test"]:
+        split_stats = results["split_stats"].get(split, {})
+        split_classes = set(split_stats.get("class_distribution", {}))
+        missing = sorted(split_classes - train_classes)
+        if missing:
+            results["split_warnings"].append(
+                f"{split} 含有 train 未出现的 {len(missing)} 个类别: {missing[:20]}"
+            )
+        split_density = split_stats.get("annotations_per_image", 0.0)
+        if train_density > 0 and split_density >= train_density * 3:
+            results["split_warnings"].append(
+                f"{split} 平均每图 {split_density:.2f} 个目标，是 train 的 "
+                f"{split_density / train_density:.1f} 倍，存在明显场景分布偏移"
+            )
 
     return results
 
@@ -256,8 +290,16 @@ def print_report(results: dict):
         stats = results["split_stats"].get(split, {})
         print(
             f"    {split}: {stats.get('images', 0)} 图像, "
-            f"{stats.get('labels', 0)} 标注, {stats.get('annotations', 0)} 目标"
+            f"{stats.get('labels', 0)} 标注, {stats.get('annotations', 0)} 目标, "
+            f"平均 {stats.get('annotations_per_image', 0):.2f} 目标/图, "
+            f"{len(stats.get('class_distribution', {}))} 类"
         )
+
+    if results.get("split_warnings"):
+        print("\n  [警告] Split 分布不一致：")
+        for warning in results["split_warnings"]:
+            print(f"    - {warning}")
+        results["has_warnings"] = True
 
     if results["missing_labels"]:
         print(f"\n  [警告] 缺少标注文件 ({len(results['missing_labels'])} 个)：")

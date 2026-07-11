@@ -40,6 +40,25 @@ logger = get_logger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _running_tasks: dict[str, Any] = {}
 _running_lock = threading.Lock()
+_TRAIN_AUGMENT_KEYS = {
+    "hsv_h",
+    "hsv_s",
+    "hsv_v",
+    "degrees",
+    "translate",
+    "scale",
+    "shear",
+    "perspective",
+    "flipud",
+    "fliplr",
+    "bgr",
+    "mosaic",
+    "mixup",
+    "copy_paste",
+    "copy_paste_mode",
+    "erasing",
+    "close_mosaic",
+}
 
 
 class _StreamTee:
@@ -359,6 +378,63 @@ def _metric_from_csv_row(task_id: int, row: dict[str, str]) -> TrainingMetric:
     )
 
 
+def _trainer_epoch_values(trainer: Any) -> dict[str, float | None]:
+    """Extract epoch-average losses and post-validation metrics from a trainer."""
+
+    metrics = getattr(trainer, "metrics", {}) or {}
+    loss_names = list(getattr(trainer, "loss_names", []) or [])
+    loss_values = getattr(trainer, "tloss", None)
+    if loss_values is None:
+        loss_values = getattr(trainer, "loss_items", None)
+
+    losses: dict[str, float | None] = {}
+    if loss_values is not None and loss_names:
+        try:
+            values = loss_values.detach().cpu().tolist()
+        except AttributeError:
+            values = list(loss_values)
+        losses = {
+            name.replace("train/", "").replace("_loss", ""): _safe_float(value)
+            for name, value in zip(loss_names, values)
+        }
+
+    def metric_value(*keys: str) -> float | None:
+        for key in keys:
+            value = _safe_float(metrics.get(key))
+            if value is not None:
+                return value
+        return None
+
+    return {
+        "box_loss": losses.get("box")
+        if losses.get("box") is not None
+        else metric_value("train/box_loss", "metrics/box_loss"),
+        "cls_loss": losses.get("cls")
+        if losses.get("cls") is not None
+        else metric_value("train/cls_loss", "metrics/cls_loss"),
+        "dfl_loss": losses.get("dfl")
+        if losses.get("dfl") is not None
+        else metric_value("train/dfl_loss", "metrics/dfl_loss"),
+        "precision": metric_value("metrics/precision(B)", "metrics/precision"),
+        "recall": metric_value("metrics/recall(B)", "metrics/recall"),
+        "map50": metric_value("metrics/mAP50(B)", "metrics/mAP50"),
+        "map50_95": metric_value("metrics/mAP50-95(B)", "metrics/mAP50-95"),
+    }
+
+
+def _training_augment_kwargs(config: Any) -> dict[str, Any]:
+    """Return supported Ultralytics augmentation overrides."""
+
+    if config is None:
+        return {}
+    if not isinstance(config, dict):
+        raise ValueError("augment_config must be an object")
+    unknown = sorted(set(config) - _TRAIN_AUGMENT_KEYS)
+    if unknown:
+        raise ValueError(f"Unsupported augment_config keys: {', '.join(unknown)}")
+    return {key: value for key, value in config.items() if value is not None}
+
+
 class TrainingService:
     """Service for managing YOLO training tasks."""
 
@@ -382,6 +458,7 @@ class TrainingService:
             raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
 
         device = _normalize_device(config.get("device", "cpu"))
+        _training_augment_kwargs(config.get("augment_config"))
         task_uuid = uuid.uuid4().hex[:8]
         log_path = _append_task_log(
             task_uuid,
@@ -499,7 +576,9 @@ class TrainingService:
                     total_epochs=int(config.get("epochs", 50)),
                 )
 
-            model.add_callback("on_train_epoch_end", on_train_epoch_end)
+            # Ultralytics validates after on_train_epoch_end. on_fit_epoch_end is
+            # the first epoch callback where current validation metrics exist.
+            model.add_callback("on_fit_epoch_end", on_train_epoch_end)
 
             output_dir = _resolve_path(settings.TRAIN_OUTPUT_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -519,6 +598,7 @@ class TrainingService:
                 "plots": False,
                 "verbose": True,
             }
+            train_kwargs.update(_training_augment_kwargs(config.get("augment_config")))
             logger.info("YOLO training begins | task=%s data=%s", task_uuid, data_yaml)
             _append_task_log(task_uuid, f"YOLO training begins\ntrain_kwargs={train_kwargs}")
 
@@ -585,38 +665,12 @@ class TrainingService:
                 .filter(TrainingMetric.task_id == task_id, TrainingMetric.epoch == epoch)
                 .first()
             )
-            if existing is not None:
-                return
-
-            metrics = getattr(trainer, "metrics", {}) or {}
-            loss_names = list(getattr(trainer, "loss_names", []) or [])
-            loss_items = getattr(trainer, "loss_items", None)
-            losses: dict[str, float | None] = {}
-            if loss_items is not None and loss_names:
-                try:
-                    values = loss_items.detach().cpu().tolist()
-                except AttributeError:
-                    values = list(loss_items)
-                losses = {
-                    name.replace("train/", "").replace("_loss", ""): _safe_float(value)
-                    for name, value in zip(loss_names, values)
-                }
-
-            metric = TrainingMetric(
-                task_id=task_id,
-                epoch=epoch,
-                box_loss=losses.get("box")
-                or _safe_float(metrics.get("train/box_loss") or metrics.get("metrics/box_loss")),
-                cls_loss=losses.get("cls")
-                or _safe_float(metrics.get("train/cls_loss") or metrics.get("metrics/cls_loss")),
-                dfl_loss=losses.get("dfl")
-                or _safe_float(metrics.get("train/dfl_loss") or metrics.get("metrics/dfl_loss")),
-                precision=_safe_float(metrics.get("metrics/precision(B)")),
-                recall=_safe_float(metrics.get("metrics/recall(B)")),
-                map50=_safe_float(metrics.get("metrics/mAP50(B)")),
-                map50_95=_safe_float(metrics.get("metrics/mAP50-95(B)")),
-            )
-            db.add(metric)
+            values = _trainer_epoch_values(trainer)
+            metric = existing or TrainingMetric(task_id=task_id, epoch=epoch)
+            for field, value in values.items():
+                setattr(metric, field, value)
+            if existing is None:
+                db.add(metric)
 
             task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
             if task is not None:
@@ -642,8 +696,8 @@ class TrainingService:
             return
 
         try:
-            existing_epochs = {
-                metric.epoch
+            existing_metrics = {
+                metric.epoch: metric
                 for metric in db.query(TrainingMetric)
                 .filter(TrainingMetric.task_id == task_id)
                 .all()
@@ -657,10 +711,22 @@ class TrainingService:
                         for key, value in row.items()
                     }
                     metric = _metric_from_csv_row(task_id, cleaned)
-                    if metric.epoch in existing_epochs:
+                    existing = existing_metrics.get(metric.epoch)
+                    if existing is None:
+                        db.add(metric)
+                        existing_metrics[metric.epoch] = metric
                         continue
-                    db.add(metric)
-                    existing_epochs.add(metric.epoch)
+                    for field in [
+                        "box_loss",
+                        "cls_loss",
+                        "dfl_loss",
+                        "precision",
+                        "recall",
+                        "map50",
+                        "map50_95",
+                        "lr",
+                    ]:
+                        setattr(existing, field, getattr(metric, field))
             db.commit()
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to parse results.csv | path=%s error=%s", results_csv, exc)

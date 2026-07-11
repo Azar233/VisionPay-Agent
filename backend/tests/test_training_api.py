@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 
 def _auth_headers(client):
     client.post(
@@ -55,6 +57,43 @@ def test_normalize_training_device_accepts_8_gpus():
 
     assert _normalize_device("0-7") == "0,1,2,3,4,5,6,7"
     assert _normalize_device("0,1,2,3,4,5,6,7") == "0,1,2,3,4,5,6,7"
+
+
+def test_trainer_epoch_values_use_epoch_average_and_current_validation_metrics():
+    from app.training.training_service import _trainer_epoch_values
+
+    trainer = SimpleNamespace(
+        loss_names=["box_loss", "cls_loss", "dfl_loss"],
+        tloss=[0.4, 1.2, 0.8],
+        loss_items=[9.0, 9.0, 9.0],
+        metrics={
+            "metrics/precision(B)": 0.31,
+            "metrics/recall(B)": 0.42,
+            "metrics/mAP50(B)": 0.27,
+            "metrics/mAP50-95(B)": 0.18,
+        },
+    )
+
+    assert _trainer_epoch_values(trainer) == {
+        "box_loss": 0.4,
+        "cls_loss": 1.2,
+        "dfl_loss": 0.8,
+        "precision": 0.31,
+        "recall": 0.42,
+        "map50": 0.27,
+        "map50_95": 0.18,
+    }
+
+
+def test_training_augment_kwargs_validate_supported_keys():
+    from app.training.training_service import _training_augment_kwargs
+
+    assert _training_augment_kwargs({"degrees": 180, "mixup": 0.1}) == {
+        "degrees": 180,
+        "mixup": 0.1,
+    }
+    with pytest.raises(ValueError, match="Unsupported augment_config keys"):
+        _training_augment_kwargs({"degree": 180})
 
 
 def test_training_start_uses_vision_pay_dataset(client, db_session, monkeypatch):

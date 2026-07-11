@@ -49,14 +49,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_categories(json_file: Path) -> tuple[dict[int, int], list[str]]:
+def load_categories(json_file: Path) -> tuple[dict[int, int], list[str], dict[int, str]]:
     with json_file.open("r", encoding="utf-8") as f:
         coco_data: dict[str, Any] = json.load(f)
 
     categories = sorted(coco_data.get("categories", []), key=lambda item: item["id"])
+    category_names = {int(category["id"]): str(category.get("name", category["id"])) for category in categories}
+    if len(category_names) != len(categories):
+        raise ValueError(f"duplicate category ids in {json_file}")
     class_mapping = {category["id"]: index for index, category in enumerate(categories)}
     class_names = [category.get("name", str(category["id"])) for category in categories]
-    return class_mapping, class_names
+    return class_mapping, class_names, category_names
 
 
 def copy_split_images(image_dir: Path, output_image_dir: Path, output_label_dir: Path) -> int:
@@ -106,7 +109,22 @@ def main() -> int:
             if child.exists():
                 shutil.rmtree(child)
 
-    class_mapping, class_names = load_categories(resolved["train"][1])
+    class_mapping, class_names, train_categories = load_categories(resolved["train"][1])
+    for split in ["val", "test"]:
+        _, _, split_categories = load_categories(resolved[split][1])
+        if split_categories != train_categories:
+            missing = sorted(set(train_categories) - set(split_categories))
+            extra = sorted(set(split_categories) - set(train_categories))
+            renamed = sorted(
+                category_id
+                for category_id in set(train_categories) & set(split_categories)
+                if train_categories[category_id] != split_categories[category_id]
+            )
+            print(
+                f"[error] {split} categories differ from train: "
+                f"missing={missing[:10]}, extra={extra[:10]}, renamed={renamed[:10]}"
+            )
+            return 1
     converter = DataConverter()
 
     print("Split COCO to YOLO conversion")
@@ -129,8 +147,12 @@ def main() -> int:
 
         print(
             f"  {split}: images={copied_images}, "
-            f"labels={stats['converted']}, annotations={stats['annotations']}"
+            f"labels={stats['converted']}, annotations={stats['annotations']}, "
+            f"skipped_annotations={stats['skipped_annotations']}"
         )
+        if stats["skipped_annotations"]:
+            print(f"[error] {split} contains annotations that could not be converted")
+            return 1
 
     yaml_path = DatasetSplitter.generate_data_yaml(
         output_dir=output_dir,

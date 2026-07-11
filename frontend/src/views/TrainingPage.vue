@@ -168,7 +168,7 @@
         </el-form-item>
 
         <el-form-item label="训练轮数">
-          <el-slider v-model="trainForm.epochs" :min="1" :max="100" :step="1" show-input />
+          <el-slider v-model="trainForm.epochs" :min="1" :max="300" :step="1" show-input />
         </el-form-item>
 
         <el-form-item label="批次大小">
@@ -220,6 +220,10 @@
             :step="0.001"
             :precision="4"
           />
+        </el-form-item>
+
+        <el-form-item label="场景增强">
+          <el-switch v-model="trainForm.checkout_augment" />
         </el-form-item>
 
         <el-form-item label="数据集目录">
@@ -529,12 +533,13 @@ const deviceOptions = [
 const trainForm = ref({
   scene_id: 1,
   model_name: 'yolov11n',
-  epochs: 5,
+  epochs: 100,
   batch_size: 16,
   img_size: 640,
   device: '0',
   optimizer: 'SGD',
   lr0: 0.01,
+  checkout_augment: true,
   dataset_path: 'datasets/vision_pay',
 })
 
@@ -747,6 +752,20 @@ async function createTask() {
   creating.value = true
   try {
     const payload = { ...trainForm.value }
+    const checkoutAugment = payload.checkout_augment
+    delete payload.checkout_augment
+    if (checkoutAugment) {
+      payload.augment_config = {
+        degrees: 180,
+        translate: 0.2,
+        scale: 0.6,
+        flipud: 0.5,
+        fliplr: 0.5,
+        mosaic: 1.0,
+        mixup: 0.1,
+        close_mosaic: 10,
+      }
+    }
     if (!payload.dataset_path) delete payload.dataset_path
     const task = await startTrainingApi(payload)
     ElMessage.success(`训练任务已创建：${task.task_uuid}`)

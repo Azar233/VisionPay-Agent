@@ -272,6 +272,25 @@ python tools\visualize_annotations.py --grid --output datasets\vision_pay\vis_ou
 backend/datasets/vision_pay/data.yaml
 ```
 
+### RPC 官方划分说明
+
+Retail Product Checkout Dataset 的官方 split 不是普通的随机同分布划分：
+
+- `train` 是单商品多角度图，每张图只有一个标注目标。
+- `val/test` 是真实多商品结算图，平均每张图约 12 个目标，并包含旋转、遮挡和堆叠。
+- 官方 JSON 的 200 个类别 ID 和名称在三个 split 中一致，COCO 到 YOLO 的连续类别映射可以共用。
+
+因此官方 `val/test` 应保留为最终场景评估集，不能回流训练。只用单商品图训练时，普通 YOLO Mosaic 只能部分模拟多目标布局，无法充分模拟真实堆叠遮挡。正式训练应增加由 `train` 单商品素材生成的多商品合成场景，或采集并标注真实多商品训练图。
+
+建议按以下顺序定位训练问题：
+
+1. 关闭增强，在少量训练图上做过拟合测试，确认标签和优化链路能达到接近满分的 train 指标。
+2. 单独评估 `split=train`。train 指标高而官方 val 指标低表示场景分布偏移，不是 COCO 类别映射错误。
+3. 从单商品素材按商品分组建立同分布 holdout，用于观察分类是否收敛；官方 val 继续用于衡量结算场景泛化。
+4. 正式训练使用 100 个以上 epoch，并观察 `results.csv`。5 epoch 仅用于流程冒烟测试，默认 3 epoch warmup 后几乎没有充分优化。
+
+`verify_dataset.py` 会报告每个 split 的目标密度、类别覆盖和明显的 split 分布偏移。前端“场景增强”会启用平面旋转、翻转、Mosaic 和少量 MixUp，以缩小单商品图与结算图之间的差异，但它不能替代多商品场景训练数据。
+
 如果从其他电脑复制了已经生成好的 `datasets/vision_pay`，需要确认 `data.yaml` 里的 `path` 指向当前电脑真实路径。最稳妥的方式是重新运行导入脚本生成。
 
 ## 跑通一次训练
