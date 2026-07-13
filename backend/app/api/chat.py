@@ -102,7 +102,11 @@ async def list_sessions(
 ):
     sessions = (
         db.query(ChatSession)
-        .filter(ChatSession.user_id == current_user.id, ChatSession.status == "active")
+        .filter(
+            ChatSession.user_id == current_user.id,
+            ChatSession.status == "active",
+            ChatSession.message_count > 0,
+        )
         .order_by(ChatSession.last_message_at.desc(), ChatSession.created_at.desc())
         .all()
     )

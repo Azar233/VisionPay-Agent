@@ -144,3 +144,51 @@ def test_detection_conversation_is_user_scoped(client):
     )
     other_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     assert client.get(f"/api/chat/sessions/{session_uuid}", headers=other_headers).status_code == 404
+
+
+def test_empty_draft_is_not_listed_until_first_message(client):
+    headers = _auth_headers(client)
+    created = client.post(
+        "/api/chat/sessions", headers=headers, json={"title": "新对话"}
+    )
+    assert created.status_code == 200
+    sessions = client.get("/api/chat/sessions", headers=headers)
+    assert sessions.status_code == 200
+    assert sessions.json() == {"items": []}
+
+
+def test_chat_stream_emits_chunks_and_persists_full_reply(client, monkeypatch):
+    from app.api import chat as chat_api
+
+    headers = _auth_headers(client)
+    session_uuid = client.post(
+        "/api/chat/sessions", headers=headers, json={"title": "新对话"}
+    ).json()["session_uuid"]
+
+    class FakeAgent:
+        def __init__(self, **kwargs):
+            pass
+
+        async def stream(self, message, attachment_paths, history):
+            yield {"type": "text_chunk", "content": "你"}
+            yield {"type": "text_chunk", "content": "好"}
+
+    monkeypatch.setattr(chat_api, "DetectionAgent", FakeAgent)
+    response = client.post(
+        "/api/chat/stream",
+        headers=headers,
+        json={
+            "message": "测试流式输出",
+            "attachment_paths": [],
+            "attachment_names": [],
+            "session_uuid": session_uuid,
+        },
+    )
+    assert response.status_code == 200
+    assert '"content": "你"' in response.text
+    assert '"content": "好"' in response.text
+    assert "data: [DONE]" in response.text
+
+    detail = client.get(f"/api/chat/sessions/{session_uuid}", headers=headers).json()
+    assert detail["messages"][-1]["role"] == "assistant"
+    assert detail["messages"][-1]["content"] == "你好"

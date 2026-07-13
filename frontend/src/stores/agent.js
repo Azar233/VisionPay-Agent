@@ -29,6 +29,7 @@ export const useAgentStore = defineStore('agent', {
     /** 添加一条消息 */
     addMessage(message) {
       this.messages.push(message)
+      return this.messages[this.messages.length - 1]
     },
     /** 更新最后一条 AI 消息（用于流式追加） */
     updateLastAssistantMessage(content) {
