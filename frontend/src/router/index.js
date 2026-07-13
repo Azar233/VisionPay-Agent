@@ -20,6 +20,18 @@ const routes = [
     component: () => import('@/views/RegisterPage.vue'),
     meta: { title: '注册', requiresAuth: false },
   },
+  {
+    path: '/checkout',
+    name: 'CustomerCheckout',
+    component: () => import('@/views/CustomerCheckoutPage.vue'),
+    meta: { title: '自助结算', requiresAuth: false },
+  },
+  {
+    path: '/checkout/payment',
+    name: 'CustomerPayment',
+    component: () => import('@/views/CustomerPaymentPage.vue'),
+    meta: { title: '确认付款', requiresAuth: false },
+  },
   // ── 需要登录的页面（使用 MainLayout 布局） ──────
   {
     path: '/',
