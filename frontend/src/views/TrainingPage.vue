@@ -2,8 +2,9 @@
   <div class="training-page">
     <div class="page-header">
       <div>
+        <span class="vp-kicker">Model Operations</span>
         <h2>模型训练与监控</h2>
-        <p>YOLOv11 训练任务、进度和指标曲线</p>
+        <p>启动 YOLOv11 训练任务，实时观察 loss、mAP 与运行状态。</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="showCreateDialog = true">
         新建训练任务
@@ -967,31 +968,44 @@ onBeforeUnmount(() => {
 .training-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+  min-height: 100%;
+  padding: 32px;
+  color: $text-primary;
+  background: $bg-color;
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 20px;
+  padding: 8px 0 14px;
 
   h2 {
-    margin: 0;
-    font-size: 22px;
+    margin: 10px 0 0;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 40px;
+    line-height: 1.08;
     color: $text-primary;
+    letter-spacing: 0;
   }
 
   p {
-    margin: 6px 0 0;
+    max-width: 560px;
+    margin: 12px 0 0;
     color: $text-secondary;
+    font-size: 16px;
+    line-height: 1.6;
   }
 }
 
 .panel {
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #ebeef5;
+  padding: 20px;
+  background: $surface-color;
+  border: 1px solid $border-color;
   border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
 }
 
 .panel-header {
@@ -1074,7 +1088,7 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   word-break: break-word;
   color: #d7e1ef;
-  background: #111827;
+  background: $bg-color-dark;
   border-radius: $border-radius-sm;
   font: 12px/1.6 Consolas, 'Courier New', monospace;
 }
@@ -1111,9 +1125,9 @@ onBeforeUnmount(() => {
 .eval-section,
 .predict-panel {
   padding: 14px;
-  border: 1px solid #ebeef5;
+  border: 1px solid $border-color;
   border-radius: $border-radius-sm;
-  background: #fff;
+  background: $surface-color;
 
   h3 {
     margin: 0 0 12px;
@@ -1171,9 +1185,9 @@ onBeforeUnmount(() => {
   max-height: 360px;
   margin-top: 12px;
   object-fit: contain;
-  border: 1px solid #ebeef5;
+  border: 1px solid $border-color;
   border-radius: $border-radius-sm;
-  background: #f5f7fa;
+  background: $surface-muted;
 }
 
 .predict-summary {
@@ -1194,10 +1208,10 @@ onBeforeUnmount(() => {
 
 .metric-card {
   min-height: 72px;
-  padding: 12px;
-  border: 1px solid #ebeef5;
+  padding: 14px;
+  border: 1px solid $border-color;
   border-radius: $border-radius-sm;
-  background: #fafafa;
+  background: $surface-muted;
 
   span {
     display: block;
@@ -1222,15 +1236,27 @@ onBeforeUnmount(() => {
 
 .chart {
   min-height: 340px;
-  border: 1px solid #ebeef5;
+  border: 1px solid $border-color;
   border-radius: $border-radius-sm;
+  background: $surface-color;
 }
 
 .empty-monitor {
   padding: 32px 0;
-  background: #fff;
-  border: 1px solid #ebeef5;
+  background: $surface-color;
+  border: 1px solid $border-color;
   border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+}
+
+.task-table :deep(.el-table__header th) {
+  background: $surface-muted;
+  color: $text-secondary;
+  font-weight: 800;
+}
+
+.task-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background: $primary-soft;
 }
 
 @media (max-width: 1100px) {
@@ -1239,6 +1265,21 @@ onBeforeUnmount(() => {
   .eval-columns,
   .predict-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .training-page {
+    padding: 20px;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+
+    h2 {
+      font-size: 30px;
+    }
   }
 }
 </style>

@@ -4,19 +4,80 @@
 
 @use './reset.scss';
 
+:root {
+  --vp-primary: #6366f1;
+  --vp-primary-hover: #5558e8;
+  --vp-primary-soft: #eef0ff;
+  --vp-accent: #0891b2;
+  --vp-success: #10b981;
+  --vp-warning: #d97706;
+  --vp-danger: #dc2626;
+  --vp-bg: #f7f7f8;
+  --vp-surface: #ffffff;
+  --vp-surface-muted: #f3f4f8;
+  --vp-border: #e5e7eb;
+  --vp-text: #111827;
+  --vp-muted: #6b7280;
+  --el-color-primary: #6366f1;
+  --el-color-primary-light-3: #8285ff;
+  --el-color-primary-light-5: #a8aafd;
+  --el-color-primary-light-7: #d1d2ff;
+  --el-color-primary-light-8: #e0e1ff;
+  --el-color-primary-light-9: #eef0ff;
+  --el-color-primary-dark-2: #4f46e5;
+  --el-border-radius-base: 8px;
+  --el-border-color: #e5e7eb;
+  --el-text-color-primary: #111827;
+  --el-text-color-regular: #374151;
+  --el-text-color-secondary: #6b7280;
+}
+
 // ── 页面容器 ────────────────────────────────────────
 .page-container {
-  padding: $spacing-lg;
+  padding: 32px;
   min-height: calc(100vh - $header-height);
+  background: $bg-color;
 }
 
 // ── 卡片容器 ────────────────────────────────────────
 .card-container {
-  background: #fff;
+  background: $surface-color;
+  border: 1px solid $border-color;
   border-radius: $border-radius-md;
   box-shadow: $shadow-sm;
   padding: $spacing-lg;
   margin-bottom: $spacing-md;
+}
+
+.vp-panel {
+  background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+}
+
+.vp-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: $primary-color;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vp-page-title {
+  margin: 0;
+  color: $text-primary;
+  font-size: 40px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.vp-page-subtitle {
+  margin: 12px 0 0;
+  color: $text-secondary;
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 // ── Flex 布局辅助 ───────────────────────────────────
@@ -46,10 +107,52 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c0c4cc;
+  background: #c6cad5;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.el-button {
+  font-weight: 700;
+}
+
+.el-button--primary {
+  --el-button-bg-color: #6366f1;
+  --el-button-border-color: #6366f1;
+  --el-button-hover-bg-color: #5558e8;
+  --el-button-hover-border-color: #5558e8;
+  --el-button-active-bg-color: #4f46e5;
+  --el-button-active-border-color: #4f46e5;
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px $border-color inset;
+}
+
+.el-input__wrapper:hover,
+.el-textarea__inner:hover,
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px $border-strong inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px $primary-color inset, $ring-primary;
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 20px;
+  }
+
+  .vp-page-title {
+    font-size: 30px;
+  }
 }

@@ -1,22 +1,26 @@
 <template>
-  <aside class="app-sidebar">
+  <aside :class="['app-sidebar', { collapsed }]">
     <el-menu
       :default-active="activeMenu"
       :router="true"
-      background-color="#304156"
-      text-color="#bfcbd9"
-      active-text-color="#409eff"
+      background-color="transparent"
+      text-color="#6b7280"
+      active-text-color="#4f46e5"
     >
-      <el-menu-item
+      <el-tooltip
         v-for="item in menuItems"
         :key="item.path"
-        :index="item.path"
+        :content="item.title"
+        :disabled="!collapsed"
+        placement="right"
       >
-        <el-icon>
-          <component :is="item.icon" />
-        </el-icon>
-        <span>{{ item.title }}</span>
-      </el-menu-item>
+        <el-menu-item :index="item.path">
+          <el-icon>
+            <component :is="item.icon" />
+          </el-icon>
+          <span>{{ item.title }}</span>
+        </el-menu-item>
+      </el-tooltip>
     </el-menu>
   </aside>
 </template>
@@ -33,6 +37,13 @@ import {
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
+
+defineProps({
+  collapsed: {
+    type: Boolean,
+    default: false,
+  },
+})
 
 /** 当前激活的菜单项 */
 const activeMenu = computed(() => {
@@ -54,23 +65,68 @@ const menuItems = [
   width: $sidebar-width;
   height: 100%;
   background: $sidebar-bg;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
   overflow-y: auto;
+  padding: 10px;
+  flex-shrink: 0;
+  transition: width 0.22s ease, padding 0.22s ease;
 
   .el-menu {
     border-right: none;
-    height: 100%;
+    height: auto;
+    background: transparent;
   }
 
   .el-menu-item {
-    height: 50px;
-    line-height: 50px;
+    height: 44px;
+    line-height: 44px;
+    margin-bottom: 6px;
+    border-radius: $border-radius-md;
+    color: $sidebar-text;
+    font-weight: 700;
+    transition: background 0.2s, color 0.2s, transform 0.2s;
 
     &.is-active {
-      background-color: rgba(64, 158, 255, 0.15) !important;
+      background-color: $primary-soft !important;
+      color: $sidebar-active-text !important;
     }
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.05) !important;
+      background-color: #f5f6fb !important;
+      color: $text-primary !important;
+      transform: translateX(2px);
+    }
+  }
+
+  &.collapsed {
+    width: 68px;
+    padding: 8px;
+
+    .el-menu-item {
+      justify-content: center;
+      padding: 0 !important;
+
+      span {
+        display: none;
+      }
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .app-sidebar {
+    width: 68px;
+    padding: 8px;
+
+    .el-menu-item {
+      justify-content: center;
+      padding: 0 !important;
+
+      span {
+        display: none;
+      }
     }
   }
 }

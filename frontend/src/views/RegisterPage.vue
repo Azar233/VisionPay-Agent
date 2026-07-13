@@ -1,10 +1,20 @@
 <template>
   <div class="register-page">
+    <section class="auth-hero">
+      <span class="vp-kicker">VisionPay Agent Platform</span>
+      <h1>Build a Retail Vision Workspace</h1>
+      <p>创建账号后即可使用商品检测、模型训练和智能体工作台。</p>
+      <div class="feature-grid">
+        <span><strong>YOLOv11</strong><small>商品定位</small></span>
+        <span><strong>Agent</strong><small>结果分析</small></span>
+        <span><strong>Metrics</strong><small>训练监控</small></span>
+      </div>
+    </section>
     <div class="register-card">
       <div class="register-header">
         <img src="/favicon.svg" alt="logo" class="register-logo" />
         <h2>创建账号</h2>
-        <p>注册后即可使用目标检测智能体平台</p>
+        <p>开始使用 VisionPay 智能检测平台</p>
       </div>
       <el-form
         ref="formRef"
@@ -137,18 +147,72 @@ async function handleRegister() {
 <style lang="scss" scoped>
 .register-page {
   width: 100%;
-  height: 100vh;
-  display: flex;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  gap: 64px;
+  padding: 48px max(32px, calc((100vw - 1120px) / 2));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 247, 248, 0.96)),
+    $bg-color;
+}
+
+.auth-hero {
+  max-width: 610px;
+
+  h1 {
+    margin: 24px 0 0;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 56px;
+    line-height: 1.04;
+    color: $text-primary;
+    letter-spacing: 0;
+  }
+
+  p {
+    margin: 18px 0 0;
+    color: $text-secondary;
+    font-size: 18px;
+    line-height: 1.7;
+  }
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 40px;
+
+  span {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 18px;
+    border: 1px solid $border-color;
+    border-radius: $border-radius-md;
+    background: $surface-color;
+    box-shadow: $shadow-sm;
+  }
+
+  strong {
+    color: $text-primary;
+    font-size: 18px;
+  }
+
+  small {
+    color: $text-secondary;
+    font-size: 13px;
+  }
 }
 
 .register-card {
   width: 420px;
-  padding: 40px;
-  background: #fff;
-  border-radius: $border-radius-lg;
+  padding: 36px;
+  background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
   box-shadow: $shadow-lg;
 }
 
@@ -163,7 +227,8 @@ async function handleRegister() {
   }
 
   h2 {
-    font-size: 22px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 28px;
     color: $text-primary;
     margin-bottom: 8px;
   }
@@ -176,6 +241,7 @@ async function handleRegister() {
 
 .register-btn {
   width: 100%;
+  min-height: 46px;
 }
 
 .register-footer {
@@ -186,10 +252,44 @@ async function handleRegister() {
   a {
     color: $primary-color;
     margin-left: 4px;
+    font-weight: 700;
 
     &:hover {
       text-decoration: underline;
     }
+  }
+}
+
+@media (max-width: 980px) {
+  .register-page {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 32px 20px;
+  }
+
+  .auth-hero {
+    text-align: center;
+
+    h1 {
+      font-size: 38px;
+    }
+  }
+
+  .feature-grid {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .register-card {
+    width: min(100%, 420px);
+    justify-self: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .feature-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
