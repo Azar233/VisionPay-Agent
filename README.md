@@ -130,12 +130,12 @@ agent-platform/
 │   ├── src/views/              # 检测、训练和结算页面
 │   └── tests/                  # 前端测试
 ├── scripts/                    # 数据处理和部署辅助脚本
-├── instances_train2019.json    # RPC 商品元数据
+├── instances_train2019.json    # 需自行准备的 RPC 商品元数据（Git 忽略）
 ├── docker-compose.yml
 └── README.md
 ```
 
-数据集、训练输出、模型权重、`.env` 和运行日志属于本地运行数据，通常不提交 Git。
+数据集、`instances_train2019.json`、训练输出、模型权重、`.env` 和运行日志属于本地运行数据，不随仓库分发。
 
 ## 5. 环境要求
 
@@ -229,15 +229,23 @@ cd backend
 alembic upgrade head
 ```
 
-价格初始化需要把 `instances_train2019.json` 放在项目根目录：
+仓库不包含 `instances_train2019.json`，使用者需要自行从 Retail Product Checkout（RPC）数据集中取得该商品元数据文件。文件需要包含 `__raw_Chinese_name_df`，其中保存 200 个 SKU 的 `category_id`、商品名、条码和商品大类。
+
+保持文件名不变，并将它放在项目根目录：
 
 ```text
 agent-platform/
-├── instances_train2019.json
+├── instances_train2019.json    # 自行下载，不提交 Git
 └── backend/
 ```
 
-然后执行：
+可以在项目根目录先确认文件存在：
+
+```powershell
+Test-Path .\instances_train2019.json
+```
+
+输出 `True` 后进入后端目录并执行价格初始化：
 
 ```powershell
 python tools\init_prices.py
@@ -251,6 +259,8 @@ Price import complete: created=200, updated=0
 ```
 
 脚本可以重复运行，已有商品会更新而不会重复插入。当前脚本按 17 个商品大类设置演示价格，并非每个 SKU 的真实市场价格。
+
+该 JSON 已加入 `.gitignore`。请不要使用 `git add -f` 强制提交；其他开发者克隆项目后需要各自在本地准备该文件并运行初始化脚本。
 
 ### 6.6 启动后端
 
