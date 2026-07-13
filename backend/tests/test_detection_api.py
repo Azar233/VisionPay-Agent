@@ -2,6 +2,9 @@ from io import BytesIO
 
 from PIL import Image
 
+from app.entity.db_models import ProductPrice
+from app.services.detection_service import DetectionService
+
 
 def _auth_headers(client):
     client.post(
@@ -23,6 +26,66 @@ def _image_bytes():
     stream = BytesIO()
     Image.new("RGB", (24, 24), color=(220, 40, 30)).save(stream, format="JPEG")
     return stream.getvalue()
+
+
+def test_price_summary_groups_detections_and_reports_missing_prices(db_session):
+    db_session.add_all(
+        [
+            ProductPrice(
+                category_id=1,
+                sku_name="cola-330",
+                name="可口可乐 330ml",
+                barcode="690000000001",
+                unit_price=3.35,
+                currency="CNY",
+            ),
+            ProductPrice(category_id=2, name="赠品", unit_price=0, currency="CNY"),
+        ]
+    )
+    db_session.commit()
+
+    summary = DetectionService._calculate_total_price(
+        db_session,
+        [
+            {"class_id": 0, "class_name": "1_puffed_food"},
+            {"class_id": 0, "class_name": "1_puffed_food"},
+            {"class_id": 1, "class_name": "2_gift"},
+            {"class_id": 98, "class_name": "99_unknown"},
+        ],
+    )
+
+    assert summary["total_price"] == 6.70
+    assert summary["pricing_complete"] is False
+    assert summary["missing_category_ids"] == [99]
+    assert summary["priced_objects"] == 3
+    assert summary["unpriced_objects"] == 1
+    assert summary["items"][0] == {
+        "class_id": 0,
+        "category_id": 1,
+        "class_name": "1_puffed_food",
+        "sku_name": "cola-330",
+        "name": "可口可乐 330ml",
+        "barcode": "690000000001",
+        "count": 2,
+        "unit_price": 3.35,
+        "subtotal": 6.70,
+        "currency": "CNY",
+        "has_price": True,
+    }
+    assert summary["items"][1]["has_price"] is True
+    assert summary["items"][2]["has_price"] is False
+
+
+def test_empty_price_summary_is_complete(db_session):
+    assert DetectionService._calculate_total_price(db_session, []) == {
+        "total_price": 0.0,
+        "currency": "CNY",
+        "items": [],
+        "pricing_complete": True,
+        "missing_category_ids": [],
+        "priced_objects": 0,
+        "unpriced_objects": 0,
+    }
 
 
 def test_detection_and_chat_routes_require_auth(client):

@@ -20,14 +20,14 @@
           <div class="panel-heading"><span>订单摘要</span><small>演示订单</small></div>
           <div class="order-number"><span>订单编号</span><strong>VP-DEMO-2026</strong></div>
           <div class="order-items">
-            <article v-for="item in orderItems" :key="item.name">
+            <article v-for="item in orderItems" :key="item.classId">
               <div class="item-mark">{{ item.short }}</div>
               <div><strong>{{ item.name }}</strong><span>数量 × {{ item.quantity }}</span></div>
-              <b>待定价</b>
+              <b>{{ formatMoney(item.unitPrice * item.quantity) }}</b>
             </article>
           </div>
           <div class="order-count"><span>商品总数</span><strong>{{ itemCount }} 件</strong></div>
-          <div class="order-total"><div><span>应付金额</span><small>价目表服务尚未接入</small></div><strong>¥ --</strong></div>
+          <div class="order-total"><div><span>应付金额</span><small>已按确认数量计算</small></div><strong>{{ formatMoney(totalPrice) }}</strong></div>
         </aside>
 
         <section class="pay-panel">
@@ -48,8 +48,8 @@
           </div>
           <div v-else class="card-section"><el-icon><CreditCard /></el-icon><strong>银行卡终端占位</strong><span>接入 POS 设备后，将在此处显示刷卡状态。</span></div>
 
-          <div class="integration-notice"><el-icon><InfoFilled /></el-icon><div><strong>当前为前端框架预览</strong><span>金额计算、订单创建和真实支付能力均未连接。</span></div></div>
-          <button class="pay-button" type="button" disabled>等待价格与支付服务接入</button>
+          <div class="integration-notice"><el-icon><InfoFilled /></el-icon><div><strong>金额已由商品价目表计算</strong><span>订单创建和真实支付能力尚未连接。</span></div></div>
+          <button class="pay-button" type="button" disabled>等待支付服务接入</button>
         </section>
       </section>
     </main>
@@ -58,23 +58,25 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ArrowLeft, Check, CreditCard, InfoFilled, Iphone, Lock, Wallet } from '@element-plus/icons-vue'
 
 const router = useRouter()
-const route = useRoute()
 const selectedMethod = ref('wechat')
 const methods = [
   { id: 'wechat', name: '微信支付', description: '使用微信扫描二维码', icon: Iphone },
   { id: 'alipay', name: '支付宝', description: '使用支付宝扫描二维码', icon: Wallet },
   { id: 'card', name: '银行卡', description: '使用收银台刷卡终端', icon: CreditCard },
 ]
-const orderItems = [
-  { name: '可口可乐 330ml', short: '可乐', quantity: 1 },
-  { name: '原味薯片', short: '薯片', quantity: 1 },
-  { name: '纯牛奶 250ml', short: '牛奶', quantity: 1 },
-]
-const itemCount = computed(() => Number(route.query.items) || orderItems.reduce((sum, item) => sum + item.quantity, 0))
+function loadOrder() {
+  try { return JSON.parse(sessionStorage.getItem('visionpay-checkout-order')) || {} }
+  catch { return {} }
+}
+const order = loadOrder()
+const orderItems = order.items || []
+const itemCount = computed(() => Number(order.itemCount) || orderItems.reduce((sum, item) => sum + item.quantity, 0))
+const totalPrice = computed(() => Number(order.totalPrice) || 0)
+function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 const qrCells = Array.from({ length: 169 }, (_, index) => {
   const row = Math.floor(index / 13)
   const col = index % 13

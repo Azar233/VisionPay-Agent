@@ -256,6 +256,17 @@ class ProductPriceResponse(ProjectBaseModel):
     }
 
 
+class CheckoutItemQuantity(ProjectBaseModel):
+    """结算清单中由客户端确认的类别和数量。"""
+    class_id: int = Field(..., ge=0, le=199, description="YOLO 类别 ID（0-199）")
+    quantity: int = Field(..., ge=1, le=99, description="确认后的商品数量")
+
+
+class CheckoutCalculateRequest(ProjectBaseModel):
+    """服务端重新计价请求；单价始终从数据库读取。"""
+    items: list[CheckoutItemQuantity] = Field(..., min_length=1, max_length=200)
+
+
 # ══════════════════════════════════════════════════════════════
 # 四、模型管理
 # ══════════════════════════════════════════════════════════════

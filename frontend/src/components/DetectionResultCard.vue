@@ -10,6 +10,21 @@
       </div>
     </div>
     <el-empty v-else :image-size="54" description="当前阈值下未识别到商品" />
+    <section v-if="result.price_summary" class="price-summary">
+      <header>
+        <div><span>商品总价</span><strong>{{ formatMoney(result.price_summary.total_price) }}</strong></div>
+        <el-tag :type="result.price_summary.pricing_complete ? 'success' : 'warning'" effect="light">
+          {{ result.price_summary.pricing_complete ? '价格完整' : `${result.price_summary.unpriced_objects} 件未定价` }}
+        </el-tag>
+      </header>
+      <div v-if="result.price_summary.items?.length" class="price-items">
+        <div v-for="item in result.price_summary.items" :key="item.class_id">
+          <span>{{ item.name || item.class_name }} × {{ item.count }}</span>
+          <strong v-if="item.has_price">{{ formatMoney(item.subtotal) }}</strong>
+          <strong v-else class="missing-price">未定价</strong>
+        </div>
+      </div>
+    </section>
     <div class="result-images">
       <article v-for="(item, index) in result.items" :key="`${item.filename}-${index}`" class="image-result">
         <button class="preview-button" type="button" @click="openPreview(item.annotated_image)">
@@ -40,6 +55,7 @@ const previewImage = ref('')
 const classes = computed(() => Object.entries(props.result.class_counts || {}).map(([name, count], index) => ({ name, count, color: palette[index % palette.length] })))
 function openPreview(src) { previewImage.value = src; previewVisible.value = true }
 function formatTime(value) { return Number(value || 0) < 1000 ? `${Number(value || 0).toFixed(0)} ms` : `${(value / 1000).toFixed(2)} s` }
+function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 </script>
 
 <style lang="scss" scoped>
@@ -50,6 +66,7 @@ function formatTime(value) { return Number(value || 0) < 1000 ? `${Number(value 
 .class-strip { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: $surface-muted; }
 .class-stat { display: grid; grid-template-columns: 8px auto auto; align-items: center; gap: 7px; min-width: max-content; padding: 6px 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-color; font-size: 12px; }
 .class-stat strong { margin-left: 4px; }.swatch { width: 8px; height: 8px; border-radius: 2px; }
+.price-summary { padding: 13px 16px; border-top: 1px solid $border-color; background: #f8fafc; }.price-summary > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.price-summary > header > div { display: flex; align-items: baseline; gap: 10px; }.price-summary header span { color: $text-secondary; font-size: 12px; }.price-summary header strong { color: $text-primary; font-size: 21px; }.price-items { display: grid; gap: 6px; margin-top: 10px; }.price-items > div { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }.price-items > div > span { color: $text-secondary; }.price-items > div > strong { color: $text-primary; }.price-items .missing-price { color: #b7791f; }
 .result-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1px; background: $border-color; }
 .image-result { min-width: 0; background: $surface-color; padding-bottom: 10px; }.preview-button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border: 0; padding: 0; background: $surface-muted; cursor: zoom-in; overflow: hidden; }
 .preview-button img { width: 100%; height: 100%; object-fit: contain; }.preview-button span { position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: $border-radius-sm; color: #fff; background: rgba(17, 24, 39, .76); opacity: 0; transition: opacity .2s; }
