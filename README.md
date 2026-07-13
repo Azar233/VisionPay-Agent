@@ -281,7 +281,8 @@ RPC JSON 与价格表使用 1–200 的 `category_id`，YOLO 使用 0–199 的 
 
 - `/detection` 在单图、多图或 ZIP 检测完成后返回 `price_summary`，包含商品名称、数量、单价、小计、总价和缺价状态。
 - 未配置价格的商品不会计入总价；响应会返回 `pricing_complete=false`、缺价类别和未定价件数。
-- `/checkout` 的“图片上传”会调用 `/api/detection/single`，根据识别结果生成购物篮；增减数量会实时重新计算总价。
+- `/checkout` 的“图片上传”会调用 `/api/checkout/detect`，根据识别结果生成购物篮。
+- 增减数量或移除商品时，前端会调用 `/api/checkout/calculate`；请求只提交类别和数量，单价及总价始终由后端从数据库重新计算。
 - 存在未定价商品时，结算按钮会被禁用，避免生成金额不完整的订单。
 - `/checkout/payment` 会展示上一页确认后的商品、数量和应付金额；订单创建及微信、支付宝、银行卡真实支付仍待接入。
 - IP Webcam 当前只提供 MJPEG 实时预览，尚未实现抓帧并发送给 YOLO；需要结算时请使用“图片上传”。
@@ -293,6 +294,8 @@ RPC JSON 与价格表使用 1–200 的 `category_id`，YOLO 使用 0–199 的 
 | `GET` | `/api/prices` | 获取全部 SKU 价格 |
 | `GET` | `/api/prices/{category_id}` | 获取单个 SKU 价格 |
 | `POST` | `/api/prices/batch` | 批量创建或更新价格 |
+| `POST` | `/api/checkout/detect` | 上传单张结算图片，完成识别和初始计价 |
+| `POST` | `/api/checkout/calculate` | 按确认后的类别和数量进行服务端重新计价 |
 
 ## 数据集导入
 
@@ -564,6 +567,7 @@ agent-platform/
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── auth.py
+│   │   │   ├── checkout.py
 │   │   │   ├── detection.py
 │   │   │   ├── health.py
 │   │   │   ├── prices.py
@@ -607,6 +611,8 @@ agent-platform/
     └── src/
         ├── api/
         │   ├── auth.js
+        │   ├── checkout.js
+        │   ├── detection.js
         │   └── training.js
         ├── assets/
         │   └── styles/

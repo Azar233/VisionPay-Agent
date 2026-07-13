@@ -11,6 +11,7 @@ from app.api.detection import router as detection_router
 from app.api.chat import router as chat_router
 from app.api.camera import router as camera_router
 from app.api.prices import router as prices_router
+from app.api.checkout import router as checkout_router
 
 from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
@@ -75,6 +76,7 @@ app.include_router(detection_router)
 app.include_router(chat_router)
 app.include_router(camera_router)
 app.include_router(prices_router)
+app.include_router(checkout_router)
 
 
 @app.get("/")

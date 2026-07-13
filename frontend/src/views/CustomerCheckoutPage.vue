@@ -73,9 +73,9 @@
               <b v-else>价格未配置</b>
             </div>
             <div class="quantity-control">
-              <button type="button" :disabled="item.quantity <= 1" @click="item.quantity--"><el-icon><Minus /></el-icon></button>
+              <button type="button" :disabled="item.quantity <= 1 || pricing" @click="changeQuantity(item, -1)"><el-icon><Minus /></el-icon></button>
               <span>{{ item.quantity }}</span>
-              <button type="button" @click="item.quantity++"><el-icon><Plus /></el-icon></button>
+              <button type="button" :disabled="pricing" @click="changeQuantity(item, 1)"><el-icon><Plus /></el-icon></button>
             </div>
             <button type="button" class="remove-button" aria-label="移除商品" @click="removeProduct(item.classId)"><el-icon><Delete /></el-icon></button>
           </article>
@@ -84,8 +84,8 @@
         </div>
 
         <footer class="settlement-panel">
-          <div class="settlement-summary"><span>应付金额</span><strong>{{ formatMoney(totalPrice) }}</strong><small>{{ pricingComplete ? '价格已按当前数量计算' : '总价不含未定价商品' }}</small></div>
-          <button type="button" :disabled="!products.length || !pricingComplete || detecting" @click="goToPayment"><span>确认商品并去结算</span><el-icon><ArrowRight /></el-icon></button>
+          <div class="settlement-summary"><span>应付金额</span><strong>{{ formatMoney(totalPrice) }}</strong><small>{{ pricing ? '正在重新计价' : pricingComplete ? '价格已由服务端按当前数量计算' : '总价不含未定价商品' }}</small></div>
+          <button type="button" :disabled="!products.length || !pricingComplete || detecting || pricing" @click="goToPayment"><span>确认商品并去结算</span><el-icon><ArrowRight /></el-icon></button>
           <p>继续即表示您已确认以上商品和数量</p>
         </footer>
       </section>
@@ -98,7 +98,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Camera, CircleCheckFilled, Delete, InfoFilled, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
-import { detectSingleApi } from '@/api/detection'
+import { calculateCheckoutApi, detectCheckoutApi } from '@/api/checkout'
 
 const router = useRouter()
 const sourceMode = ref('camera')
@@ -110,15 +110,18 @@ const cameraConnected = ref(false)
 const cameraStatusText = ref('等待连接')
 const cameraError = ref('')
 const detecting = ref(false)
+const pricing = ref(false)
 const detectionResult = ref(null)
+const checkoutSummary = ref(null)
 const detectionError = ref('')
 let cameraConnectTimer = null
 let detectionSequence = 0
+let pricingSequence = 0
 const products = ref([])
 const totalItems = computed(() => products.value.reduce((sum, item) => sum + item.quantity, 0))
-const totalPrice = computed(() => Math.round(products.value.reduce((sum, item) => sum + (item.hasPrice ? item.unitPrice * item.quantity : 0), 0) * 100) / 100)
-const unpricedItems = computed(() => products.value.reduce((sum, item) => sum + (item.hasPrice ? 0 : item.quantity), 0))
-const pricingComplete = computed(() => products.value.length > 0 && unpricedItems.value === 0)
+const totalPrice = computed(() => Number(checkoutSummary.value?.total_price || 0))
+const unpricedItems = computed(() => Number(checkoutSummary.value?.unpriced_objects || 0))
+const pricingComplete = computed(() => products.value.length > 0 && checkoutSummary.value?.pricing_complete === true)
 const detectionStatus = computed(() => detecting.value ? '识别中' : detectionError.value ? '识别失败' : detectionResult.value ? '已完成' : '待扫描')
 const averageConfidence = computed(() => {
   const detections = detectionResult.value?.items?.flatMap((item) => item.detections || []) || []
@@ -134,10 +137,12 @@ async function setPreview(file) {
   detecting.value = true
   detectionError.value = ''
   products.value = []
+  checkoutSummary.value = null
   try {
-    const result = await detectSingleApi(file)
+    const result = await detectCheckoutApi(file)
     if (sequence !== detectionSequence) return
     detectionResult.value = result
+    checkoutSummary.value = result.price_summary
     const confidences = new Map()
     for (const detection of result.items?.flatMap((item) => item.detections || []) || []) {
       const values = confidences.get(detection.class_id) || []
@@ -172,8 +177,44 @@ async function setPreview(file) {
 }
 function handleUpload(event) { setPreview(event.target.files?.[0]); event.target.value = '' }
 function handleDrop(event) { setPreview(event.dataTransfer.files?.[0]) }
-function removeProduct(classId) { products.value = products.value.filter((item) => item.classId !== classId) }
-function resetDemo() { detectionSequence++; detecting.value = false; products.value = []; detectionResult.value = null; detectionError.value = ''; selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
+async function recalculateCart() {
+  const sequence = ++pricingSequence
+  if (!products.value.length) {
+    checkoutSummary.value = { total_price: 0, pricing_complete: true, unpriced_objects: 0, items: [] }
+    return
+  }
+  pricing.value = true
+  try {
+    const summary = await calculateCheckoutApi(products.value)
+    if (sequence !== pricingSequence) return
+    checkoutSummary.value = summary
+    const serverItems = new Map((summary.items || []).map((item) => [item.class_id, item]))
+    for (const product of products.value) {
+      const serverItem = serverItems.get(product.classId)
+      if (!serverItem) continue
+      product.unitPrice = Number(serverItem.unit_price || 0)
+      product.hasPrice = Boolean(serverItem.has_price)
+      product.name = serverItem.name || serverItem.sku_name || product.name
+      product.barcode = serverItem.barcode || ''
+    }
+  } finally {
+    if (sequence === pricingSequence) pricing.value = false
+  }
+}
+async function changeQuantity(item, delta) {
+  const previous = item.quantity
+  item.quantity = Math.max(1, Math.min(99, item.quantity + delta))
+  if (item.quantity === previous) return
+  try { await recalculateCart() }
+  catch { item.quantity = previous }
+}
+async function removeProduct(classId) {
+  const previous = products.value
+  products.value = products.value.filter((item) => item.classId !== classId)
+  try { await recalculateCart() }
+  catch { products.value = previous }
+}
+function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; detectionError.value = ''; selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
 function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 function goToPayment() {
   const order = { items: products.value, itemCount: totalItems.value, totalPrice: totalPrice.value, currency: 'CNY' }
@@ -195,7 +236,7 @@ function handleCameraError() { window.clearTimeout(cameraConnectTimer); cameraCo
 function disconnectIpCamera() { window.clearTimeout(cameraConnectTimer); cameraStreamUrl.value = ''; cameraConnected.value = false; cameraStatusText.value = '等待连接'; cameraError.value = '' }
 function selectSource(mode) { sourceMode.value = mode; if (mode === 'camera') connectIpCamera(); else disconnectIpCamera() }
 onMounted(connectIpCamera)
-onBeforeUnmount(() => { detectionSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); disconnectIpCamera() })
+onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); disconnectIpCamera() })
 </script>
 
 <style lang="scss" scoped>

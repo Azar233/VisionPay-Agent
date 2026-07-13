@@ -163,30 +163,29 @@ class DetectionService:
 
     @staticmethod
     def _calculate_total_price(db, detections: list[dict[str, Any]]) -> dict[str, Any]:
-        """
-        根据检测结果计算总价。
-
-        返回:
-            {
-                "total_price": 总价,
-                "currency": "CNY",
-                "items": [
-                    {
-                        "class_id": ...,
-                        "class_name": ...,
-                        "count": ...,
-                        "unit_price": ...,
-                        "subtotal": ...,
-                    }
-                ],
-            }
-        """
+        """根据逐个检测框汇总类别数量并计算总价。"""
         counts: dict[int, int] = Counter()
         name_map: dict[int, str] = {}
         for detection in detections:
             class_id = int(detection["class_id"])
             counts[class_id] += 1
             name_map[class_id] = detection["class_name"]
+
+        return DetectionService.calculate_price(db, counts, name_map)
+
+    @staticmethod
+    def calculate_price(
+        db,
+        class_counts: dict[int, int],
+        class_names: dict[int, str] | None = None,
+    ) -> dict[str, Any]:
+        """Use authoritative database prices to calculate a checkout summary."""
+        counts = {
+            int(class_id): int(count)
+            for class_id, count in class_counts.items()
+            if int(count) > 0
+        }
+        name_map = class_names or {}
 
         if not counts:
             return {
@@ -236,7 +235,7 @@ class DetectionService:
                 {
                     "class_id": class_id,
                     "category_id": category_id,
-                    "class_name": name_map.get(class_id, ""),
+                    "class_name": name_map.get(class_id) or (price.sku_name if price else ""),
                     "sku_name": price.sku_name if price else None,
                     "name": price.name if price else None,
                     "barcode": price.barcode if price else None,
