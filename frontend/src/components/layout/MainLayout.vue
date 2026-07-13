@@ -36,6 +36,6 @@ import AppSidebar from './AppSidebar.vue'
   flex: 1;
   background: $bg-color;
   overflow-y: auto;
-  padding: $spacing-lg;
+  padding: 0;
 }
 </style>

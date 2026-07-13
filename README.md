@@ -14,6 +14,8 @@ VisionPay 是一个基于 YOLOv11 的零售商品自动结账智能体平台（A
 - YOLOv11 本地训练服务 `TrainingService`。
 - 训练任务 API：启动、列表、状态、指标、停止、结果下载。
 - 前端模型训练监控页面：任务列表、创建训练任务、ECharts loss/mAP 曲线。
+- Day 8 商品识别 Agent：DeepSeek Tool Calling、SSE 流式对话、单图/多图/ZIP 检测。
+- 智能识别工作台：附件拖拽、阈值控制、快捷直检、标注图与商品类别汇总。
 
 ## 技术栈
 
@@ -113,6 +115,14 @@ MINIO_BUCKET=vp-images
 MINIO_SECURE=false
 
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:8080
+
+# DeepSeek V4 Flash（模型标识以控制台实际提供的名称为准）
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+
+# 可选：直接指定检测权重；留空时查找场景默认模型或最新训练 best.pt
+DETECTION_MODEL_PATH=
 ```
 
 执行数据库迁移并启动后端：
@@ -158,10 +168,29 @@ http://127.0.0.1:5173
 | `/login` | 登录 | 已完成 |
 | `/register` | 注册 | 已完成 |
 | `/training` | 模型训练 | Day 6 已完成 |
-| `/chat` | 智能对话 | 后续完善 |
-| `/detection` | 检测工作台 | 后续完善 |
+| `/chat` | 通用智能对话 | 后续实现 |
+| `/detection` | 商品检测 Agent、单图/多图/ZIP 工作台 | Day 8 已完成 |
 | `/history` | 历史记录 | 后续完善 |
 | `/dashboard` | 数据看板 | 后续完善 |
+
+### Day 8 商品识别接口
+
+所有接口都需要 JWT 登录态。前端 `/detection` 已接入以下能力：
+
+| 方法 | 路径 | 说明 |
+| ---- | ---- | ---- |
+| `GET` | `/api/chat/status` | 查看 DeepSeek Agent 配置状态 |
+| `POST` | `/api/chat/upload` | 上传对话图片或 ZIP 附件 |
+| `POST` | `/api/chat/stream` | DeepSeek Tool Calling + SSE 流式响应 |
+| `POST` | `/api/chat/sessions` | 创建检测对话 |
+| `GET` | `/api/chat/sessions` | 获取历史检测对话 |
+| `GET` | `/api/chat/sessions/{session_uuid}` | 恢复历史消息与检测结果 |
+| `DELETE` | `/api/chat/sessions/{session_uuid}` | 删除检测对话 |
+| `POST` | `/api/detection/single` | 单图 YOLO 商品检测 |
+| `POST` | `/api/detection/batch` | 多图批量检测 |
+| `POST` | `/api/detection/zip` | ZIP 解压与批量检测 |
+
+快捷“立即识别”按钮直接调用检测 API；自然语言指令通过 DeepSeek Agent 自动选择单图、多图或 ZIP Tool。检测模型按 `DETECTION_MODEL_PATH`、场景默认模型、最新完成训练的 `best.pt` 顺序选择。
 
 ## 数据集导入
 

@@ -41,8 +41,8 @@ const activeMenu = computed(() => {
 
 /** 侧边栏菜单配置 */
 const menuItems = [
-  { path: '/chat', title: '智能对话', icon: ChatDotRound },
   { path: '/detection', title: '检测工作台', icon: Camera },
+  { path: '/chat', title: '智能对话', icon: ChatDotRound },
   { path: '/training', title: '模型训练', icon: Cpu },
   { path: '/history', title: '历史记录', icon: Clock },
   { path: '/dashboard', title: '数据看板', icon: DataAnalysis },

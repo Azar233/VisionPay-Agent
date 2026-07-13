@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     DATASET_BASE_DIR: str = "datasets"
     YOLO_CONFIG_DIR: str = ".ultralytics"
 
+    # ── 检测推理配置 ──────────────────────────────────
+    DETECTION_OUTPUT_DIR: str = "runs/detect"
+    DETECTION_UPLOAD_DIR: str = ".runtime/uploads"
+    DETECTION_MODEL_PATH: str = ""
+    DETECTION_MAX_FILE_MB: int = 20
+    DETECTION_MAX_BATCH_SIZE: int = 30
+
+    # ── DeepSeek Agent 配置（OpenAI 兼容接口）─────────
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    # DeepSeek 控制台显示的 v4 flash 模型标识可在 .env 中覆盖。
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_TEMPERATURE: float = 0.1
+
     # ── Redis 配置 ────────────────────────────────────
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
