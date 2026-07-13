@@ -15,7 +15,12 @@ from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import get_db
 from app.entity.db_models import DetectionScene, TrainingTask
-from app.entity.schemas import ModelExportRequest, ModelValidateRequest, TrainingTaskCreate
+from app.entity.schemas import (
+    ModelExportRequest,
+    ModelValidateRequest,
+    TrainingRunImportRequest,
+    TrainingTaskCreate,
+)
 from app.training.training_service import training_service
 
 logger = get_logger(__name__)
@@ -151,6 +156,42 @@ async def start_training(
         "dataset_size": task.dataset_size,
         "message": "训练任务已创建，正在后台启动",
     }
+
+
+@router.post("/import-run")
+async def import_training_run(
+    request: TrainingRunImportRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Import an offline/sbatch Ultralytics training run into task metrics."""
+
+    scene = db.query(DetectionScene).filter(DetectionScene.id == request.scene_id).first()
+    if scene is None:
+        raise HTTPException(status_code=404, detail="检测场景不存在")
+
+    try:
+        result = training_service.import_training_run(
+            db=db,
+            user_id=current_user.id,
+            scene_id=request.scene_id,
+            config=request.model_dump(exclude_none=True),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.error("导入离线训练结果失败：%s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"导入离线训练结果失败：{exc}") from exc
+
+    logger.info(
+        "用户 %s 导入离线训练结果：scene=%s, task=%s",
+        current_user.username,
+        scene.name,
+        result.get("task", {}).get("task_uuid"),
+    )
+    return result
 
 
 @router.get("/tasks")

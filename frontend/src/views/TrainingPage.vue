@@ -6,9 +6,14 @@
         <h2>模型训练与监控</h2>
         <p>启动 YOLOv11 训练任务，实时观察 loss、mAP 与运行状态。</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="showCreateDialog = true">
-        新建训练任务
-      </el-button>
+      <div class="page-actions">
+        <el-button :icon="Upload" @click="showImportDialog = true">
+          导入离线结果
+        </el-button>
+        <el-button type="primary" :icon="Plus" @click="showCreateDialog = true">
+          新建训练任务
+        </el-button>
+      </div>
     </div>
 
     <section class="panel">
@@ -132,6 +137,27 @@
         </div>
       </div>
 
+      <div class="live-progress-panel">
+        <div class="live-progress-header">
+          <span>{{ liveProgressTitle }}</span>
+          <span>{{ liveProgressPercent.toFixed(1) }}%</span>
+        </div>
+        <el-progress
+          class="monitor-progress"
+          :percentage="liveProgressPercent"
+          :status="progressStatus(selectedTask.status)"
+          :stroke-width="16"
+        />
+        <div class="live-progress-meta">
+          <span>Epoch {{ liveProgress?.epoch ?? (selectedTask.current_epoch || 0) }}/{{ selectedTask.epochs || 0 }}</span>
+          <span v-if="liveProgress?.total_batches">Batch {{ liveProgress.batch || 0 }}/{{ liveProgress.total_batches }}</span>
+          <span>Elapsed {{ liveProgress?.elapsed_text || '-' }}</span>
+          <span>ETA {{ liveProgress?.eta_text || '-' }}</span>
+          <span>{{ liveProgress?.rate_text || '--it/s' }}</span>
+        </div>
+        <pre v-if="liveProgress?.tqdm_line" class="tqdm-line">{{ liveProgress.tqdm_line }}</pre>
+      </div>
+
       <div class="metric-grid">
         <div v-for="item in metricCards" :key="item.label" class="metric-card">
           <span>{{ item.label }}</span>
@@ -236,6 +262,55 @@
         <el-button @click="showCreateDialog = false">取消</el-button>
         <el-button type="primary" :loading="creating" @click="createTask">
           启动训练
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="showImportDialog"
+      title="导入离线训练结果"
+      width="720px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="importForm" label-width="130px">
+        <el-form-item label="检测场景">
+          <el-input-number v-model="importForm.scene_id" :min="1" />
+        </el-form-item>
+        <el-form-item label="训练输出目录">
+          <el-input
+            v-model="importForm.run_dir"
+            placeholder="/home/xshi/projects/VisionPay-Agent/backend/runs/train/task_xxx"
+          />
+        </el-form-item>
+        <el-form-item label="任务 ID">
+          <el-input v-model="importForm.task_uuid" placeholder="可选；默认从 task_xxx 推断" />
+        </el-form-item>
+        <el-form-item label="基础模型">
+          <el-select v-model="importForm.model_name" clearable placeholder="默认读取 args.yaml">
+            <el-option label="YOLOv11 Nano" value="yolov11n" />
+            <el-option label="YOLOv11 Small" value="yolov11s" />
+            <el-option label="YOLOv11 Medium" value="yolov11m" />
+            <el-option label="YOLOv11 Large" value="yolov11l" />
+            <el-option label="YOLOv11 X" value="yolov11x" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="数据集目录">
+          <el-input
+            v-model="importForm.dataset_path"
+            placeholder="可选；默认由 data.yaml 推断"
+          />
+        </el-form-item>
+        <el-form-item label="data.yaml">
+          <el-input v-model="importForm.data_yaml" placeholder="可选；默认读取 args.yaml" />
+        </el-form-item>
+        <el-form-item label="训练日志">
+          <el-input v-model="importForm.log_path" placeholder="可选；默认 run_dir/train.log" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showImportDialog = false">取消</el-button>
+        <el-button type="primary" :loading="importing" @click="submitImportRun">
+          导入结果
         </el-button>
       </template>
     </el-dialog>
@@ -445,7 +520,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import { Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
 import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components'
 import { LineChart } from 'echarts/charts'
@@ -458,6 +533,7 @@ import {
   getTrainingMetricsApi,
   getTrainingStatusApi,
   getTrainingTasksApi,
+  importTrainingRunApi,
   predictTrainingImageApi,
   startTrainingApi,
   stopTrainingApi,
@@ -470,8 +546,20 @@ const taskList = ref([])
 const loadingTasks = ref(false)
 const selectedTask = ref(null)
 const latestMetric = ref(null)
+const liveProgress = ref(null)
 const showCreateDialog = ref(false)
 const creating = ref(false)
+const showImportDialog = ref(false)
+const importing = ref(false)
+const importForm = ref({
+  scene_id: 1,
+  run_dir: '/home/xshi/projects/VisionPay-Agent/backend/runs/train/task_sbatch_mixed_yolov11x',
+  task_uuid: '',
+  model_name: '',
+  dataset_path: '/data0/xshi/datasets/visionpay/yolo/vision_pay_mixed_train4800_val1200',
+  data_yaml: '/data0/xshi/datasets/visionpay/yolo/vision_pay_mixed_train4800_val1200/data.yaml',
+  log_path: '',
+})
 
 const showLogDrawer = ref(false)
 const logTask = ref(null)
@@ -553,9 +641,30 @@ const metricCards = computed(() => {
     { label: '进度', value: `${task.progress || 0}%` },
     { label: 'Box Loss', value: formatNumber(metric?.box_loss) },
     { label: 'Cls Loss', value: formatNumber(metric?.cls_loss) },
+    { label: 'DFL Loss', value: formatNumber(metric?.dfl_loss) },
+    { label: 'Precision', value: formatPercent(metric?.precision) },
+    { label: 'Recall', value: formatPercent(metric?.recall) },
     { label: 'mAP@50', value: formatPercent(metric?.map50) },
     { label: 'mAP@50-95', value: formatPercent(metric?.map50_95) },
   ]
+})
+
+const liveProgressPercent = computed(() => {
+  const value = liveProgress.value?.percent ?? selectedTask.value?.progress ?? 0
+  return Math.min(100, Math.max(0, Number(value) || 0))
+})
+
+const liveProgressTitle = computed(() => {
+  const phase = liveProgress.value?.phase || selectedTask.value?.status || 'pending'
+  const label = {
+    pending: '等待中',
+    train: '训练中',
+    running: '训练中',
+    completed: '训练完成',
+    failed: '训练失败',
+    cancelled: '已取消',
+  }[phase] || phase
+  return `${label} ${liveProgress.value?.bar || ''}`.trim()
 })
 
 const logText = computed(() => logLines.value.join('\n'))
@@ -664,6 +773,7 @@ async function fetchTasks() {
 async function selectTask(task) {
   selectedTask.value = { ...task }
   latestMetric.value = null
+  liveProgress.value = null
   await nextTick()
   initCharts()
   await refreshSelectedTask()
@@ -680,6 +790,7 @@ async function refreshSelectedTask() {
 
   selectedTask.value = { ...selectedTask.value, ...(statusRes.task || {}) }
   latestMetric.value = statusRes.latest_metric || null
+  liveProgress.value = statusRes.live_progress || null
   updateCharts(metricsRes.metrics || [])
 }
 
@@ -776,6 +887,24 @@ async function createTask() {
     await selectTask(created || task)
   } finally {
     creating.value = false
+  }
+}
+
+
+async function submitImportRun() {
+  importing.value = true
+  try {
+    const payload = { ...importForm.value }
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === '' || payload[key] == null) delete payload[key]
+    })
+    const result = await importTrainingRunApi(payload)
+    ElMessage.success(`已导入 ${result.metrics_imported || 0} 个 epoch 指标`)
+    showImportDialog.value = false
+    await fetchTasks()
+    if (result.task) await selectTask(result.task)
+  } finally {
+    importing.value = false
   }
 }
 
@@ -1000,6 +1129,12 @@ onBeforeUnmount(() => {
   }
 }
 
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .panel {
   padding: 20px;
   background: $surface-color;
@@ -1200,9 +1335,52 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.live-progress-panel {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: $border-radius-sm;
+  background: #fafafa;
+}
+
+.live-progress-header,
+.live-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.live-progress-header {
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.live-progress-meta {
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: $text-secondary;
+  font-size: 12px;
+}
+
+.monitor-progress {
+  margin-bottom: 0;
+}
+
+.tqdm-line {
+  margin: 10px 0 0;
+  padding: 8px;
+  overflow-x: auto;
+  color: #d7e1ef;
+  background: #111827;
+  border-radius: $border-radius-sm;
+  font: 12px/1.5 Consolas, 'Courier New', monospace;
+}
+
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 12px;
 }
 

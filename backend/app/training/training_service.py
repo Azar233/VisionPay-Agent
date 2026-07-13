@@ -10,6 +10,7 @@ The service owns training task lifecycle management:
 from __future__ import annotations
 
 import base64
+from collections import deque
 import csv
 import contextlib
 import json
@@ -30,6 +31,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover - PyYAML is installed with Ultralytics.
+    yaml = None
+
 from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
@@ -40,6 +46,8 @@ logger = get_logger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _running_tasks: dict[str, Any] = {}
 _running_lock = threading.Lock()
+_live_progress: dict[str, dict[str, Any]] = {}
+_live_progress_lock = threading.Lock()
 _TRAIN_AUGMENT_KEYS = {
     "hsv_h",
     "hsv_s",
@@ -353,7 +361,7 @@ def _count_dataset_images(dataset_path: Path) -> int:
 
 
 def _metric_from_csv_row(task_id: int, row: dict[str, str]) -> TrainingMetric:
-    epoch = int(float(row.get("epoch", "0"))) + 1
+    epoch = max(1, int(float(row.get("epoch", "1"))))
     return TrainingMetric(
         task_id=task_id,
         epoch=epoch,
@@ -376,6 +384,179 @@ def _metric_from_csv_row(task_id: int, row: dict[str, str]) -> TrainingMetric:
         ),
         lr=_safe_float(_first_existing(row, ["lr/pg0", "lr0", "lr"])),
     )
+
+
+def _metric_log_line(metric: TrainingMetric, total_epochs: int) -> str:
+    progress = min(100, int(metric.epoch / max(total_epochs, 1) * 100))
+    fields = [
+        f"training progress epoch={metric.epoch}/{total_epochs}",
+        f"progress={progress}%",
+        f"box_loss={format(metric.box_loss, '.5f') if metric.box_loss is not None else '-'}",
+        f"cls_loss={format(metric.cls_loss, '.5f') if metric.cls_loss is not None else '-'}",
+        f"dfl_loss={format(metric.dfl_loss, '.5f') if metric.dfl_loss is not None else '-'}",
+        f"precision={format(metric.precision, '.5f') if metric.precision is not None else '-'}",
+        f"recall={format(metric.recall, '.5f') if metric.recall is not None else '-'}",
+        f"map50={format(metric.map50, '.5f') if metric.map50 is not None else '-'}",
+        f"map50_95={format(metric.map50_95, '.5f') if metric.map50_95 is not None else '-'}",
+    ]
+    return " | ".join(fields)
+
+
+def _copy_metric_values(target: TrainingMetric, source: TrainingMetric) -> None:
+    target.box_loss = source.box_loss
+    target.cls_loss = source.cls_loss
+    target.dfl_loss = source.dfl_loss
+    target.precision = source.precision
+    target.recall = source.recall
+    target.map50 = source.map50
+    target.map50_95 = source.map50_95
+    target.lr = source.lr
+
+
+def _format_duration(seconds: float | int | None) -> str:
+    if seconds is None:
+        return "--:--"
+    try:
+        total = max(0, int(seconds))
+    except (TypeError, ValueError):
+        return "--:--"
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _progress_bar(percent: float, width: int = 24) -> str:
+    clamped = min(100.0, max(0.0, percent))
+    filled = int(round(clamped / 100 * width))
+    return "[" + "#" * filled + "-" * (width - filled) + "]"
+
+
+def _tqdm_bar(percent: float, width: int = 10) -> str:
+    clamped = min(100.0, max(0.0, percent))
+    raw_filled = clamped / 100 * width
+    full = min(width, int(raw_filled))
+    remainder = raw_filled - full
+    partials = "\u258f\u258e\u258d\u258c\u258b\u258a\u2589"
+    bar = "\u2588" * full
+    if full < width and remainder > 0:
+        bar += partials[min(len(partials) - 1, int(remainder * len(partials)))]
+    return bar.ljust(width)
+
+
+def _tqdm_rate_text(rate: float | None) -> str:
+    if not rate or rate <= 0:
+        return "?it/s"
+    if rate < 1:
+        return f"{1 / rate:5.2f}s/it"
+    return f"{rate:5.2f}it/s"
+
+
+def _trainer_loader_length(trainer: Any) -> int | None:
+    for attr in ("train_loader", "loader", "dataloader"):
+        loader = getattr(trainer, attr, None)
+        if loader is None:
+            continue
+        try:
+            return max(1, len(loader))
+        except TypeError:
+            continue
+    return None
+
+
+def _trainer_losses(trainer: Any) -> dict[str, float | None]:
+    loss_names = list(getattr(trainer, "loss_names", []) or [])
+    loss_items = getattr(trainer, "loss_items", None)
+    losses: dict[str, float | None] = {"box_loss": None, "cls_loss": None, "dfl_loss": None}
+    if loss_items is None or not loss_names:
+        return losses
+    try:
+        values = loss_items.detach().cpu().tolist()
+    except AttributeError:
+        try:
+            values = list(loss_items)
+        except TypeError:
+            return losses
+    for raw_name, value in zip(loss_names, values):
+        name = raw_name.replace("train/", "").replace("_loss", "")
+        key = f"{name}_loss" if name in {"box", "cls", "dfl"} else raw_name
+        if key in losses:
+            losses[key] = _safe_float(value)
+    return losses
+
+
+def _set_live_progress(task_uuid: str, progress: dict[str, Any]) -> None:
+    with _live_progress_lock:
+        current = _live_progress.get(task_uuid, {})
+        current.update(progress)
+        current["updated_at"] = datetime.now().isoformat()
+        _live_progress[task_uuid] = current
+
+
+def _get_live_progress(task_uuid: str) -> dict[str, Any] | None:
+    with _live_progress_lock:
+        progress = _live_progress.get(task_uuid)
+        return dict(progress) if progress else None
+
+
+def _build_tqdm_progress(
+    phase: str,
+    epoch: int,
+    total_epochs: int,
+    batch: int | None,
+    total_batches: int | None,
+    completed_units: int,
+    total_units: int,
+    elapsed: float,
+    losses: dict[str, float | None] | None = None,
+) -> dict[str, Any]:
+    safe_total_units = max(1, int(total_units or 1))
+    safe_completed_units = min(safe_total_units, max(0, int(completed_units or 0)))
+    percent = safe_completed_units / safe_total_units * 100
+    rate = safe_completed_units / elapsed if elapsed > 0 and safe_completed_units > 0 else None
+    eta = (safe_total_units - safe_completed_units) / rate if rate and safe_total_units >= safe_completed_units else None
+    rate_text = _tqdm_rate_text(rate)
+    elapsed_text = _format_duration(elapsed)
+    eta_text = _format_duration(eta)
+    bar = _tqdm_bar(percent)
+    percent_int = min(100, max(0, int(round(percent))))
+    losses = losses or {}
+    loss_parts = [
+        f"box_loss={losses.get('box_loss'):.4f}" if losses.get("box_loss") is not None else None,
+        f"cls_loss={losses.get('cls_loss'):.4f}" if losses.get("cls_loss") is not None else None,
+        f"dfl_loss={losses.get('dfl_loss'):.4f}" if losses.get("dfl_loss") is not None else None,
+    ]
+    loss_text = " ".join(part for part in loss_parts if part)
+    tqdm_line = (
+        f"{percent_int:3d}%|{bar}| {safe_completed_units}/{safe_total_units} "
+        f"[{elapsed_text}<{eta_text}, {rate_text}]"
+    )
+    if phase == "train" and epoch and total_epochs:
+        tqdm_line = f"Epoch {min(epoch, total_epochs)}/{total_epochs} {tqdm_line}"
+    elif phase and phase not in {"train", "running"}:
+        tqdm_line = f"{phase} {tqdm_line}"
+    if loss_text:
+        tqdm_line += f" | {loss_text}"
+    return {
+        "phase": phase,
+        "epoch": epoch,
+        "total_epochs": total_epochs,
+        "batch": batch,
+        "total_batches": total_batches,
+        "completed_units": safe_completed_units,
+        "total_units": safe_total_units,
+        "percent": round(min(100.0, max(0.0, percent)), 2),
+        "elapsed_seconds": elapsed,
+        "elapsed_text": elapsed_text,
+        "eta_seconds": eta,
+        "eta_text": eta_text,
+        "rate": rate,
+        "rate_text": rate_text,
+        "bar": bar,
+        "tqdm_line": tqdm_line,
+        **losses,
+    }
 
 
 def _trainer_epoch_values(trainer: Any) -> dict[str, float | None]:
@@ -491,6 +672,23 @@ class TrainingService:
         db.commit()
         db.refresh(task)
 
+        _set_live_progress(
+            task.task_uuid,
+            {
+                "phase": "pending",
+                "epoch": 0,
+                "total_epochs": task.epochs,
+                "batch": None,
+                "total_batches": None,
+                "percent": 0.0,
+                "elapsed_text": "00:00",
+                "eta_text": "--:--",
+                "rate_text": "--it/s",
+                "bar": _progress_bar(0),
+                "tqdm_line": f"pending: {_progress_bar(0)}   0.0% | waiting to start",
+            },
+        )
+
         thread_config = {
             **config,
             "model_name": model_name,
@@ -535,6 +733,8 @@ class TrainingService:
         db = SessionLocal()
         task: TrainingTask | None = None
         file_handler: logging.Handler | None = None
+        results_monitor_stop = threading.Event()
+        results_monitor: threading.Thread | None = None
         try:
             log_path = _task_log_path(task_uuid)
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -555,6 +755,25 @@ class TrainingService:
             db.commit()
             _append_task_log(task_uuid, "status=running")
 
+            live_started_at = time.perf_counter()
+            live_state = {
+                "started_at": live_started_at,
+                "last_log_time": 0.0,
+                "log_interval_seconds": float(config.get("log_interval_seconds", 2.0)),
+            }
+            initial_live_progress = _build_tqdm_progress(
+                phase="train",
+                epoch=0,
+                total_epochs=int(config.get("epochs", 50)),
+                batch=None,
+                total_batches=None,
+                completed_units=0,
+                total_units=max(1, int(config.get("epochs", 50))),
+                elapsed=0,
+            )
+            initial_live_progress["started_at_monotonic"] = live_started_at
+            _set_live_progress(task_uuid, initial_live_progress)
+
             TrainingService._prepare_ultralytics_env()
             from ultralytics import YOLO
 
@@ -567,7 +786,22 @@ class TrainingService:
                 _running_tasks[task_uuid] = model
             _append_task_log(task_uuid, "model registered as running")
 
-            def on_train_epoch_end(trainer):
+            def on_train_batch_end(trainer):
+                TrainingService._record_live_batch_progress(
+                    task_uuid=task_uuid,
+                    trainer=trainer,
+                    total_epochs=int(config.get("epochs", 50)),
+                    state=live_state,
+                )
+
+            def on_fit_epoch_end(trainer):
+                TrainingService._record_live_batch_progress(
+                    task_uuid=task_uuid,
+                    trainer=trainer,
+                    total_epochs=int(config.get("epochs", 50)),
+                    state=live_state,
+                    force_log=True,
+                )
                 TrainingService._record_epoch_from_trainer(
                     db=db,
                     task_id=task_id,
@@ -578,7 +812,8 @@ class TrainingService:
 
             # Ultralytics validates after on_train_epoch_end. on_fit_epoch_end is
             # the first epoch callback where current validation metrics exist.
-            model.add_callback("on_fit_epoch_end", on_train_epoch_end)
+            model.add_callback("on_train_batch_end", on_train_batch_end)
+            model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
 
             output_dir = _resolve_path(settings.TRAIN_OUTPUT_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -602,6 +837,24 @@ class TrainingService:
             logger.info("YOLO training begins | task=%s data=%s", task_uuid, data_yaml)
             _append_task_log(task_uuid, f"YOLO training begins\ntrain_kwargs={train_kwargs}")
 
+            results_monitor = threading.Thread(
+                target=TrainingService._monitor_results_csv,
+                args=(
+                    task_id,
+                    task_uuid,
+                    int(config.get("epochs", 50)),
+                    output_dir,
+                    results_monitor_stop,
+                ),
+                daemon=True,
+                name=f"train-results-monitor-{task_uuid}",
+            )
+            results_monitor.start()
+            _append_task_log(
+                task_uuid,
+                "results.csv monitor started; progress and losses will update after each epoch",
+            )
+
             file_handler = logging.FileHandler(log_path, encoding="utf-8")
             file_handler.setFormatter(
                 logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
@@ -622,7 +875,23 @@ class TrainingService:
                 task.completed_at = datetime.now()
                 db.commit()
 
+            results_monitor_stop.set()
+            if results_monitor is not None:
+                results_monitor.join(timeout=10)
             TrainingService._parse_final_results(db, task_id, task_uuid, output_dir)
+            _set_live_progress(
+                task_uuid,
+                _build_tqdm_progress(
+                    phase="completed",
+                    epoch=int(config.get("epochs", 50)),
+                    total_epochs=int(config.get("epochs", 50)),
+                    batch=None,
+                    total_batches=None,
+                    completed_units=int(config.get("epochs", 50)),
+                    total_units=max(1, int(config.get("epochs", 50))),
+                    elapsed=time.perf_counter() - live_started_at,
+                ),
+            )
             logger.info("YOLO training completed | task=%s", task_uuid)
             _append_task_log(task_uuid, "YOLO training completed")
 
@@ -640,13 +909,200 @@ class TrainingService:
                 task.error_message = str(exc)[:2000]
                 task.completed_at = datetime.now()
                 db.commit()
+            _set_live_progress(
+                task_uuid,
+                {
+                    "phase": "failed",
+                    "eta_text": "--:--",
+                    "rate_text": "--it/s",
+                    "tqdm_line": f"failed: {_progress_bar(0)} error={exc}",
+                },
+            )
         finally:
+            results_monitor_stop.set()
+            if results_monitor is not None and results_monitor.is_alive():
+                results_monitor.join(timeout=5)
             if file_handler is not None:
                 logging.getLogger().removeHandler(file_handler)
                 file_handler.close()
             with _running_lock:
                 _running_tasks.pop(task_uuid, None)
             db.close()
+
+
+    @staticmethod
+    def _record_live_batch_progress(
+        task_uuid: str,
+        trainer: Any,
+        total_epochs: int,
+        state: dict[str, Any],
+        force_log: bool = False,
+    ) -> None:
+        try:
+            epoch = int(getattr(trainer, "epoch", 0)) + 1
+            total_batches = _trainer_loader_length(trainer)
+            raw_batch_i = getattr(trainer, "batch_i", None)
+            if raw_batch_i is None:
+                fallback_key = f"batch_count_epoch_{epoch}"
+                state[fallback_key] = int(state.get(fallback_key, 0)) + 1
+                batch = state[fallback_key]
+            else:
+                batch = int(raw_batch_i) + 1
+            if total_batches is None:
+                completed_units = max(0, epoch - 1)
+                total_units = max(1, total_epochs)
+                batch_for_report = None
+            else:
+                batch = min(max(1, batch), total_batches)
+                completed_units = batch
+                total_units = total_batches
+                batch_for_report = batch
+            elapsed = time.perf_counter() - float(state.get("started_at", time.perf_counter()))
+            progress = _build_tqdm_progress(
+                phase="train",
+                epoch=min(epoch, total_epochs),
+                total_epochs=total_epochs,
+                batch=batch_for_report,
+                total_batches=total_batches,
+                completed_units=completed_units,
+                total_units=total_units,
+                elapsed=elapsed,
+                losses=_trainer_losses(trainer),
+            )
+            _set_live_progress(task_uuid, progress)
+            now = time.perf_counter()
+            log_interval = float(state.get("log_interval_seconds", 2.0))
+            if force_log or log_interval <= 0 or now - float(state.get("last_log_time", 0.0)) >= log_interval:
+                _append_task_log(task_uuid, progress["tqdm_line"])
+                state["last_log_time"] = now
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("live batch progress callback failed | task=%s error=%s", task_uuid, exc)
+
+    @staticmethod
+    def _upsert_metric_from_csv_row(
+        db: Session,
+        task_id: int,
+        task_uuid: str,
+        row: dict[str, str],
+        total_epochs: int,
+        log_progress: bool = False,
+    ) -> int | None:
+        try:
+            metric = _metric_from_csv_row(task_id, row)
+        except (TypeError, ValueError):
+            return None
+        existing = (
+            db.query(TrainingMetric)
+            .filter(TrainingMetric.task_id == task_id, TrainingMetric.epoch == metric.epoch)
+            .first()
+        )
+        if existing is None:
+            db.add(metric)
+        else:
+            _copy_metric_values(existing, metric)
+            metric = existing
+        task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
+        if task is not None and task.status not in {"completed", "failed", "cancelled"}:
+            task.current_epoch = min(metric.epoch, total_epochs)
+            task.progress = min(99, int(metric.epoch / max(total_epochs, 1) * 100))
+        db.commit()
+        if log_progress:
+            _append_task_log(task_uuid, _metric_log_line(metric, total_epochs))
+        return metric.epoch
+
+    @staticmethod
+    def _sync_results_csv(
+        db: Session,
+        task_id: int,
+        task_uuid: str,
+        results_csv: Path,
+        total_epochs: int,
+        logged_epochs: set[int] | None = None,
+    ) -> set[int]:
+        if logged_epochs is None:
+            logged_epochs = set()
+        if not results_csv.exists():
+            return logged_epochs
+        with results_csv.open("r", encoding="utf-8", errors="replace") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cleaned = {(key or "").strip(): (value or "").strip() for key, value in row.items()}
+                if not cleaned.get("epoch"):
+                    continue
+                try:
+                    source_epoch = int(float(cleaned["epoch"]))
+                except (TypeError, ValueError):
+                    continue
+                saved_epoch = TrainingService._upsert_metric_from_csv_row(
+                    db=db,
+                    task_id=task_id,
+                    task_uuid=task_uuid,
+                    row=cleaned,
+                    total_epochs=total_epochs,
+                    log_progress=source_epoch not in logged_epochs,
+                )
+                if saved_epoch is not None:
+                    logged_epochs.add(source_epoch)
+                    metric = _metric_from_csv_row(task_id, cleaned)
+                    live = _get_live_progress(task_uuid) or {}
+                    start = live.get("started_at_monotonic")
+                    elapsed = time.perf_counter() - float(start) if start is not None else 0.0
+                    progress = _build_tqdm_progress(
+                        phase="train",
+                        epoch=min(metric.epoch, total_epochs),
+                        total_epochs=total_epochs,
+                        batch=None,
+                        total_batches=None,
+                        completed_units=min(metric.epoch, total_epochs),
+                        total_units=max(1, total_epochs),
+                        elapsed=max(0.0, elapsed),
+                        losses={"box_loss": metric.box_loss, "cls_loss": metric.cls_loss, "dfl_loss": metric.dfl_loss},
+                    )
+                    if start is not None:
+                        progress["started_at_monotonic"] = start
+                    _set_live_progress(task_uuid, progress)
+        return logged_epochs
+
+    @staticmethod
+    def _monitor_results_csv(
+        task_id: int,
+        task_uuid: str,
+        total_epochs: int,
+        output_dir: str | Path,
+        stop_event: threading.Event,
+    ) -> None:
+        results_csv = Path(output_dir) / f"task_{task_uuid}" / "results.csv"
+        logged_epochs: set[int] = set()
+        monitor_db = SessionLocal()
+        try:
+            while not stop_event.is_set():
+                try:
+                    logged_epochs = TrainingService._sync_results_csv(
+                        db=monitor_db,
+                        task_id=task_id,
+                        task_uuid=task_uuid,
+                        results_csv=results_csv,
+                        total_epochs=total_epochs,
+                        logged_epochs=logged_epochs,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    monitor_db.rollback()
+                    logger.debug("results.csv monitor tick failed | task=%s error=%s", task_uuid, exc)
+                stop_event.wait(5)
+            try:
+                TrainingService._sync_results_csv(
+                    db=monitor_db,
+                    task_id=task_id,
+                    task_uuid=task_uuid,
+                    results_csv=results_csv,
+                    total_epochs=total_epochs,
+                    logged_epochs=logged_epochs,
+                )
+            except Exception as exc:  # noqa: BLE001
+                monitor_db.rollback()
+                logger.debug("final results.csv monitor sync failed | task=%s error=%s", task_uuid, exc)
+        finally:
+            monitor_db.close()
 
     @staticmethod
     def _record_epoch_from_trainer(
@@ -731,6 +1187,217 @@ class TrainingService:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to parse results.csv | path=%s error=%s", results_csv, exc)
             db.rollback()
+
+
+    @staticmethod
+    def import_training_run(
+        db: Session,
+        user_id: int,
+        scene_id: int,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Import an Ultralytics run directory produced outside the web backend."""
+
+        def _as_int(value: Any, default: int) -> int:
+            if value is None or value == "":
+                return default
+            if isinstance(value, (list, tuple)):
+                value = value[0] if value else default
+            try:
+                return int(float(value))
+            except (TypeError, ValueError):
+                return default
+
+        def _as_float(value: Any, default: float) -> float:
+            if value is None or value == "":
+                return default
+            if isinstance(value, (list, tuple)):
+                value = value[0] if value else default
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def _as_device(value: Any, default: str = "0") -> str:
+            if value is None or value == "":
+                return default
+            if isinstance(value, (list, tuple)):
+                return ",".join(str(item) for item in value)
+            return str(value)
+
+        def _safe_task_uuid(value: str) -> str:
+            cleaned = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in value)
+            cleaned = cleaned.strip("_-")
+            return cleaned[:100] or uuid.uuid4().hex[:8]
+
+        run_dir = _resolve_path(config.get("run_dir"))
+        if not run_dir.exists() or not run_dir.is_dir():
+            raise FileNotFoundError(f"run_dir not found: {run_dir}")
+
+        results_csv = run_dir / "results.csv"
+        if not results_csv.exists():
+            raise FileNotFoundError(f"results.csv not found: {results_csv}")
+
+        args: dict[str, Any] = {}
+        args_yaml = run_dir / "args.yaml"
+        if args_yaml.exists() and yaml is not None:
+            loaded = yaml.safe_load(args_yaml.read_text(encoding="utf-8")) or {}
+            if isinstance(loaded, dict):
+                args = loaded
+
+        raw_uuid = config.get("task_uuid")
+        if not raw_uuid:
+            raw_uuid = run_dir.name[5:] if run_dir.name.startswith("task_") else run_dir.name
+        task_uuid = _safe_task_uuid(str(raw_uuid))
+
+        expected_run_dir = _task_dir(task_uuid)
+        if expected_run_dir.resolve() != run_dir.resolve():
+            expected_run_dir.parent.mkdir(parents=True, exist_ok=True)
+            if not expected_run_dir.exists():
+                expected_run_dir.symlink_to(run_dir, target_is_directory=True)
+            elif expected_run_dir.resolve() != run_dir.resolve():
+                raise ValueError(
+                    f"expected task output path already exists and points elsewhere: {expected_run_dir}"
+                )
+
+        metrics: list[TrainingMetric] = []
+        with results_csv.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cleaned = {(key or "").strip(): (value or "").strip() for key, value in row.items()}
+                if not any(cleaned.values()):
+                    continue
+                metrics.append(_metric_from_csv_row(task_id=0, row=cleaned))
+        if not metrics:
+            raise ValueError(f"no metrics found in results.csv: {results_csv}")
+
+        max_epoch = max(metric.epoch for metric in metrics)
+        model_name = _clean_model_name(str(config.get("model_name") or args.get("model") or "yolov11n"))
+
+        data_yaml_value = config.get("data_yaml") or args.get("data")
+        data_yaml = _resolve_path(str(data_yaml_value)) if data_yaml_value else None
+        dataset_path_value = config.get("dataset_path")
+        if dataset_path_value:
+            dataset_path = _resolve_path(str(dataset_path_value))
+        elif data_yaml is not None:
+            dataset_path = data_yaml.parent
+        else:
+            dataset_path = run_dir
+
+        epochs = _as_int(config.get("epochs") or args.get("epochs"), max_epoch)
+        img_size = _as_int(config.get("img_size") or args.get("imgsz"), 640)
+        batch_size = _as_int(config.get("batch_size") or args.get("batch"), 16)
+        device = _as_device(config.get("device") or args.get("device"), "0")
+        optimizer = str(config.get("optimizer") or args.get("optimizer") or "SGD")
+        lr0 = _as_float(config.get("lr0") or args.get("lr0"), 0.01)
+        status = str(config.get("status") or "completed")
+        if status not in {"completed", "failed", "cancelled"}:
+            raise ValueError("status must be completed, failed, or cancelled")
+
+        augment_config = config.get("augment_config")
+        if augment_config is None:
+            augment_config = {key: args[key] for key in _TRAIN_AUGMENT_KEYS if key in args}
+            if not augment_config:
+                augment_config = None
+        _training_augment_kwargs(augment_config)
+
+        task = db.query(TrainingTask).filter(TrainingTask.task_uuid == task_uuid).first()
+        if task is not None and task.user_id != user_id:
+            raise ValueError(f"task_uuid already belongs to another user: {task_uuid}")
+
+        if task is None:
+            task = TrainingTask(user_id=user_id, scene_id=scene_id, task_uuid=task_uuid)
+            db.add(task)
+            db.flush()
+
+        task.scene_id = scene_id
+        task.status = status
+        task.model_name = model_name
+        task.epochs = epochs
+        task.current_epoch = max_epoch
+        task.progress = 100 if status == "completed" else min(99, int(max_epoch / max(epochs, 1) * 100))
+        task.img_size = img_size
+        task.batch_size = batch_size
+        task.device = device
+        task.optimizer = optimizer
+        task.lr0 = lr0
+        task.augment_config = augment_config
+        task.dataset_path = str(dataset_path)
+        task.dataset_size = _count_dataset_images(dataset_path) if dataset_path.exists() else None
+        task.data_yaml = str(data_yaml) if data_yaml is not None else None
+        task.error_message = None if status == "completed" else f"imported offline run as {status}"
+        task.started_at = datetime.fromtimestamp(args_yaml.stat().st_mtime if args_yaml.exists() else run_dir.stat().st_mtime)
+        if status in {"completed", "failed", "cancelled"}:
+            task.completed_at = datetime.fromtimestamp(results_csv.stat().st_mtime)
+
+        db.query(TrainingMetric).filter(TrainingMetric.task_id == task.id).delete()
+        for metric in sorted(metrics, key=lambda item: item.epoch):
+            metric.task_id = task.id
+            db.add(metric)
+        db.commit()
+        db.refresh(task)
+
+        latest_metric = max(metrics, key=lambda item: item.epoch)
+        progress_payload = _build_tqdm_progress(
+            phase=status,
+            epoch=max_epoch,
+            total_epochs=epochs,
+            batch=None,
+            total_batches=None,
+            completed_units=max_epoch,
+            total_units=max(epochs, max_epoch, 1),
+            elapsed=0,
+        )
+        progress_payload.update(
+            {
+                "box_loss": latest_metric.box_loss,
+                "cls_loss": latest_metric.cls_loss,
+                "dfl_loss": latest_metric.dfl_loss,
+                "precision": latest_metric.precision,
+                "recall": latest_metric.recall,
+                "map50": latest_metric.map50,
+                "map50_95": latest_metric.map50_95,
+            }
+        )
+        progress_payload["percent"] = float(task.progress)
+        _set_live_progress(task_uuid, progress_payload)
+
+        _append_task_log(
+            task_uuid,
+            "imported offline training run\n"
+            f"run_dir={run_dir}\n"
+            f"results_csv={results_csv}\n"
+            f"metrics_imported={len(metrics)}\n"
+            f"status={status}",
+        )
+
+        external_log_value = config.get("log_path")
+        external_log = _resolve_path(str(external_log_value)) if external_log_value else run_dir / "train.log"
+        task_log = _task_log_path(task_uuid)
+        if external_log.exists() and external_log.resolve() != task_log.resolve():
+            tail = deque(maxlen=2000)
+            with external_log.open("r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    tail.append(line.rstrip("\n"))
+            _append_task_log(
+                task_uuid,
+                "imported external train log tail\n"
+                f"source={external_log}\n"
+                + "\n".join(tail),
+            )
+
+        best_weights = expected_run_dir / "weights" / "best.pt"
+        last_weights = expected_run_dir / "weights" / "last.pt"
+        return {
+            "message": "离线训练结果已导入",
+            "task": TrainingService._serialize_task(task),
+            "metrics_imported": len(metrics),
+            "run_dir": str(expected_run_dir),
+            "source_run_dir": str(run_dir),
+            "results_csv": str(results_csv),
+            "best_weights": str(best_weights) if best_weights.exists() else None,
+            "last_weights": str(last_weights) if last_weights.exists() else None,
+        }
 
     @staticmethod
     def validate_model(
@@ -1020,6 +1687,7 @@ class TrainingService:
             if latest_metric
             else None,
             "is_running": is_running,
+            "live_progress": _get_live_progress(task.task_uuid),
         }
 
     @staticmethod

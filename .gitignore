@@ -158,6 +158,7 @@ dmypy.json
 docs/
 .LiuCheng/
 logs/
+log/
 *.log
 
 # 个人本地使用的 Windows 启动脚本（不提交到仓库）
