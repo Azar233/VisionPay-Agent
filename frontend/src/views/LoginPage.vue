@@ -1,10 +1,26 @@
 <template>
   <div class="login-page">
+    <section class="auth-hero">
+      <span class="vp-kicker">Powered by YOLOv11 & Agent Workflow</span>
+      <h1>VisionPay for Retail Intelligence</h1>
+      <p>连接商品检测、训练监控与智能对话，把收银台图像转成可用的识别结果。</p>
+      <div class="chat-preview">
+        <header>
+          <span class="preview-icon"><img src="/favicon.svg" alt="" /></span>
+          <div><strong>VisionPay Assistant</strong><small><i></i> Online</small></div>
+        </header>
+        <div class="preview-body">
+          <p class="bubble user">识别这批收银台商品</p>
+          <p class="bubble agent">已定位 12 件商品，正在生成结算清单。</p>
+          <span class="typing"><i></i><i></i><i></i></span>
+        </div>
+      </div>
+    </section>
     <div class="login-card">
       <div class="login-header">
-        <img src="/favicon.svg" alt="logo" class="login-logo" />
-        <h2>VisionPay Agent Platform</h2>
-        <p>基于 YOLOv11 的零售商品自动结账智能体平台</p>
+        <img src="/favicon.svg" alt="VisionPay" class="login-logo" />
+        <h2>欢迎回来</h2>
+        <p>登录后继续管理检测、训练和智能体任务</p>
       </div>
       <el-form
         ref="formRef"
@@ -106,18 +122,151 @@ async function handleLogin() {
 <style lang="scss" scoped>
 .login-page {
   width: 100%;
-  height: 100vh;
-  display: flex;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  gap: 64px;
+  padding: 48px max(32px, calc((100vw - 1120px) / 2));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(247, 247, 248, 0.96)),
+    $bg-color;
+}
+
+.auth-hero {
+  max-width: 620px;
+
+  h1 {
+    margin: 24px 0 0;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 58px;
+    line-height: 1.02;
+    color: $text-primary;
+    letter-spacing: 0;
+  }
+
+  p {
+    max-width: 560px;
+    margin: 18px 0 0;
+    color: $text-secondary;
+    font-size: 18px;
+    line-height: 1.7;
+  }
+}
+
+.chat-preview {
+  max-width: 560px;
+  margin-top: 48px;
+  padding: 24px;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  background: $surface-color;
+  box-shadow: $shadow-lg;
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid $border-color;
+  }
+
+  strong {
+    display: block;
+    color: $text-primary;
+    font-weight: 800;
+  }
+
+  small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    color: $success-color;
+    font-weight: 700;
+  }
+
+  small i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $success-color;
+  }
+}
+
+.preview-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: $primary-color;
+
+  img {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 24px;
+}
+
+.bubble {
+  width: fit-content;
+  max-width: 78%;
+  margin: 0;
+  padding: 13px 16px;
+  border-radius: $border-radius-md;
+  font-size: 14px;
+
+  &.user {
+    align-self: flex-end;
+    color: #fff;
+    background: $primary-color;
+  }
+
+  &.agent {
+    color: $text-primary;
+    background: $surface-muted;
+  }
+}
+
+.typing {
+  display: inline-flex;
+  gap: 5px;
+  width: fit-content;
+  padding: 12px 16px;
+  border-radius: $border-radius-md;
+  background: $surface-muted;
+
+  i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $text-secondary;
+    animation: authPulse 1.2s infinite;
+  }
+
+  i:nth-child(2) {
+    animation-delay: .16s;
+  }
+
+  i:nth-child(3) {
+    animation-delay: .32s;
+  }
 }
 
 .login-card {
   width: 420px;
-  padding: 40px;
-  background: #fff;
-  border-radius: $border-radius-lg;
+  padding: 36px;
+  background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
   box-shadow: $shadow-lg;
 }
 
@@ -126,13 +275,14 @@ async function handleLogin() {
   margin-bottom: 32px;
 
   .login-logo {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     margin-bottom: 12px;
   }
 
   h2 {
-    font-size: 22px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 28px;
     color: $text-primary;
     margin-bottom: 8px;
   }
@@ -145,6 +295,7 @@ async function handleLogin() {
 
 .login-btn {
   width: 100%;
+  min-height: 46px;
 }
 
 .login-footer {
@@ -155,10 +306,47 @@ async function handleLogin() {
   a {
     color: $primary-color;
     margin-left: 4px;
+    font-weight: 700;
 
     &:hover {
       text-decoration: underline;
     }
+  }
+}
+
+@keyframes authPulse {
+  0%, 70%, 100% { opacity: .35; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (max-width: 980px) {
+  .login-page {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 32px 20px;
+  }
+
+  .auth-hero {
+    text-align: center;
+
+    h1 {
+      font-size: 40px;
+    }
+
+    p {
+      margin-left: auto;
+      margin-right: auto;
+      font-size: 16px;
+    }
+  }
+
+  .chat-preview {
+    margin: 28px auto 0;
+  }
+
+  .login-card {
+    width: min(100%, 420px);
+    justify-self: center;
   }
 }
 </style>

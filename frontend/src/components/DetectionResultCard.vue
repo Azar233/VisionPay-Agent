@@ -34,7 +34,7 @@ import { computed, ref } from 'vue'
 import { ZoomIn } from '@element-plus/icons-vue'
 
 const props = defineProps({ result: { type: Object, required: true } })
-const palette = ['#1677ff', '#13a86b', '#e89119', '#d84a5f', '#7856c8', '#008b95']
+const palette = ['#6366f1', '#10b981', '#d97706', '#dc2626', '#0891b2', '#7c3aed']
 const previewVisible = ref(false)
 const previewImage = ref('')
 const classes = computed(() => Object.entries(props.result.class_counts || {}).map(([name, count], index) => ({ name, count, color: palette[index % palette.length] })))
@@ -43,16 +43,16 @@ function formatTime(value) { return Number(value || 0) < 1000 ? `${Number(value 
 </script>
 
 <style lang="scss" scoped>
-.result-card { margin-top: 14px; border: 1px solid #dfe5ec; border-radius: 8px; overflow: hidden; background: #fff; }
-.result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #edf0f3; }
+.result-card { margin-top: 14px; border: 1px solid $border-color; border-radius: $border-radius-md; overflow: hidden; background: $surface-color; box-shadow: $shadow-sm; }
+.result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid $border-color; }
 .result-header > div { display: flex; flex-direction: column; gap: 3px; }
-.result-header strong { color: #172331; font-size: 15px; }.eyebrow { color: #718096; font-size: 11px; }
-.class-strip { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: #f8fafc; }
-.class-stat { display: grid; grid-template-columns: 8px auto auto; align-items: center; gap: 7px; min-width: max-content; padding: 5px 9px; border: 1px solid #e3e8ee; border-radius: 4px; background: #fff; font-size: 12px; }
+.result-header strong { color: $text-primary; font-size: 15px; }.eyebrow { color: $text-secondary; font-size: 11px; font-weight: 700; }
+.class-strip { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: $surface-muted; }
+.class-stat { display: grid; grid-template-columns: 8px auto auto; align-items: center; gap: 7px; min-width: max-content; padding: 6px 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-color; font-size: 12px; }
 .class-stat strong { margin-left: 4px; }.swatch { width: 8px; height: 8px; border-radius: 2px; }
-.result-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1px; background: #e7ebef; }
-.image-result { min-width: 0; background: #fff; padding-bottom: 10px; }.preview-button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border: 0; padding: 0; background: #eef1f4; cursor: zoom-in; overflow: hidden; }
-.preview-button img { width: 100%; height: 100%; object-fit: contain; }.preview-button span { position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 4px; color: #fff; background: rgba(18, 28, 39, .74); opacity: 0; transition: opacity .2s; }
+.result-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1px; background: $border-color; }
+.image-result { min-width: 0; background: $surface-color; padding-bottom: 10px; }.preview-button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border: 0; padding: 0; background: $surface-muted; cursor: zoom-in; overflow: hidden; }
+.preview-button img { width: 100%; height: 100%; object-fit: contain; }.preview-button span { position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: $border-radius-sm; color: #fff; background: rgba(17, 24, 39, .76); opacity: 0; transition: opacity .2s; }
 .preview-button:hover span { opacity: 1; }.image-meta { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: 12px; color: #6b7785; }
-.image-meta strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #273444; }.image-result :deep(.el-table) { width: calc(100% - 24px); margin: 0 12px; }.dialog-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
+.image-meta strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $text-primary; }.image-result :deep(.el-table) { width: calc(100% - 24px); margin: 0 12px; }.dialog-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
 </style>
