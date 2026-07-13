@@ -1,0 +1,309 @@
+"""Conversation persistence and SSE endpoints for the VisionPay detection agent."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from app.agent.detection_agent import AgentConfigurationError, DetectionAgent
+from app.api.auth import get_current_user
+from app.api.detection import save_upload
+from app.config.settings import settings
+from app.core.logger import get_logger
+from app.database.session import get_db
+from app.entity.db_models import ChatMessage, ChatSession
+
+logger = get_logger(__name__)
+router = APIRouter(prefix="/api/chat", tags=["检测对话"])
+
+
+def _session_or_404(db, user_id: int, session_uuid: str) -> ChatSession:
+    session = (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.session_uuid == session_uuid,
+            ChatSession.user_id == user_id,
+        )
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    return session
+
+
+def _serialize_session(session: ChatSession) -> dict:
+    return {
+        "session_uuid": session.session_uuid,
+        "title": session.title or "新对话",
+        "message_count": session.message_count or 0,
+        "last_message_at": session.last_message_at,
+        "created_at": session.created_at,
+    }
+
+
+def _parse_json(value: str | None):
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def _touch_session(db, session: ChatSession, first_message: str | None = None) -> None:
+    session.message_count = (
+        db.query(ChatMessage).filter(ChatMessage.session_id == session.id).count()
+    )
+    session.last_message_at = datetime.now()
+    if first_message and (not session.title or session.title == "新对话"):
+        session.title = first_message.strip().replace("\n", " ")[:40] or "新对话"
+    db.add(session)
+
+
+@router.get("/status", summary="Agent 配置状态")
+async def agent_status(current_user=Depends(get_current_user)):
+    configured = bool(
+        settings.DEEPSEEK_API_KEY
+        and not settings.DEEPSEEK_API_KEY.startswith("sk-your-")
+    )
+    return {"configured": configured, "provider": "DeepSeek", "model": settings.DEEPSEEK_MODEL}
+
+
+@router.post("/sessions", summary="创建检测对话")
+async def create_session(
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    title = str(body.get("title") or "新对话").strip()[:200]
+    session = ChatSession(
+        user_id=current_user.id,
+        session_uuid=uuid4().hex,
+        title=title or "新对话",
+        status="active",
+        message_count=0,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return _serialize_session(session)
+
+
+@router.get("/sessions", summary="检测对话历史")
+async def list_sessions(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    sessions = (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.user_id == current_user.id,
+            ChatSession.status == "active",
+            ChatSession.message_count > 0,
+        )
+        .order_by(ChatSession.last_message_at.desc(), ChatSession.created_at.desc())
+        .all()
+    )
+    return {"items": [_serialize_session(session) for session in sessions]}
+
+
+@router.get("/sessions/{session_uuid}", summary="读取检测对话")
+async def get_session(
+    session_uuid: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = _session_or_404(db, current_user.id, session_uuid)
+    messages = []
+    for message in session.messages:
+        metadata = message.tool_calls if isinstance(message.tool_calls, dict) else {}
+        messages.append(
+            {
+                "id": message.id,
+                "role": message.role,
+                "content": message.content,
+                "files": metadata.get("attachments", []),
+                "tool": metadata.get("tool"),
+                "result": _parse_json(message.tool_result),
+                "created_at": message.created_at,
+            }
+        )
+    return {"session": _serialize_session(session), "messages": messages}
+
+
+@router.delete("/sessions/{session_uuid}", summary="删除检测对话")
+async def delete_session(
+    session_uuid: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    session = _session_or_404(db, current_user.id, session_uuid)
+    db.delete(session)
+    db.commit()
+    return {"message": "对话已删除"}
+
+
+@router.post("/sessions/{session_uuid}/exchanges", summary="保存快捷检测对话")
+async def save_exchange(
+    session_uuid: str,
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    user_content = str(body.get("user_content") or "").strip()
+    assistant_content = str(body.get("assistant_content") or "").strip()
+    if not user_content or not assistant_content:
+        raise HTTPException(status_code=400, detail="对话内容不能为空")
+    attachments = body.get("files") or []
+    result = body.get("result")
+    session = _session_or_404(db, current_user.id, session_uuid)
+    db.add(
+        ChatMessage(
+            session_id=session.id,
+            role="user",
+            content=user_content,
+            agent_used="detection",
+            tool_calls={"attachments": attachments},
+        )
+    )
+    db.add(
+        ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content=assistant_content,
+            agent_used="detection",
+            tool_calls={"tool": "yolo_direct"},
+            tool_result=json.dumps(result, ensure_ascii=False) if result else None,
+        )
+    )
+    db.flush()
+    _touch_session(db, session, user_content)
+    db.commit()
+    return _serialize_session(session)
+
+
+@router.post("/upload", summary="上传检测对话附件")
+async def upload_attachments(
+    files: list[UploadFile] = File(...),
+    current_user=Depends(get_current_user),
+):
+    if len(files) > settings.DETECTION_MAX_BATCH_SIZE:
+        raise HTTPException(status_code=400, detail="附件数量超过限制")
+    saved = []
+    for file in files:
+        path = await save_upload(file, allow_zip=True)
+        saved.append({"name": file.filename, "path": str(path)})
+    return {"files": saved}
+
+
+@router.post("/stream", summary="DeepSeek Agent SSE 检测对话")
+async def chat_stream(
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    message = str(body.get("message", "")).strip()
+    attachment_paths = body.get("attachment_paths") or []
+    attachment_names = body.get("attachment_names") or []
+    scene_id = body.get("scene_id")
+    session_uuid = str(body.get("session_uuid") or "")
+    if not message:
+        raise HTTPException(status_code=400, detail="消息内容不能为空")
+    if not isinstance(attachment_paths, list) or not all(
+        isinstance(path, str) for path in attachment_paths
+    ):
+        raise HTTPException(status_code=400, detail="附件路径格式无效")
+
+    session = _session_or_404(db, current_user.id, session_uuid)
+    history = []
+    for item in session.messages:
+        if item.role not in {"user", "assistant"}:
+            continue
+        content = item.content
+        # 把历史附件路径也拼进上下文，否则 LLM 在多轮对话中看不到之前的附件
+        if item.role == "user" and item.tool_calls:
+            historical_paths = item.tool_calls.get("attachment_paths") or []
+            if historical_paths:
+                content += "\n\n本次附件路径：\n" + "\n".join(
+                    f"- {p}" for p in historical_paths
+                )
+        history.append({"role": item.role, "content": content})
+    history = history[-20:]
+    db.add(
+        ChatMessage(
+            session_id=session.id,
+            role="user",
+            content=message,
+            agent_used="detection",
+            tool_calls={"attachments": attachment_names, "attachment_paths": attachment_paths},
+        )
+    )
+    db.flush()
+    _touch_session(db, session, message)
+    db.commit()
+
+    try:
+        agent = DetectionAgent(user_id=current_user.id, scene_id=scene_id)
+    except AgentConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    async def events():
+        assistant_content = ""
+        result = None
+        tool_name = None
+        error_text = None
+        yield f"data: {json.dumps({'type': 'session', 'session_uuid': session_uuid})}\n\n"
+        try:
+            async for event in agent.stream(message, attachment_paths, history):
+                if event.get("type") == "text_chunk":
+                    assistant_content += event.get("content", "")
+                elif event.get("type") == "detection_result":
+                    result = event.get("result")
+                elif event.get("type") == "tool_call":
+                    tool_name = event.get("tool")
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            logger.error("DeepSeek Agent 流式请求失败: %s", exc, exc_info=True)
+            error_text = f"Agent 处理失败: {exc}"
+            yield f"data: {json.dumps({'type': 'error', 'content': error_text}, ensure_ascii=False)}\n\n"
+        finally:
+            final_content = assistant_content.strip() or error_text or "本次响应已停止。"
+            try:
+                persist_session = _session_or_404(db, current_user.id, session_uuid)
+                db.add(
+                    ChatMessage(
+                        session_id=persist_session.id,
+                        role="assistant",
+                        content=final_content,
+                        agent_used="detection",
+                        tool_calls={"tool": tool_name} if tool_name else None,
+                        tool_result=(
+                            json.dumps(result, ensure_ascii=False) if result else None
+                        ),
+                    )
+                )
+                db.flush()
+                _touch_session(db, persist_session)
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.error("检测对话持久化失败", exc_info=True)
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
