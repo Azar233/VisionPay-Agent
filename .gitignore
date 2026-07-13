@@ -159,3 +159,9 @@ docs/
 .LiuCheng/
 logs/
 *.log
+
+# 个人本地使用的 Windows 启动脚本（不提交到仓库）
+start-dev.cmd
+start-dev.ps1
+stop-dev.cmd
+stop-dev.ps1
