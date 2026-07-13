@@ -161,6 +161,24 @@ http://127.0.0.1:5173
 
 前端请求封装使用 `baseURL: /api`，Vite 代理会把 `/api/*` 转发到 `http://localhost:8000`。
 
+### 使用 IP Webcam 接入手机摄像头
+
+`/checkout` 支持读取 Android IP Webcam 提供的 MJPEG 视频流。后端会代理手机的 HTTP 视频流，
+因此前端没有跨域或 HTTPS 混合内容问题；当前不会存储视频，也尚未发送给 YOLO。
+
+1. 手机和电脑连接同一个 Wi-Fi。在 IP Webcam 中滚动到底部，点击“启动服务器”。
+2. 当前前端固定使用 `http://192.168.1.109:8080`。先在电脑浏览器打开该地址，确认电脑能够
+   访问手机；建议原型阶段关闭 IP Webcam 的登录/密码验证。
+3. 正常启动后端和前端，在电脑打开 `http://127.0.0.1:5173/checkout`。
+4. 进入页面或点击“Webcam”模式后会自动连接直播画面；切换到“图片上传”模式会断开视频流。
+
+如果手机 IP 发生变化，请修改 `frontend/src/views/CustomerCheckoutPage.vue` 中的
+`IP_WEBCAM_URL` 常量。
+
+接口 `/api/camera/ip-webcam/stream` 只接受私有局域网 IP 以及 `/video`、`/videofeed` 路径，
+避免被用于代理公网或任意内部地址。如果连接失败，请检查 Windows 防火墙、手机是否仍在运行服务器，
+以及路由器是否开启了 AP/客户端隔离。
+
 前端路由：
 
 | 路由 | 页面 | 当前状态 |
