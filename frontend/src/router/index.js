@@ -1,13 +1,8 @@
-/**
- * Vue Router 路由配置
- * - 登录/注册页面无需认证
- * - 其他页面需要登录后才能访问
- * - 路由守卫自动检查登录状态
- */
 import { createRouter, createWebHistory } from 'vue-router'
 
-// ── 路由定义 ────────────────────────────────────────
-const routes = [
+const isCheckoutApp = import.meta.env.MODE === 'checkout'
+
+const developerRoutes = [
   {
     path: '/login',
     name: 'Login',
@@ -20,19 +15,6 @@ const routes = [
     component: () => import('@/views/RegisterPage.vue'),
     meta: { title: '注册', requiresAuth: false },
   },
-  {
-    path: '/checkout',
-    name: 'CustomerCheckout',
-    component: () => import('@/views/CustomerCheckoutPage.vue'),
-    meta: { title: '自助结算', requiresAuth: false },
-  },
-  {
-    path: '/checkout/payment',
-    name: 'CustomerPayment',
-    component: () => import('@/views/CustomerPaymentPage.vue'),
-    meta: { title: '确认付款', requiresAuth: false },
-  },
-  // ── 需要登录的页面（使用 MainLayout 布局） ──────
   {
     path: '/',
     component: () => import('@/components/layout/MainLayout.vue'),
@@ -71,39 +53,55 @@ const routes = [
       },
     ],
   },
-  // ── 404 页面 ─────────────────────────────────────
   {
     path: '/:pathMatch(.*)*',
     redirect: '/login',
   },
 ]
 
-// ── 创建路由实例 ──────────────────────────────────────
+const checkoutRoutes = [
+  {
+    path: '/checkout',
+    name: 'CustomerCheckout',
+    component: () => import('@/views/CustomerCheckoutPage.vue'),
+    meta: { title: '自助结算', requiresAuth: false },
+  },
+  {
+    path: '/checkout/payment',
+    name: 'CustomerPayment',
+    component: () => import('@/views/CustomerPaymentPage.vue'),
+    meta: { title: '确认付款', requiresAuth: false },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/checkout',
+  },
+]
+
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes: isCheckoutApp ? checkoutRoutes : developerRoutes,
 })
 
-// ── 路由守卫 ────────────────────────────────────────
-router.beforeEach((to, from, next) => {
-  // 设置页面标题
+router.beforeEach((to) => {
   document.title = to.meta.title
     ? `${to.meta.title} - VisionPay Agent Platform`
     : 'VisionPay Agent Platform'
 
-  // 检查是否需要认证
+  if (isCheckoutApp) return true
+
   const token = localStorage.getItem('vp_agent_token')
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth !== false)
 
   if (requiresAuth && !token) {
-    // 需要登录但未登录，跳转到登录页
-    next({ path: '/login', query: { redirect: to.fullPath } })
-  } else if ((to.path === '/login' || to.path === '/register') && token) {
-    // 已登录用户访问登录/注册页，跳转到首页
-    next('/')
-  } else {
-    next()
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
+
+  if ((to.path === '/login' || to.path === '/register') && token) {
+    return '/'
+  }
+
+  return true
 })
 
 export default router

@@ -34,7 +34,6 @@ import {
   Cpu,
   Clock,
   DataAnalysis,
-  ShoppingCart,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -53,7 +52,6 @@ const activeMenu = computed(() => {
 
 /** 侧边栏菜单配置 */
 const menuItems = [
-  { path: '/checkout', title: '顾客结算端', icon: ShoppingCart },
   { path: '/detection', title: '检测工作台', icon: Camera },
   { path: '/chat', title: '智能对话', icon: ChatDotRound },
   { path: '/training', title: '模型训练', icon: Cpu },

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:checkout": "vite --mode checkout --port 5174 --open /checkout",
     "build": "vite build",
+    "build:checkout": "vite build --mode checkout",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",

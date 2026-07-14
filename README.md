@@ -288,6 +288,15 @@ npm run dev -- --host 127.0.0.1
 
 访问 `http://127.0.0.1:5173`。Vite 会把 `/api/*` 请求代理到 `http://localhost:8000`。
 
+顾客结算端可单独启动一个 Vite 服务：
+
+```powershell
+cd frontend
+npm run dev:checkout
+```
+
+访问 `http://localhost:5174/checkout`。该服务只注册顾客结算和付款确认路由；开发者端不包含结算入口。
+
 ### 6.8 启动后检查
 
 1. 打开前端并注册或登录。
@@ -380,8 +389,8 @@ npm run dev -- --host 127.0.0.1
 | `/register` | 注册 |
 | `/detection` | 检测工作台与 Agent |
 | `/training` | 模型训练与监控 |
-| `/checkout` | 自助识别和结算 |
-| `/checkout/payment` | 商品及金额确认 |
+| `http://localhost:5174/checkout` | 自助识别和结算 |
+| `http://localhost:5174/checkout/payment` | 商品及金额确认 |
 | `/history` | 历史记录页面 |
 | `/dashboard` | 数据看板页面 |
 
