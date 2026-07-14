@@ -7,6 +7,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from app.config.settings import settings
+
 
 router = APIRouter(prefix="/api/camera", tags=["手机摄像头"])
 ALLOWED_STREAM_PATHS = {"/video", "/videofeed"}
@@ -40,11 +42,33 @@ def normalize_ip_webcam_url(raw_url: str) -> str:
     return urlunsplit(("http", f"{host}:{port}", path, "", ""))
 
 
+def configured_ip_webcam_url() -> str:
+    """Return the validated server-side IP Webcam MJPEG endpoint."""
+    if not settings.IP_WEBCAM_URL.strip():
+        raise ValueError("后端尚未配置 IP_WEBCAM_URL")
+    return normalize_ip_webcam_url(settings.IP_WEBCAM_URL)
+
+
+@router.get("/ip-webcam/config", summary="获取 IP Webcam 公共状态")
+async def ip_webcam_config():
+    """Expose readiness without leaking the private LAN camera address."""
+    try:
+        stream_url = configured_ip_webcam_url()
+    except ValueError as exc:
+        return {"configured": False, "message": str(exc)}
+    parsed = urlsplit(stream_url)
+    return {
+        "configured": True,
+        "source": "IP Webcam",
+        "endpoint": parsed.path,
+    }
+
+
 @router.get("/ip-webcam/stream")
-async def ip_webcam_stream(url: str = Query(..., max_length=200)):
+async def ip_webcam_stream(url: str | None = Query(None, max_length=200)):
     """Relay MJPEG bytes so HTTPS/mixed-content and CORS do not affect the UI."""
     try:
-        stream_url = normalize_ip_webcam_url(url)
+        stream_url = normalize_ip_webcam_url(url) if url else configured_ip_webcam_url()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

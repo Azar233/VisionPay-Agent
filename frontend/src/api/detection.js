@@ -27,6 +27,20 @@ export function detectZipApi(file, options) {
   })
 }
 
+export function detectVideoApi(file, options = {}) {
+  const form = detectionForm([file], options)
+  if (options.frameSampleRate) form.append('frame_sample_rate', String(options.frameSampleRate))
+  if (options.maxFrames) form.append('max_frames', String(options.maxFrames))
+  return request.post('/detection/video', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
+  })
+}
+
+export function getVideoStatusApi(taskId) {
+  return request.get(`/detection/video/status/${taskId}`)
+}
+
 export function uploadChatFilesApi(files) {
   const form = new FormData()
   files.forEach((file) => form.append('files', file))

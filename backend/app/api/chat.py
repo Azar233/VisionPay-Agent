@@ -198,7 +198,7 @@ async def upload_attachments(
         raise HTTPException(status_code=400, detail="附件数量超过限制")
     saved = []
     for file in files:
-        path = await save_upload(file, allow_zip=True)
+        path = await save_upload(file, allow_zip=True, allow_video=True)
         saved.append({"name": file.filename, "path": str(path)})
     return {"files": saved}
 
