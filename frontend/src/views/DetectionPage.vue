@@ -59,17 +59,19 @@
           auto-start
         />
         <div v-else ref="messageListRef" class="message-list">
-          <section v-if="!agentStore.messages.length" class="empty-state">
-            <div class="empty-mark"><img src="/favicon.svg" alt="" /></div>
-            <span class="empty-eyebrow">Vision Agent</span>
-            <h2>从一张商品图片开始</h2>
-            <p class="empty-copy">上传素材后，VisionPay 会识别商品、汇总数量并生成结算清单。</p>
-            <div class="starter-grid">
-              <button type="button" @click="inputText = '识别附件中的商品，并按类别汇总数量'">识别并汇总</button>
-              <button type="button" @click="inputText = '检查识别结果中置信度较低的商品'">检查低置信度</button>
-              <button type="button" @click="inputText = '根据识别结果生成结算商品清单'">生成结算清单</button>
-            </div>
-          </section>
+          <Transition name="new-chat">
+            <section v-if="!agentStore.messages.length" class="empty-state">
+              <div class="empty-mark"><img src="/favicon.svg" alt="" /></div>
+              <span class="empty-eyebrow">Vision Agent</span>
+              <h2>从一张商品图片开始</h2>
+              <p class="empty-copy">上传素材后，VisionPay 会识别商品、汇总数量并生成结算清单。</p>
+              <div class="starter-grid">
+                <button type="button" @click="inputText = '识别附件中的商品，并按类别汇总数量'">识别并汇总</button>
+                <button type="button" @click="inputText = '检查识别结果中置信度较低的商品'">检查低置信度</button>
+                <button type="button" @click="inputText = '根据识别结果生成结算商品清单'">生成结算清单</button>
+              </div>
+            </section>
+          </Transition>
 
           <article v-for="(message, index) in agentStore.messages" :key="index" :class="['message-row', message.role]">
             <div class="avatar"><el-icon><User v-if="message.role === 'user'" /><Cpu v-else /></el-icon></div>
@@ -96,13 +98,13 @@
               <button type="button" aria-label="移除附件" @click="removeFile(index)"><el-icon><Close /></el-icon></button>
             </span>
           </div>
-          <div class="composer-row">
+          <div class="composer-row" @paste="handlePaste">
             <input ref="singleInputRef" class="file-input" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" @change="handleFileInput($event, 'single')" />
             <input ref="batchInputRef" class="file-input" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" multiple @change="handleFileInput($event, 'batch')" />
             <input ref="zipInputRef" class="file-input" type="file" accept=".zip,application/zip" @change="handleFileInput($event, 'zip')" />
             <input ref="videoInputRef" class="file-input" type="file" accept="video/mp4,video/quicktime,video/x-msvideo,.mkv" @change="handleFileInput($event, 'video')" />
             <el-tooltip content="按当前模式添加文件" placement="top" :show-arrow="false"><el-button :icon="Paperclip" circle :disabled="busy" @click="openModePicker(inputMode)" /></el-tooltip>
-            <el-input v-model="inputText" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" resize="none" placeholder="向识别 Agent 发出指令" :disabled="busy" @keydown.enter.exact.prevent="sendToAgent" />
+            <el-input v-model="inputText" type="textarea" :autosize="{ minRows: 1, maxRows: 4 }" resize="none" placeholder="向识别 Agent 发出指令，或直接粘贴图片和文件" :disabled="busy" @keydown.enter.exact.prevent="sendToAgent" />
             <el-tooltip :content="busy ? '停止响应' : '发送给 Agent'" placement="top" :show-arrow="false">
               <el-button class="send-button" :type="busy ? 'danger' : 'primary'" :icon="busy ? VideoPause : Promotion" circle :disabled="!busy && !canSend" @click="busy ? stopStream() : sendToAgent()" />
             </el-tooltip>
@@ -166,6 +168,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { streamChat } from '@/utils/stream'
 
 const agentStore = useAgentStore()
+agentStore.newChat()
 const inputText = ref('')
 const selectedFiles = ref([])
 const confidence = ref(0.25)
@@ -183,6 +186,18 @@ const inputMode = ref('single')
 const sessionLoading = ref(false)
 const busy = computed(() => directLoading.value || agentStore.isLoading)
 const canSend = computed(() => inputText.value.trim() || selectedFiles.value.length)
+const clipboardExtensionByType = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/bmp': '.bmp',
+  'image/webp': '.webp',
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/x-msvideo': '.avi',
+  'video/x-matroska': '.mkv',
+  'application/zip': '.zip',
+  'application/x-zip-compressed': '.zip',
+}
 const modeCopy = computed(() => ({
   single: { title: '选择一张商品图片', hint: 'JPG / PNG / BMP / WEBP' },
   batch: { title: '选择多张商品图片', hint: '最多 30 张图片' },
@@ -194,13 +209,6 @@ const modeCopy = computed(() => ({
 onMounted(async () => {
   try { agentStatus.value = await getAgentStatusApi() } catch { /* auth interceptor reports errors */ }
   await loadSessions()
-  if (agentStore.currentSessionId && agentStore.sessions.some((item) => item.session_uuid === agentStore.currentSessionId)) {
-    await openSession(agentStore.currentSessionId)
-  } else if (agentStore.sessions.length) {
-    await openSession(agentStore.sessions[0].session_uuid)
-  } else {
-    createNewChat()
-  }
 })
 onBeforeUnmount(() => { stopStream(); clearSelectedFiles() })
 function escapeText(value) { const node = document.createElement('div'); node.textContent = value; return node.innerHTML.replace(/\n/g, '<br>') }
@@ -254,8 +262,13 @@ async function removeSession(session) {
 function formatSessionTime(value) {
   if (!value) return ''
   const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
   const today = new Date()
-  return date.toDateString() === today.toDateString() ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+  const timeText = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  if (date.toDateString() === today.toDateString()) return timeText
+  const dateOptions = { month: '2-digit', day: '2-digit' }
+  if (date.getFullYear() !== today.getFullYear()) dateOptions.year = 'numeric'
+  return `${date.toLocaleDateString('zh-CN', dateOptions)} ${timeText}`
 }
 function selectMode(mode) {
   if (busy.value) return
@@ -281,6 +294,55 @@ function selectFiles(files, mode = inputMode.value) {
   }
 }
 function handleFileInput(event, mode) { inputMode.value = mode; selectFiles(event.target.files, mode); event.target.value = '' }
+function normalizeClipboardFile(file, index) {
+  if (/\.[a-z0-9]+$/i.test(file.name || '')) return file
+  const extension = clipboardExtensionByType[file.type]
+  if (!extension) return file
+  const baseName = (file.name || '').trim() || `clipboard-${Date.now()}-${index + 1}`
+  return new File([file], `${baseName}${extension}`, { type: file.type, lastModified: file.lastModified || Date.now() })
+}
+function pastedFileMode(files) {
+  const kinds = new Set(files.map((file) => {
+    if (/\.(jpe?g|png|bmp|webp)$/i.test(file.name)) return 'image'
+    if (/\.(mp4|avi|mov|mkv)$/i.test(file.name)) return 'video'
+    if (/\.zip$/i.test(file.name)) return 'zip'
+    return 'unsupported'
+  }))
+  if (kinds.has('unsupported')) return null
+  if (kinds.size > 1) return 'mixed'
+  const [kind] = kinds
+  if (kind === 'image') return files.length > 1 ? 'batch' : 'single'
+  return kind
+}
+function handlePaste(event) {
+  const clipboard = event.clipboardData
+  if (!clipboard) return
+  const rawFiles = clipboard.files?.length
+    ? [...clipboard.files]
+    : [...(clipboard.items || [])].filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter(Boolean)
+  if (!rawFiles.length) return
+
+  event.preventDefault()
+  if (busy.value) {
+    ElMessage.warning('当前任务处理中，请完成或停止后再粘贴附件')
+    return
+  }
+
+  const files = rawFiles.map(normalizeClipboardFile)
+  const mode = pastedFileMode(files)
+  if (!mode) {
+    ElMessage.warning('仅支持粘贴 JPG、PNG、BMP、WEBP、ZIP、MP4、AVI、MOV 或 MKV 文件')
+    return
+  }
+  if (mode === 'mixed') {
+    ElMessage.warning('一次请粘贴同一类型的附件')
+    return
+  }
+
+  inputMode.value = mode
+  selectFiles(files, mode)
+  if (selectedFiles.value.length) ElMessage.success(`已粘贴 ${selectedFiles.value.length} 个附件`)
+}
 function handleDrop(event) {
   if (busy.value) return
   const files = [...event.dataTransfer.files]
@@ -363,12 +425,15 @@ function resetWorkspace() { createNewChat() }
 .workspace { height: 100%; min-height: 620px; display: flex; flex-direction: column; color: $text-primary; background: $bg-color; }
 .workspace-header { min-height: 78px; padding: 14px 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid $border-color; border-radius: $border-radius-md $border-radius-md 0 0; background: $surface-color; box-shadow: $shadow-sm; }.workspace-header h1 { margin: 5px 0 0; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 24px; line-height: 1.16; letter-spacing: 0; }.kicker { font-size: 11px; color: $primary-color; font-weight: 800; letter-spacing: 0.06em; }.header-actions { display: flex; align-items: center; gap: 10px; }.agent-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: $danger-color; font-weight: 700; }.agent-status i { width: 7px; height: 7px; border-radius: 50%; background: $danger-color; }.agent-status.ready { color: $success-color; }.agent-status.ready i { background: $success-color; box-shadow: 0 0 0 4px rgba(16, 185, 129, .12); }
 .workspace-grid { min-height: 0; flex: 1; display: grid; grid-template-columns: 210px minmax(0, 1fr) 296px; border: 1px solid $border-color; border-top: 0; border-radius: 0 0 $border-radius-md $border-radius-md; overflow: hidden; background: $surface-color; }.conversation-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: $surface-color; }.workspace-camera { flex: 1; margin: 22px; }.message-list { min-height: 0; flex: 1; overflow-y: auto; padding: 28px max(22px, calc((100% - 840px) / 2)); }.empty-state { min-height: 100%; display: grid; align-content: center; justify-items: center; text-align: center; }.empty-mark { width: 58px; height: 58px; display: grid; place-items: center; border: 1px solid $border-color; border-radius: 50%; color: #fff; background: $primary-color; font-size: 25px; box-shadow: 0 16px 34px rgba(99, 102, 241, .24); }.empty-state h2 { margin: 16px 0 22px; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 22px; }.starter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 680px; }.starter-grid button { padding: 14px; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; color: $text-regular; cursor: pointer; font-size: 12px; font-weight: 700; transition: border-color .2s, box-shadow .2s, transform .2s; }.starter-grid button:hover { border-color: $primary-color; color: $primary-color; background: $primary-soft; box-shadow: $ring-primary; transform: translateY(-1px); }
+.new-chat-enter-active { transform-origin: center; transition: opacity .42s ease, transform .42s cubic-bezier(.22, 1, .36, 1), filter .42s ease; will-change: opacity, transform, filter; }
+.new-chat-enter-from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(5px); }
 .session-sidebar { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 14px 12px; border-right: 1px solid $border-color; background: $surface-muted; }.new-chat-button { width: 100%; }.session-heading { display: flex; align-items: center; justify-content: space-between; height: 38px; margin-top: 10px; padding-left: 5px; color: $text-secondary; font-size: 11px; font-weight: 800; }.session-list { min-height: 80px; flex: 1; overflow-y: auto; }.session-item { width: 100%; display: grid; grid-template-columns: 18px minmax(0, 1fr) 22px; align-items: center; gap: 8px; margin-bottom: 5px; padding: 9px 6px 9px 9px; border: 0; border-radius: $border-radius-sm; color: $text-secondary; background: transparent; text-align: left; cursor: pointer; transition: background .2s, color .2s; }.session-item:hover { background: #fff; }.session-item.active { color: $primary-color; background: $primary-soft; }.session-item > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.session-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }.session-item small { color: $text-placeholder; font-size: 9px; }.session-item i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 3px; opacity: 0; color: $text-secondary; cursor: pointer; }.session-item:hover i, .session-item.active i { opacity: 1; }.session-item i:hover { color: $danger-color; background: #fff; }.no-sessions { padding: 22px 4px; color: $text-placeholder; text-align: center; font-size: 11px; }
 .message-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; margin-bottom: 24px; }.avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: $primary-color; }.message-row.user .avatar { color: $text-primary; background: $surface-muted; }.message-label { margin-bottom: 6px; font-size: 11px; font-weight: 800; color: $text-secondary; }.message-content { color: $text-primary; line-height: 1.7; font-size: 14px; word-break: break-word; }.message-content :deep(p) { margin: 0 0 8px; }.message-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }.message-files span { display: flex; align-items: center; gap: 5px; max-width: 240px; padding: 6px 9px; border: 1px solid $border-color; border-radius: $border-radius-sm; color: $text-secondary; background: $surface-muted; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.thinking { display: flex; gap: 5px; padding: 8px 0; }.thinking span { width: 7px; height: 7px; border-radius: 50%; background: $text-secondary; animation: pulse 1.1s infinite; }.thinking span:nth-child(2) { animation-delay: .15s; }.thinking span:nth-child(3) { animation-delay: .3s; }.tool-state { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: $border-radius-sm; color: $warning-color; background: color-mix(in srgb, $warning-color 12%, $surface-color); font-size: 11px; font-weight: 700; }.stream-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -2px; background: $primary-color; animation: cursor-blink .8s steps(1) infinite; }
 .composer { padding: 14px max(22px, calc((100% - 840px) / 2)) 18px; border-top: 1px solid $border-color; background: $surface-color; }.composer-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; align-items: end; gap: 9px; padding: 8px; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: 0 10px 24px rgba(15, 23, 42, .06); }.composer-row:focus-within { border-color: $primary-color; box-shadow: $ring-primary; }.composer-row :deep(.el-textarea__inner) { min-height: 34px !important; padding: 7px 4px; border: 0; box-shadow: none; }.file-input { display: none; }.selected-files { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; }.selected-files > span { min-width: 0; max-width: 220px; height: 38px; display: grid; grid-template-columns: 28px minmax(0, 1fr) 22px; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-muted; }.selected-files img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; }.selected-files b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.selected-files button { border: 0; background: transparent; cursor: pointer; color: $text-secondary; }.send-button { align-self: end; }
 .control-rail { overflow-y: auto; border-left: 1px solid $border-color; background: $surface-muted; }.rail-section { padding: 18px; border-bottom: 1px solid $border-color; }.section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; font-size: 12px; font-weight: 800; color: $text-primary; }.section-title em { font-style: normal; font-size: 11px; color: $text-secondary; }.drop-zone { width: 100%; height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1px dashed $border-strong; border-radius: $border-radius-md; background: $surface-color; color: $text-secondary; cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s; }.drop-zone .el-icon { color: $primary-color; font-size: 26px; }.drop-zone strong { font-size: 12px; color: $text-primary; }.drop-zone span { font-size: 10px; color: $text-secondary; }.drop-zone:hover { border-color: $primary-color; background: $primary-soft; box-shadow: $ring-primary; }.input-modes { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.input-modes button { height: 32px; border: 0; border-right: 1px solid $border-color; background: $surface-color; color: $text-secondary; font-size: 10px; cursor: pointer; font-weight: 700; }.input-modes button:last-child { border-right: 0; }.input-modes button:hover { color: $primary-color; background: $primary-soft; }.input-modes button.active { color: $primary-color; background: $primary-soft; font-weight: 800; }.parameters label { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 2px; color: $text-secondary; font-size: 11px; }.parameters label strong { color: $text-primary; }.parameters :deep(.el-input-number) { width: 100%; }.action-section { text-align: center; }.action-section .el-button { width: 100%; }.action-section > span { display: block; margin-top: 7px; color: $text-placeholder; font-size: 10px; }.summary-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: $border-color; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.summary-metrics div { padding: 12px; display: flex; flex-direction: column; background: $surface-color; }.summary-metrics strong { font-size: 21px; }.summary-metrics span { font-size: 10px; color: $text-secondary; }.summary-price { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 3px 8px; margin-top: 10px; padding: 10px; border-radius: $border-radius-sm; background: $surface-color; }.summary-price span { color: $text-secondary; font-size: 10px; }.summary-price strong { font-size: 17px; }.summary-price small { grid-column: 1 / -1; color: $warning-color; font-size: 9px; }.summary-section ul { list-style: none; padding: 0; margin: 10px 0 0; }.summary-section li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid $border-color; font-size: 11px; }
 @keyframes pulse { 0%, 70%, 100% { opacity: .3; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
 @keyframes cursor-blink { 0%, 45% { opacity: 1; } 46%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .new-chat-enter-active { transition: none; } }
 
 /* Apple-class visual hierarchy */
 .workspace {
