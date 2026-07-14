@@ -163,3 +163,5 @@ logs/
 log/
 *.log
 scripts/
+!/frontend/scripts/
+!/frontend/scripts/dev-all.js

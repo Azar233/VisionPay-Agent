@@ -278,24 +278,39 @@ uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 ### 6.7 启动前端
 
-打开新的 PowerShell：
+打开新的 PowerShell，一条命令同时启动 5173 开发侧和 5174 用户侧：
 
 ```powershell
 cd frontend
 npm install
-npm run dev -- --host 127.0.0.1
+npm run dev
 ```
 
-访问 `http://127.0.0.1:5173`。Vite 会把 `/api/*` 请求代理到 `http://localhost:8000`。
+访问地址：
 
-顾客结算端可单独启动一个 Vite 服务：
+- 开发侧：`http://127.0.0.1:5173`
+- 用户侧：`http://127.0.0.1:5174/checkout`
+
+Vite 会把 `/api/*` 请求代理到 `http://localhost:8000`。如需让局域网中的其他设备访问两侧，可以指定监听地址：
 
 ```powershell
-cd frontend
-npm run dev:checkout
+npm run dev -- --host 0.0.0.0
 ```
 
-访问 `http://localhost:5174/checkout`。该服务只注册顾客结算和付款确认路由；开发者端不包含结算入口。
+如需只启动一侧：
+
+```powershell
+npm run dev:developer   # 仅启动 5173
+npm run dev:checkout    # 仅启动 5174
+```
+
+用户侧服务只注册顾客结算和付款确认路由；开发者端不直接注册结算路由。
+
+开发者端侧边栏的“用户侧跳转”页面可以在新窗口打开用户侧。默认目标地址为 `http://localhost:5174/checkout`，如需修改，可在 `frontend/.env` 中配置：
+
+```env
+VITE_CHECKOUT_URL=http://localhost:5174/checkout
+```
 
 ### 6.8 启动后检查
 
@@ -389,6 +404,7 @@ npm run dev:checkout
 | `/register` | 注册 |
 | `/detection` | 检测工作台与 Agent |
 | `/training` | 模型训练与监控 |
+| `/customer-side` | 开发者端用户侧跳转页，新窗口打开 5174 |
 | `http://localhost:5174/checkout` | 自助识别和结算 |
 | `http://localhost:5174/checkout/payment` | 商品及金额确认 |
 | `/history` | 历史记录页面 |
