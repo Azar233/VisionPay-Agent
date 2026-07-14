@@ -48,6 +48,7 @@ import {
   Camera,
   Cpu,
   Clock,
+  Connection,
   DataAnalysis,
 } from '@element-plus/icons-vue'
 
@@ -75,6 +76,7 @@ const menuItems = [
   { path: '/training', title: '模型训练', shortTitle: '训练', icon: Cpu },
   { path: '/history', title: '历史记录', shortTitle: '历史', icon: Clock },
   { path: '/dashboard', title: '数据看板', shortTitle: '看板', icon: DataAnalysis },
+  { path: '/customer-side', title: '用户侧跳转', shortTitle: '用户侧', icon: Connection },
 ]
 </script>
 

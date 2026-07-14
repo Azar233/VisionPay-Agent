@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:checkout": "vite --mode checkout --port 5174 --open /checkout",
+    "dev": "node scripts/dev-all.js",
+    "dev:developer": "vite --host 127.0.0.1 --port 5173",
+    "dev:checkout": "vite --mode checkout --host 127.0.0.1 --port 5174 --open /checkout",
     "build": "vite build",
     "build:checkout": "vite build --mode checkout",
     "preview": "vite preview",

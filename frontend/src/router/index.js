@@ -51,6 +51,12 @@ const developerRoutes = [
         component: () => import('@/views/DashboardPage.vue'),
         meta: { title: '数据看板', icon: 'DataAnalysis' },
       },
+      {
+        path: 'customer-side',
+        name: 'CustomerSide',
+        component: () => import('@/views/CustomerSidePage.vue'),
+        meta: { title: '用户侧跳转', icon: 'Connection' },
+      },
     ],
   },
   {

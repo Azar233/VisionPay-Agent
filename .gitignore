@@ -170,4 +170,5 @@ stop-dev.ps1
 
 # 项目脚本目录（按需保留）
 scripts/
-
+!/frontend/scripts/
+!/frontend/scripts/dev-all.js
