@@ -383,10 +383,10 @@ VITE_CHECKOUT_PUBLIC_ORIGIN=http://192.168.1.100:5173
 1. 手机和电脑连接同一个 Wi-Fi。
 2. 在 Android IP Webcam 中启动服务器。
 3. 确认电脑能访问手机显示的局域网地址。
-4. 在 `backend/.env` 中配置 `IP_WEBCAM_URL`，例如 `http://192.168.1.109:8080`。
-5. 打开 `/checkout` 的 Webcam 模式，或在开发者检测工作台选择“实时”。
+4. 默认地址为 `http://10.172.52.70:8080`；也可以在 `backend/.env` 中修改 `IP_WEBCAM_URL`。
+5. 打开 `/checkout` 的 Webcam 模式，或在开发者检测工作台选择“实时”，在面板顶部可直接修改手机地址。
 
-后端只接受私有局域网 IP Webcam 地址。实时模式由后端直接读取 MJPEG 流，以 CPU 416×416、目标 3 FPS 执行 YOLO 推理，通过 `/api/detection/camera` WebSocket 返回标注帧、当前帧商品统计和价格。系统一次只允许一个实时检测会话。
+后端只接受私有局域网 IP Webcam 地址。前端填写的地址会保存在当前浏览器，连接时由后端再次校验并自动补全 `/video`。实时模式由后端直接读取 MJPEG 流，以 CPU 416×416、目标 3 FPS 执行 YOLO 推理，通过 `/api/detection/camera` WebSocket 返回标注帧、当前帧商品统计和价格。系统一次只允许一个实时检测会话。
 
 ### 8.4 前端页面
 

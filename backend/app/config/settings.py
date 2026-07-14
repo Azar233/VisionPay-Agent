@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     VIDEO_RESULT_DIR: str = "runs/detect/video-results"
 
     # ── IP Webcam 实时检测配置 ─────────────────────────
-    # 地址只保存在后端，前端不再传入局域网摄像头地址。
-    IP_WEBCAM_URL: str = ""
+    # 前端可以覆盖该默认地址；后端仍会校验为安全的局域网 HTTP 地址。
+    IP_WEBCAM_URL: str = "http://10.172.52.70:8080"
     CAMERA_CONFIDENCE: float = 0.25
     CAMERA_IOU: float = 0.45
     CAMERA_IMAGE_SIZE: int = 416
@@ -87,8 +87,8 @@ class Settings(BaseSettings):
 
     # ── CORS 配置 ────────────────────────────────────
     ALLOWED_ORIGINS: str = (
-        "http://localhost:3000,http://localhost:5173,http://localhost:5174,"
-        "http://127.0.0.1:5173,http://127.0.0.1:5174,http://localhost:8080"
+        "http://localhost:3000,http://localhost:5173,"
+        "http://127.0.0.1:5173,http://localhost:8080"
     )
 
     @property

@@ -8,6 +8,19 @@
       <small>IP WEBCAM · YOLO · CPU</small>
     </header>
 
+    <div class="camera-address">
+      <label for="ip-webcam-url">手机摄像头地址</label>
+      <el-input
+        id="ip-webcam-url"
+        v-model.trim="cameraUrl"
+        :disabled="active"
+        placeholder="http://10.172.52.70:8080"
+        clearable
+        @change="saveCameraUrl"
+      />
+      <small>支持局域网 IPv4 地址；检测时后端会自动连接 /video</small>
+    </div>
+
     <div class="camera-screen">
       <canvas ref="canvasRef"></canvas>
       <div v-if="!hasFrame" class="camera-empty">
@@ -63,12 +76,20 @@ const error = ref('')
 const statusText = ref('等待启动')
 const modelInfo = ref('模型将在连接后加载')
 const result = ref({})
+const defaultCameraUrl = 'http://10.172.52.70:8080'
+const cameraUrl = ref(window.localStorage.getItem('visionpay-ip-webcam-url') || defaultCameraUrl)
 let socket = null
 let intentionalClose = false
 let reconnectAttempts = 0
 let reconnectTimer = null
 
 const classes = computed(() => Object.entries(result.value.class_counts || {}).map(([name, count]) => ({ name, count })))
+
+function saveCameraUrl() {
+  const value = cameraUrl.value.trim()
+  if (value) window.localStorage.setItem('visionpay-ip-webcam-url', value)
+  else window.localStorage.removeItem('visionpay-ip-webcam-url')
+}
 
 function socketUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -110,6 +131,7 @@ function connect() {
       conf: props.conf,
       iou: props.iou,
       scene_id: props.sceneId || null,
+      camera_url: cameraUrl.value.trim(),
     }))
   }
   socket.onmessage = async (event) => {
@@ -163,6 +185,12 @@ function connect() {
 
 function start() {
   if (active.value) return
+  if (!cameraUrl.value.trim()) {
+    error.value = '请输入手机 IP Webcam 地址'
+    setStatus('地址未填写')
+    return
+  }
+  saveCameraUrl()
   reconnectAttempts = 0
   connect()
 }
@@ -187,10 +215,11 @@ defineExpose({ start, stop })
 <style lang="scss" scoped>
 .ip-camera-panel { overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }
 .camera-head { height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; color: #dfe7ec; background: #1e2a34; font-size: 11px; }.camera-head > div { display: flex; align-items: center; gap: 7px; }.camera-head i { width: 7px; height: 7px; border-radius: 50%; background: #71808c; }.camera-head i.live { background: #2bd88f; box-shadow: 0 0 0 4px rgba(43,216,143,.13); }.camera-head small { color: #8fa0ad; }
+.camera-address { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid $border-color; background: $surface-muted; }.camera-address label { color: $text-primary; font-size: 11px; font-weight: 700; }.camera-address small { color: $text-secondary; font-size: 9px; }
 .camera-screen { position: relative; min-height: 360px; display: grid; place-items: center; overflow: hidden; background: #101820; }.camera-screen canvas { display: block; width: 100%; height: 100%; max-height: 58vh; object-fit: contain; }.camera-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: #aebbc5; text-align: center; }.camera-empty .el-icon { font-size: 44px; color: #657682; }.camera-empty strong { color: #d8e1e7; }.camera-empty span { max-width: 430px; font-size: 11px; line-height: 1.6; }.live-badge { position: absolute; top: 12px; left: 12px; padding: 4px 7px; border-radius: 3px; color: #fff; background: #dc2626; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
 .camera-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid $border-color; border-bottom: 1px solid $border-color; }.camera-metrics > div { padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; border-right: 1px solid $border-color; }.camera-metrics > div:last-child { border-right: 0; }.camera-metrics span { color: $text-secondary; font-size: 9px; }.camera-metrics strong { color: $text-primary; font-size: 13px; }
 .camera-classes { display: flex; gap: 6px; padding: 9px 12px; overflow-x: auto; background: $surface-muted; }.camera-classes span { flex-shrink: 0; padding: 5px 8px; border: 1px solid $border-color; border-radius: 4px; background: $surface-color; color: $text-secondary; font-size: 10px; }.camera-classes b { margin-left: 4px; color: $text-primary; }.camera-error { margin: 0; padding: 9px 13px; color: #9c2938; background: #fff0f2; font-size: 11px; }
 .camera-actions { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; }.camera-actions > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.camera-actions span { overflow: hidden; color: $text-primary; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }.camera-actions small { color: $text-secondary; font-size: 9px; }
 .compact { border-radius: 0; box-shadow: none; }.compact .camera-screen { min-height: 340px; }.compact .camera-actions { border-top: 1px solid $border-color; }
-@media (max-width: 640px) { .camera-screen, .compact .camera-screen { min-height: 260px; }.camera-metrics { grid-template-columns: repeat(2, 1fr); }.camera-metrics > div:nth-child(2) { border-right: 0; }.camera-metrics > div:nth-child(-n+2) { border-bottom: 1px solid $border-color; } }
+@media (max-width: 640px) { .camera-address { grid-template-columns: 1fr; gap: 5px; }.camera-screen, .compact .camera-screen { min-height: 260px; }.camera-metrics { grid-template-columns: repeat(2, 1fr); }.camera-metrics > div:nth-child(2) { border-right: 0; }.camera-metrics > div:nth-child(-n+2) { border-bottom: 1px solid $border-color; } }
 </style>

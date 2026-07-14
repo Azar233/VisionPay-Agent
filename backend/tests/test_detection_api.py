@@ -40,11 +40,15 @@ def test_camera_options_are_cpu_only_and_bounded():
         "conf": 0.3,
         "iou": 0.5,
         "scene_id": 2,
+        "camera_url": None,
     }
+    assert _camera_options({"camera_url": "http://10.172.52.70:8080"})["camera_url"] == "http://10.172.52.70:8080/video"
     with pytest.raises(ValueError, match="仅支持 cpu"):
         _camera_options({"mode": "gpu"})
     with pytest.raises(ValueError, match="0.05"):
         _camera_options({"conf": 0.01})
+    with pytest.raises(ValueError, match="局域网"):
+        _camera_options({"camera_url": "http://8.8.8.8:8080"})
 
 
 def test_camera_websocket_returns_annotated_current_frame(client, monkeypatch):

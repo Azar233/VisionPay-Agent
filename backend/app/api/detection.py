@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
-from app.api.camera import configured_ip_webcam_url
+from app.api.camera import configured_ip_webcam_url, normalize_ip_webcam_url
 from app.config.settings import settings
 from app.database.session import get_db
 from app.entity.db_models import DetectionTask
@@ -305,7 +305,18 @@ def _camera_options(payload: dict) -> dict:
         scene_id = int(scene_id)
         if scene_id < 1:
             raise ValueError("scene_id 必须为正整数")
-    return {"mode": mode, "conf": conf, "iou": iou, "scene_id": scene_id}
+    camera_url = str(payload.get("camera_url") or "").strip()
+    if camera_url:
+        camera_url = normalize_ip_webcam_url(camera_url)
+    else:
+        camera_url = None
+    return {
+        "mode": mode,
+        "conf": conf,
+        "iou": iou,
+        "scene_id": scene_id,
+        "camera_url": camera_url,
+    }
 
 
 async def _camera_control(websocket: WebSocket, stopped: asyncio.Event) -> None:
@@ -344,7 +355,7 @@ async def camera_detection_ws(websocket: WebSocket):
         if initial.get("type") != "config":
             raise ValueError("连接后必须先发送 config 消息")
         options = _camera_options(initial)
-        stream_url = configured_ip_webcam_url()
+        stream_url = options["camera_url"] or configured_ip_webcam_url()
 
         def open_capture():
             import cv2
