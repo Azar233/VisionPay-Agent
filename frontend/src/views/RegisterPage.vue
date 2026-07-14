@@ -1,9 +1,9 @@
 <template>
   <div class="register-page">
     <section class="auth-hero">
-      <span class="vp-kicker">VisionPay Agent Platform</span>
-      <h1>Build a Retail Vision Workspace</h1>
-      <p>创建账号后即可使用商品检测、模型训练和智能体工作台。</p>
+      <span class="vp-kicker">VisionPay Workspace</span>
+      <h1>一个账号，<br />开启智能零售。</h1>
+      <p>创建账号后即可使用商品检测、模型训练和智能分析工作台。</p>
       <div class="feature-grid">
         <span><strong>YOLOv11</strong><small>商品定位</small></span>
         <span><strong>Agent</strong><small>结果分析</small></span>
@@ -64,7 +64,7 @@
             :loading="loading"
             @click="handleRegister"
           >
-            注 册
+            创建账号
           </el-button>
         </el-form-item>
       </el-form>
@@ -155,8 +155,8 @@ async function handleRegister() {
   gap: 64px;
   padding: 48px max(32px, calc((100vw - 1120px) / 2));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 247, 248, 0.96)),
-    $bg-color;
+    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, .1), transparent 28%),
+    linear-gradient(180deg, #fff, $bg-color 72%);
 }
 
 .auth-hero {
@@ -164,11 +164,12 @@ async function handleRegister() {
 
   h1 {
     margin: 24px 0 0;
-    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
-    font-size: 56px;
+    font-family: inherit;
+    font-size: clamp(46px, 6vw, 70px);
+    font-weight: 600;
     line-height: 1.04;
     color: $text-primary;
-    letter-spacing: 0;
+    letter-spacing: -.05em;
   }
 
   p {
@@ -210,10 +211,11 @@ async function handleRegister() {
 .register-card {
   width: 420px;
   padding: 36px;
-  background: $surface-color;
+  background: rgba(255, 255, 255, .82);
   border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-lg;
+  border-radius: $border-radius-lg;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .1);
+  backdrop-filter: blur(24px) saturate(130%);
 }
 
 .register-header {
@@ -227,7 +229,7 @@ async function handleRegister() {
   }
 
   h2 {
-    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-family: inherit;
     font-size: 28px;
     color: $text-primary;
     margin-bottom: 8px;
@@ -241,7 +243,7 @@ async function handleRegister() {
 
 .register-btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
 }
 
 .register-footer {
@@ -252,7 +254,7 @@ async function handleRegister() {
   a {
     color: $primary-color;
     margin-left: 4px;
-    font-weight: 700;
+    font-weight: 500;
 
     &:hover {
       text-decoration: underline;

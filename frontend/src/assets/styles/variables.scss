@@ -1,54 +1,45 @@
-// ═══════════════════════════════════════════════════════
-// 全局 SCSS 变量 — 主题色、间距、尺寸
-// ═══════════════════════════════════════════════════════
+// Runtime semantic tokens. Components keep using the familiar SCSS names,
+// while their rendered values now follow the active color theme.
+$primary-color: var(--vp-primary);
+$primary-hover: var(--vp-primary-hover);
+$primary-soft: var(--vp-primary-soft);
+$secondary-color: var(--vp-secondary);
+$accent-color: var(--vp-accent);
+$success-color: var(--vp-success);
+$warning-color: var(--vp-warning);
+$danger-color: var(--vp-danger);
+$info-color: var(--vp-info);
 
-// ── 主题色：AI-native light system ──────────────────
-$primary-color: #6366f1;
-$primary-hover: #5558e8;
-$primary-soft: #eef0ff;
-$secondary-color: #7c83ff;
-$accent-color: #0891b2;
-$success-color: #10b981;
-$warning-color: #d97706;
-$danger-color: #dc2626;
-$info-color: #64748b;
+$bg-color: var(--vp-bg);
+$bg-color-dark: var(--vp-bg-dark);
+$surface-color: var(--vp-surface);
+$surface-muted: var(--vp-surface-muted);
+$sidebar-bg: var(--vp-sidebar-bg);
+$sidebar-text: var(--vp-sidebar-text);
+$sidebar-active-text: var(--vp-sidebar-active-text);
+$border-color: var(--vp-border);
+$border-strong: var(--vp-border-strong);
 
-// ── 背景色 ──────────────────────────────────────────
-$bg-color: #f7f7f8;
-$bg-color-dark: #111827;
-$surface-color: #ffffff;
-$surface-muted: #f3f4f8;
-$sidebar-bg: #ffffff;
-$sidebar-text: #6b7280;
-$sidebar-active-text: #4f46e5;
-$border-color: #e5e7eb;
-$border-strong: #d9dce5;
+$text-primary: var(--vp-text);
+$text-regular: var(--vp-text-regular);
+$text-secondary: var(--vp-muted);
+$text-placeholder: var(--vp-placeholder);
 
-// ── 文字色 ──────────────────────────────────────────
-$text-primary: #111827;
-$text-regular: #374151;
-$text-secondary: #6b7280;
-$text-placeholder: #9ca3af;
+$header-height: 72px;
+$sidebar-width: 224px;
+$sidebar-collapsed-width: 72px;
 
-// ── 布局尺寸 ────────────────────────────────────────
-$header-height: 64px;
-$sidebar-width: 232px;
-$sidebar-collapsed-width: 64px;
-
-// ── 间距 ────────────────────────────────────────────
 $spacing-xs: 4px;
 $spacing-sm: 8px;
 $spacing-md: 16px;
 $spacing-lg: 24px;
-$spacing-xl: 32px;
+$spacing-xl: 48px;
 
-// ── 圆角 ────────────────────────────────────────────
-$border-radius-sm: 6px;
-$border-radius-md: 8px;
-$border-radius-lg: 8px;
+$border-radius-sm: 10px;
+$border-radius-md: 16px;
+$border-radius-lg: 24px;
 
-// ── 阴影 ────────────────────────────────────────────
-$shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-$shadow-md: 0 10px 24px rgba(15, 23, 42, 0.08);
-$shadow-lg: 0 22px 60px rgba(15, 23, 42, 0.12);
-$ring-primary: 0 0 0 3px rgba(99, 102, 241, 0.14);
+$shadow-sm: var(--vp-shadow-sm);
+$shadow-md: var(--vp-shadow-md);
+$shadow-lg: var(--vp-shadow-lg);
+$ring-primary: var(--vp-ring);

@@ -18,7 +18,10 @@ import '@/assets/styles/global.scss'
 import App from './App.vue'
 import router from './router'
 import pinia from './stores'
+import { initializeTheme } from '@/composables/useTheme'
 import { setupErrorReporting } from "@/utils/errorReporter";
+
+initializeTheme()
 
 // ── 创建并配置应用 ────────────────────────────────────
 const app = createApp(App)

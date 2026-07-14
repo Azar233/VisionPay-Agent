@@ -1,13 +1,13 @@
 <template>
   <div class="login-page">
     <section class="auth-hero">
-      <span class="vp-kicker">Powered by YOLOv11 & Agent Workflow</span>
-      <h1>VisionPay for Retail Intelligence</h1>
-      <p>连接商品检测、训练监控与智能对话，把收银台图像转成可用的识别结果。</p>
+      <span class="vp-kicker">Retail Vision, Simplified</span>
+      <h1>让商品识别<br />更简单。</h1>
+      <p>从图像到结算清单，VisionPay 将检测、训练与智能分析放进一个清晰的工作空间。</p>
       <div class="chat-preview">
         <header>
           <span class="preview-icon"><img src="/favicon.svg" alt="" /></span>
-          <div><strong>VisionPay Assistant</strong><small><i></i> Online</small></div>
+          <div><strong>VisionPay 智能助理</strong><small><i></i> 已就绪</small></div>
         </header>
         <div class="preview-body">
           <p class="bubble user">识别这批收银台商品</p>
@@ -54,7 +54,7 @@
             :loading="loading"
             @click="handleLogin"
           >
-            登 录
+            登录
           </el-button>
         </el-form-item>
       </el-form>
@@ -130,8 +130,8 @@ async function handleLogin() {
   gap: 64px;
   padding: 48px max(32px, calc((100vw - 1120px) / 2));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(247, 247, 248, 0.96)),
-    $bg-color;
+    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, .1), transparent 28%),
+    linear-gradient(180deg, #fff, $bg-color 72%);
 }
 
 .auth-hero {
@@ -139,11 +139,12 @@ async function handleLogin() {
 
   h1 {
     margin: 24px 0 0;
-    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
-    font-size: 58px;
+    font-family: inherit;
+    font-size: clamp(48px, 6vw, 72px);
+    font-weight: 600;
     line-height: 1.02;
     color: $text-primary;
-    letter-spacing: 0;
+    letter-spacing: -.055em;
   }
 
   p {
@@ -160,9 +161,10 @@ async function handleLogin() {
   margin-top: 48px;
   padding: 24px;
   border: 1px solid $border-color;
-  border-radius: $border-radius-md;
+  border-radius: $border-radius-lg;
   background: $surface-color;
-  box-shadow: $shadow-lg;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .1);
+  backdrop-filter: blur(20px);
 
   header {
     display: flex;
@@ -175,7 +177,7 @@ async function handleLogin() {
   strong {
     display: block;
     color: $text-primary;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   small {
@@ -184,7 +186,7 @@ async function handleLogin() {
     gap: 6px;
     margin-top: 3px;
     color: $success-color;
-    font-weight: 700;
+    font-weight: 500;
   }
 
   small i {
@@ -201,7 +203,7 @@ async function handleLogin() {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: $primary-color;
+  background: linear-gradient(145deg, #1688f8, #0068d4);
 
   img {
     width: 24px;
@@ -264,10 +266,11 @@ async function handleLogin() {
 .login-card {
   width: 420px;
   padding: 36px;
-  background: $surface-color;
+  background: rgba(255, 255, 255, .82);
   border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-lg;
+  border-radius: $border-radius-lg;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .1);
+  backdrop-filter: blur(24px) saturate(130%);
 }
 
 .login-header {
@@ -281,7 +284,7 @@ async function handleLogin() {
   }
 
   h2 {
-    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-family: inherit;
     font-size: 28px;
     color: $text-primary;
     margin-bottom: 8px;
@@ -295,7 +298,7 @@ async function handleLogin() {
 
 .login-btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
 }
 
 .login-footer {
@@ -306,7 +309,7 @@ async function handleLogin() {
   a {
     color: $primary-color;
     margin-left: 4px;
-    font-weight: 700;
+    font-weight: 500;
 
     &:hover {
       text-decoration: underline;

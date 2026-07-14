@@ -1,8 +1,7 @@
 <template>
   <header class="app-header">
-    <!-- 左侧：Logo + 平台名称 -->
     <div class="header-left">
-      <el-tooltip :content="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'" placement="bottom">
+      <el-tooltip :content="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'" placement="bottom" :show-arrow="false">
         <el-button
           class="sidebar-toggle"
           :icon="sidebarCollapsed ? Expand : Fold"
@@ -11,19 +10,26 @@
           @click="$emit('toggle-sidebar')"
         />
       </el-tooltip>
-      <span class="brand-mark">
-        <img src="/favicon.svg" alt="VisionPay" class="header-logo" />
-      </span>
+      <router-link to="/detection" class="brand-mark" aria-label="返回检测工作台">
+        <img src="/favicon.svg" alt="" class="header-logo" />
+      </router-link>
       <div class="brand-copy">
         <span class="header-title">VisionPay</span>
-        <small>Agent Platform</small>
+        <small>Retail Intelligence</small>
       </div>
     </div>
-    <!-- 右侧：用户信息 + 退出按钮 -->
+
     <div class="header-right">
-      <el-dropdown trigger="click" @command="handleCommand">
-        <div class="user-info">
-          <el-avatar :size="32" :src="userStore.avatar || undefined">
+      <el-dropdown
+        trigger="click"
+        placement="bottom-end"
+        :offset="8"
+        :show-arrow="false"
+        popper-class="user-menu-popper"
+        @command="handleCommand"
+      >
+        <div class="user-info" aria-label="打开用户菜单">
+          <el-avatar :size="34" :src="userStore.avatar || undefined">
             {{ userStore.username?.charAt(0)?.toUpperCase() }}
           </el-avatar>
           <span class="username">{{ userStore.username }}</span>
@@ -31,12 +37,13 @@
         </div>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="profile">
-              <el-icon><User /></el-icon>个人中心
+            <el-dropdown-item command="theme" class="theme-menu-item">
+              <el-icon><Sunny v-if="isDark" /><Moon v-else /></el-icon>
+              <span class="theme-menu-label">{{ themeLabel }}</span>
+              <span :class="['theme-switch', { active: isDark }]" aria-hidden="true"><i></i></span>
             </el-dropdown-item>
-            <el-dropdown-item command="logout" divided>
-              <el-icon><SwitchButton /></el-icon>退出登录
-            </el-dropdown-item>
+            <el-dropdown-item command="profile"><el-icon><User /></el-icon>个人中心</el-dropdown-item>
+            <el-dropdown-item command="logout" divided><el-icon><SwitchButton /></el-icon>退出登录</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -46,153 +53,158 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
-import { ArrowDown, Expand, Fold, User, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, Expand, Fold, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { useTheme } from '@/composables/useTheme'
 
-defineProps({
-  sidebarCollapsed: {
-    type: Boolean,
-    default: false,
-  },
-})
-
+defineProps({ sidebarCollapsed: { type: Boolean, default: false } })
 defineEmits(['toggle-sidebar'])
-
 const router = useRouter()
 const userStore = useUserStore()
+const { isDark, themeLabel, toggleTheme } = useTheme()
 
-/** 处理下拉菜单命令 */
 function handleCommand(command) {
-  switch (command) {
-    case 'profile':
-      // 个人中心（后续实现）
-      break
-    case 'logout':
-      ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }).then(() => {
-        userStore.logout()
-        router.push('/login')
-      }).catch(() => {})
-      break
+  if (command === 'theme') {
+    toggleTheme()
+    return
+  }
+  if (command === 'logout') {
+    ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
+      confirmButtonText: '退出', cancelButtonText: '取消', type: 'warning',
+    }).then(() => { userStore.logout(); router.push('/login') }).catch(() => {})
   }
 }
 </script>
 
 <style lang="scss" scoped>
 .app-header {
+  z-index: 100;
   height: $header-height;
-  background: rgba(255, 255, 255, 0.9);
-  border-bottom: 1px solid $border-color;
+  padding: 0 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
-  backdrop-filter: blur(16px);
-  z-index: 100;
+  background: rgba(245, 245, 247, .78);
+  border-bottom: 1px solid $border-color;
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.header-left, .header-right, .user-info { display: flex; align-items: center; }
+.header-left { gap: 10px; }
 
 .sidebar-toggle {
   width: 40px;
   height: 40px;
-  border-color: $border-color;
   color: $text-secondary;
-  background: $surface-color;
-  transition: border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 
-  &:hover,
-  &:focus-visible {
-    border-color: $primary-color;
-    color: $primary-color;
-    box-shadow: $ring-primary;
-    transform: translateY(-1px);
+  &:hover, &:focus-visible {
+    color: $text-primary;
+    background: rgba(255, 255, 255, .82);
+    border-color: $border-color;
+    box-shadow: $shadow-sm;
   }
 }
 
 .brand-mark {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: $border-radius-md;
-  background: $primary-color;
-  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.26);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #1688f8, #0068d4);
+  box-shadow: 0 8px 22px rgba(0, 113, 227, .22), inset 0 1px rgba(255, 255, 255, .35);
 }
-
-.header-logo {
-  width: 22px;
-  height: 22px;
-}
-
-.brand-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-
-  small {
-    color: $text-secondary;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-}
-
-.header-title {
-  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1;
-  color: $text-primary;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-}
+.header-logo { width: 24px; height: 24px; }
+.brand-copy { display: flex; flex-direction: column; gap: 2px; }
+.header-title { color: $text-primary; font-size: 17px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
+.brand-copy small { color: $text-secondary; font-size: 10px; font-weight: 400; }
 
 .user-info {
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 12px 4px 4px;
+  color: $text-secondary;
+  cursor: pointer;
+  background: rgba(255, 255, 255, .68);
+  border: 1px solid $border-color;
+  border-radius: 999px;
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+
+  &:hover { background: #fff; border-color: $border-strong; box-shadow: $shadow-sm; }
+}
+.username { color: $text-primary; font-size: 14px; font-weight: 500; }
+
+:global(.user-menu-popper.el-popper) {
+  width: 208px !important;
+  min-width: 208px !important;
+  margin-left: -12px !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--vp-border) !important;
+  border-radius: 16px !important;
+  background: var(--vp-surface) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .18) !important;
+  backdrop-filter: blur(24px) saturate(140%);
+}
+:global(.user-menu-popper .el-popper__arrow) { display: none !important; }
+:global(.user-menu-popper .el-dropdown-menu) {
+  width: 100%;
+  min-width: 0;
+  padding: 5px;
+  border-radius: inherit;
+  background: transparent;
+}
+:global(.user-menu-popper .el-dropdown-menu__item) {
+  min-height: 38px;
+  padding: 0 10px;
+  gap: 8px;
+  border-radius: 10px;
+  color: var(--vp-text);
+  font-size: 14px;
+}
+:global(.user-menu-popper .el-dropdown-menu__item:hover),
+:global(.user-menu-popper .el-dropdown-menu__item:focus) {
+  color: var(--vp-text) !important;
+  background: var(--vp-surface-muted) !important;
+}
+:global(.user-menu-popper .el-dropdown-menu__item:focus-visible) {
+  outline: none !important;
+  box-shadow: inset 0 0 0 1px var(--vp-border-strong);
+}
+:global(.user-menu-popper .el-dropdown-menu__item--divided) {
+  margin-top: 4px;
+  border-top-color: var(--vp-border);
+}
+:global(.user-menu-popper .theme-menu-item) { display: grid; grid-template-columns: 17px minmax(0, 1fr) auto; }
+:global(.user-menu-popper .theme-menu-label) { white-space: nowrap; }
+:global(.user-menu-popper .theme-switch) {
+  width: 32px;
+  height: 18px;
   display: flex;
   align-items: center;
-  gap: $spacing-sm;
-  cursor: pointer;
-  min-height: 40px;
-  padding: 4px 10px 4px 4px;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  background: $surface-color;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-
-  &:hover {
-    border-color: $primary-color;
-    box-shadow: $ring-primary;
-    transform: translateY(-1px);
-  }
+  padding: 2px;
+  border-radius: 999px;
+  background: #d2d2d7;
+  transition: background .25s ease;
 }
-
-.username {
-  font-size: 14px;
-  color: $text-primary;
-  font-weight: 700;
+:global(.user-menu-popper .theme-switch i) {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+  transition: transform .25s cubic-bezier(.2, .8, .2, 1);
 }
+:global(.user-menu-popper .theme-switch.active) { background: #0a84ff; }
+:global(.user-menu-popper .theme-switch.active i) { transform: translateX(14px); }
 
 @media (max-width: 720px) {
-  .app-header {
-    padding: 0 16px;
-  }
-
-  .brand-copy small,
-  .username {
-    display: none;
-  }
+  .app-header { padding: 0 16px; }
+  .brand-copy small, .username { display: none; }
 }
 </style>
