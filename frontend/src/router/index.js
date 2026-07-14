@@ -1,8 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const isCheckoutApp = import.meta.env.MODE === 'checkout'
-
-const developerRoutes = [
+const routes = [
   {
     path: '/login',
     name: 'Login',
@@ -52,12 +50,24 @@ const developerRoutes = [
         meta: { title: '数据看板', icon: 'DataAnalysis' },
       },
       {
-        path: 'customer-side',
-        name: 'CustomerSide',
-        component: () => import('@/views/CustomerSidePage.vue'),
-        meta: { title: '用户侧跳转', icon: 'Connection' },
+        path: 'checkout',
+        name: 'CustomerCheckout',
+        component: () => import('@/views/CustomerCheckoutPage.vue'),
+        meta: { title: '用户结算端', icon: 'ShoppingCart' },
+      },
+      {
+        path: 'checkout/payment',
+        name: 'CustomerPayment',
+        component: () => import('@/views/CustomerPaymentPage.vue'),
+        meta: { title: '确认付款' },
       },
     ],
+  },
+  {
+    path: '/mock-pay/:token',
+    name: 'MockPayment',
+    component: () => import('@/views/MockPaymentPage.vue'),
+    meta: { title: '模拟付款', requiresAuth: false },
   },
   {
     path: '/:pathMatch(.*)*',
@@ -65,36 +75,15 @@ const developerRoutes = [
   },
 ]
 
-const checkoutRoutes = [
-  {
-    path: '/checkout',
-    name: 'CustomerCheckout',
-    component: () => import('@/views/CustomerCheckoutPage.vue'),
-    meta: { title: '自助结算', requiresAuth: false },
-  },
-  {
-    path: '/checkout/payment',
-    name: 'CustomerPayment',
-    component: () => import('@/views/CustomerPaymentPage.vue'),
-    meta: { title: '确认付款', requiresAuth: false },
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/checkout',
-  },
-]
-
 const router = createRouter({
   history: createWebHistory(),
-  routes: isCheckoutApp ? checkoutRoutes : developerRoutes,
+  routes,
 })
 
 router.beforeEach((to) => {
   document.title = to.meta.title
     ? `${to.meta.title} - VisionPay Agent Platform`
     : 'VisionPay Agent Platform'
-
-  if (isCheckoutApp) return true
 
   const token = localStorage.getItem('vp_agent_token')
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth !== false)

@@ -20,3 +20,28 @@ export function calculateCheckoutApi(items) {
     })),
   })
 }
+
+export function createMockPaymentOrderApi(items) {
+  return request.post('/mock-pay/orders', {
+    items: items.map((item) => ({
+      class_id: item.classId ?? item.class_id,
+      quantity: item.quantity ?? item.count,
+    })),
+  })
+}
+
+export function getMockPaymentStatusApi(orderUuid) {
+  return request.get(`/mock-pay/orders/${orderUuid}/status`, { skipGlobalError: true })
+}
+
+export function getMockPaymentOrderApi(paymentToken) {
+  return request.get(`/mock-pay/${paymentToken}`, { skipGlobalError: true })
+}
+
+export function confirmMockPaymentApi(paymentToken, paymentMethod) {
+  return request.post(
+    `/mock-pay/${paymentToken}/confirm`,
+    { payment_method: paymentMethod },
+    { skipGlobalError: true },
+  )
+}

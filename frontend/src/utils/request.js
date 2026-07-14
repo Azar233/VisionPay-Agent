@@ -41,6 +41,9 @@ request.interceptors.response.use(
   },
   (error) => {
     const { response } = error
+    if (error.config?.skipGlobalError) {
+      return Promise.reject(error)
+    }
     if (response) {
       switch (response.status) {
         case 401:

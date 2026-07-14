@@ -1,10 +1,37 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import os from 'node:os'
+
+function findLanAddress() {
+  const candidates = []
+  const blockedNames = /virtual|vmware|vbox|docker|wsl|loopback|bluetooth|tailscale/i
+  const wirelessNames = /wi-?fi|wlan|wireless|无线/i
+  const wiredNames = /ethernet|以太网/i
+
+  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+    for (const address of addresses || []) {
+      if (address.family !== 'IPv4' || address.internal || blockedNames.test(name)) continue
+      if (!/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(address.address)) continue
+      const score = wirelessNames.test(name) ? 20 : wiredNames.test(name) ? 10 : 0
+      candidates.push({ address: address.address, score })
+    }
+  }
+
+  return candidates.sort((left, right) => right.score - left.score)[0]?.address || ''
+}
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const lanAddress = findLanAddress()
+  const checkoutPublicOrigin = env.VITE_CHECKOUT_PUBLIC_ORIGIN || (lanAddress ? `http://${lanAddress}:5173` : '')
+
+  return {
   plugins: [vue()],
+  define: {
+    'import.meta.env.VITE_CHECKOUT_PUBLIC_ORIGIN': JSON.stringify(checkoutPublicOrigin),
+  },
   //路径别名
   resolve: {
     alias: {
@@ -45,4 +72,5 @@ export default defineConfig({
       reporter: ["text", "html"],
     },
   },
+  }
 })

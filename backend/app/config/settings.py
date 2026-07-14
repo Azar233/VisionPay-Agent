@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # ── 模拟支付配置 ──────────────────────────────────
+    MOCK_PAYMENT_EXPIRE_MINUTES: int = 10
+
     # ── CORS 配置 ────────────────────────────────────
     ALLOWED_ORIGINS: str = (
         "http://localhost:3000,http://localhost:5173,http://localhost:5174,"
