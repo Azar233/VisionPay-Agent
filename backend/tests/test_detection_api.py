@@ -1,6 +1,8 @@
 from io import BytesIO
+import asyncio
 import json
 from pathlib import Path
+import threading
 
 import pytest
 from PIL import Image
@@ -51,6 +53,39 @@ def test_camera_options_are_cpu_only_and_bounded():
         _camera_options({"camera_url": "http://8.8.8.8:8080"})
 
 
+def test_latest_camera_frame_discards_buffered_frames():
+    from app.api.detection import _LatestCameraFrame
+
+    class BurstCapture:
+        def __init__(self):
+            self.index = 0
+            self.drained = threading.Event()
+            self.released = threading.Event()
+
+        def read(self):
+            if self.index < 3:
+                self.index += 1
+                if self.index == 3:
+                    self.drained.set()
+                return True, self.index
+            self.released.wait(timeout=2)
+            return False, None
+
+        def release(self):
+            self.released.set()
+
+    capture = BurstCapture()
+    reader = _LatestCameraFrame(capture)
+    reader.start()
+    assert capture.drained.wait(timeout=1)
+    sequence, frame, captured_at = reader.latest(0, timeout=1)
+    reader.stop()
+
+    assert sequence == 3
+    assert frame == 3
+    assert captured_at > 0
+
+
 def test_camera_websocket_returns_annotated_current_frame(client, monkeypatch):
     import cv2
     from app.api import detection as detection_api
@@ -79,6 +114,14 @@ def test_camera_websocket_returns_annotated_current_frame(client, monkeypatch):
         detection_api.detection_service,
         "detect_realtime_frame",
         lambda *_args, **_kwargs: {
+            "detections": [],
+            "inference_time_ms": 12.5,
+        },
+    )
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "finalize_realtime_frame",
+        lambda *_args, **_kwargs: {
             "annotated_frame": "ZmFrZQ==",
             "detections": [],
             "object_count": 0,
@@ -96,11 +139,43 @@ def test_camera_websocket_returns_annotated_current_frame(client, monkeypatch):
         configured = websocket.receive_json()
         assert configured["type"] == "config_ok"
         assert configured["model"] == "best.pt"
+        assert configured["low_latency"] is True
         result = websocket.receive_json()
         assert result["type"] == "result"
         assert result["annotated_frame"] == "ZmFrZQ=="
         assert result["frame_count"] == 1
+        assert result["pipeline_latency_ms"] >= 0
         websocket.send_json({"type": "close"})
+
+
+def test_camera_websocket_does_not_claim_session_for_invalid_config(client):
+    from app.api import detection as detection_api
+
+    with client.websocket_connect(
+        "/api/detection/camera",
+        headers={"origin": "http://localhost:5173"},
+    ) as websocket:
+        websocket.send_json({"type": "invalid"})
+        response = websocket.receive_json()
+        assert response["type"] == "error"
+
+    assert detection_api._CAMERA_ACTIVE_SESSION is None
+
+
+@pytest.mark.asyncio
+async def test_new_camera_session_replaces_previous_session():
+    from app.api import detection as detection_api
+
+    first = await detection_api._claim_camera_session()
+    claim_second = asyncio.create_task(detection_api._claim_camera_session())
+    await asyncio.wait_for(first["stopped"].wait(), timeout=1)
+    first["closed"].set()
+    second = await asyncio.wait_for(claim_second, timeout=1)
+
+    assert first["replaced"] is True
+    assert detection_api._CAMERA_ACTIVE_SESSION is second
+    detection_api._release_camera_session(second)
+    assert detection_api._CAMERA_ACTIVE_SESSION is None
 
 
 def test_price_summary_groups_detections_and_reports_missing_prices(db_session):
