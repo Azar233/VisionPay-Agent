@@ -90,10 +90,24 @@ class DetectionAgent:
             )
             return result_to_json(self.last_detection_result)
 
+        def video(video_path: str, confidence: float = 0.25) -> str:
+            """抽取视频关键帧并检测零售商品，返回时长、帧数和类别统计。"""
+            path = self._allowed_attachment(video_path)
+            self.last_detection_result = detection_service.detect_video(
+                path,
+                user_id=self.user_id,
+                scene_id=self.scene_id,
+                conf=confidence,
+                frame_sample_rate=settings.VIDEO_FRAME_SAMPLE_RATE,
+                max_frames=settings.VIDEO_MAX_KEY_FRAMES,
+            )
+            return result_to_json(self.last_detection_result)
+
         tools = [
             StructuredTool.from_function(single, name="detect_single_product_image"),
             StructuredTool.from_function(batch, name="detect_product_images"),
             StructuredTool.from_function(zip_images, name="detect_product_zip"),
+            StructuredTool.from_function(video, name="detect_product_video"),
         ]
         llm = ChatOpenAI(
             model=settings.DEEPSEEK_MODEL,
@@ -109,10 +123,10 @@ class DetectionAgent:
                     """你是 VisionPay 零售商品识别 Agent。你的任务是理解用户意图，必要时调用 YOLO 商品检测工具，并用简洁中文总结结果。
 
 规则：
-1. 用户消息中的“附件路径”是已上传到服务器的可信附件；单图调用单图工具，多图调用批量工具，ZIP 调用 ZIP 工具。
+1. 用户消息中的“附件路径”是已上传到服务器的可信附件；单图调用单图工具，多图调用批量工具，ZIP 调用 ZIP 工具，视频调用视频工具。
 2. 有附件且用户表达检测、识别、盘点或结算意图时，直接调用工具，不要再次索要路径。
 3. 不编造商品、数量、价格或置信度。价格数据尚未接入时，明确说明只能生成识别清单，不能计算金额。
-4. 工具完成后先给出图片数和商品总数，再按类别汇总；低置信度结果提示人工复核。
+4. 工具完成后先给出图片数或关键帧数和检测总数，再按类别汇总；视频结果说明统计未经跨帧去重，低置信度结果提示人工复核。
 5. 没有附件时，可以回答本平台识别流程、模型能力和操作问题；不要声称已经执行检测。""",
                 ),
                 MessagesPlaceholder("chat_history", optional=True),

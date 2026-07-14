@@ -39,6 +39,20 @@ class Settings(BaseSettings):
     DETECTION_MODEL_PATH: str = ""
     DETECTION_MAX_FILE_MB: int = 20
     DETECTION_MAX_BATCH_SIZE: int = 30
+    DETECTION_VIDEO_MAX_FILE_MB: int = 50
+    VIDEO_FRAME_SAMPLE_RATE: int = 5
+    VIDEO_MAX_KEY_FRAMES: int = 50
+    VIDEO_TASK_TTL_SECONDS: int = 3600
+    VIDEO_RESULT_DIR: str = "runs/detect/video-results"
+
+    # ── IP Webcam 实时检测配置 ─────────────────────────
+    # 地址只保存在后端，前端不再传入局域网摄像头地址。
+    IP_WEBCAM_URL: str = ""
+    CAMERA_CONFIDENCE: float = 0.25
+    CAMERA_IOU: float = 0.45
+    CAMERA_IMAGE_SIZE: int = 416
+    CAMERA_TARGET_FPS: float = 3.0
+    CAMERA_JPEG_QUALITY: int = 70
 
     # ── DeepSeek Agent 配置（OpenAI 兼容接口）─────────
     DEEPSEEK_API_KEY: str = ""
@@ -70,7 +84,8 @@ class Settings(BaseSettings):
 
     # ── CORS 配置 ────────────────────────────────────
     ALLOWED_ORIGINS: str = (
-        "http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:8080"
+        "http://localhost:3000,http://localhost:5173,http://localhost:5174,"
+        "http://127.0.0.1:5173,http://127.0.0.1:5174,http://localhost:8080"
     )
 
     @property

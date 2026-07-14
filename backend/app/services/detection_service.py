@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -13,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from PIL import Image
 
@@ -32,8 +33,10 @@ from app.entity.db_models import (
 logger = get_logger(__name__)
 
 ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+ALLOWED_VIDEO_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv"}
 _MODEL_CACHE: dict[str, Any] = {}
 _MODEL_LOCK = threading.Lock()
+_PREDICT_LOCK = threading.Lock()
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -116,6 +119,300 @@ class DetectionService:
                 logger.info("加载商品检测模型: %s", key)
                 _MODEL_CACHE[key] = YOLO(key)
             return _MODEL_CACHE[key]
+
+    def prepare_realtime_model(
+        self,
+        *,
+        scene_id: int | None = None,
+        image_size: int = 416,
+        conf: float = 0.25,
+        iou: float = 0.45,
+    ) -> dict[str, Any]:
+        """Resolve, load and warm the model used by an IP Webcam session."""
+        import numpy as np
+
+        db = SessionLocal()
+        try:
+            scene = self._resolve_scene(db, scene_id)
+            model_path, _model_version_id = self._resolve_model(db, scene.id)
+            model = self._load_model(model_path)
+            scene_info = {
+                "scene_id": scene.id,
+                "scene": scene.display_name,
+            }
+        finally:
+            db.close()
+
+        dummy_frame = np.zeros((image_size, image_size, 3), dtype=np.uint8)
+        with _PREDICT_LOCK:
+            model.predict(
+                source=dummy_frame,
+                conf=conf,
+                iou=iou,
+                imgsz=image_size,
+                device="cpu",
+                save=False,
+                verbose=False,
+            )
+        return {
+            "model": model,
+            "model_name": model_path.name,
+            **scene_info,
+        }
+
+    def detect_realtime_frame(
+        self,
+        model: Any,
+        frame: Any,
+        *,
+        conf: float = 0.25,
+        iou: float = 0.45,
+        image_size: int = 416,
+        jpeg_quality: int = 70,
+    ) -> dict[str, Any]:
+        """Run one CPU inference and return a compact WebSocket payload."""
+        import cv2
+
+        with _PREDICT_LOCK:
+            result = model.predict(
+                source=frame,
+                conf=conf,
+                iou=iou,
+                imgsz=image_size,
+                device="cpu",
+                save=False,
+                verbose=False,
+            )[0]
+
+        names = result.names
+        detections: list[dict[str, Any]] = []
+        if result.boxes is not None:
+            for box in result.boxes:
+                class_id = int(box.cls.item())
+                detections.append(
+                    {
+                        "class_id": class_id,
+                        "class_name": str(names[class_id]),
+                        "confidence": round(float(box.conf.item()), 4),
+                        "bbox": [
+                            round(float(value), 2) for value in box.xyxy[0].tolist()
+                        ],
+                    }
+                )
+
+        ok, encoded = cv2.imencode(
+            ".jpg",
+            result.plot(),
+            [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality],
+        )
+        if not ok:
+            raise DetectionServiceError("实时标注帧编码失败")
+
+        db = SessionLocal()
+        try:
+            price_summary = self._calculate_total_price(db, detections)
+        finally:
+            db.close()
+
+        speed = result.speed or {}
+        return {
+            "annotated_frame": base64.b64encode(encoded).decode("ascii"),
+            "detections": detections,
+            "object_count": len(detections),
+            "class_counts": dict(Counter(item["class_name"] for item in detections)),
+            "inference_time_ms": round(float(speed.get("inference", 0)), 2),
+            "price_summary": price_summary,
+        }
+
+    def create_video_task(
+        self,
+        *,
+        user_id: int,
+        scene_id: int | None = None,
+        conf: float = 0.25,
+        iou: float = 0.45,
+        image_size: int = 640,
+    ) -> dict[str, Any]:
+        """Create the durable database row before background processing starts."""
+        db = SessionLocal()
+        try:
+            scene = self._resolve_scene(db, scene_id)
+            _model_path, model_version_id = self._resolve_model(db, scene.id)
+            task = DetectionTask(
+                user_id=user_id,
+                scene_id=scene.id,
+                model_version_id=model_version_id,
+                task_type="video",
+                status="pending",
+                total_images=0,
+                conf_threshold=conf,
+                iou_threshold=iou,
+                image_size=image_size,
+            )
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+            return {"task_id": task.id, "scene_id": scene.id, "scene": scene.display_name}
+        except Exception as exc:
+            db.rollback()
+            if isinstance(exc, DetectionServiceError):
+                raise
+            raise DetectionServiceError(f"创建视频检测任务失败: {exc}") from exc
+        finally:
+            db.close()
+
+    def detect_video(
+        self,
+        video_path: str | Path,
+        *,
+        user_id: int,
+        scene_id: int | None = None,
+        conf: float = 0.25,
+        iou: float = 0.45,
+        image_size: int = 640,
+        frame_sample_rate: int = 5,
+        max_frames: int = 50,
+        task_id: int | None = None,
+        progress_callback: Callable[[int, str], None] | None = None,
+    ) -> dict[str, Any]:
+        """Detect uniformly sampled video frames and return annotated key frames."""
+        import cv2
+
+        path = Path(video_path).resolve()
+        if path.suffix.lower() not in ALLOWED_VIDEO_SUFFIXES or not path.is_file():
+            raise DetectionServiceError(f"不支持的视频文件: {path.name}")
+        if frame_sample_rate < 1 or max_frames < 1:
+            raise DetectionServiceError("视频采样间隔和最大关键帧数必须大于 0")
+        if task_id is None:
+            task_id = self.create_video_task(
+                user_id=user_id,
+                scene_id=scene_id,
+                conf=conf,
+                iou=iou,
+                image_size=image_size,
+            )["task_id"]
+
+        db = SessionLocal()
+        capture = None
+        try:
+            task = db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+            if not task or task.user_id != user_id or task.task_type != "video":
+                raise DetectionServiceError("视频检测任务不存在或无权访问")
+            task.status = "processing"
+            db.commit()
+            if progress_callback:
+                progress_callback(2, "正在读取视频信息")
+
+            scene = self._resolve_scene(db, task.scene_id)
+            model_path, _model_version_id = self._resolve_model(db, scene.id)
+            model = self._load_model(model_path)
+            capture = cv2.VideoCapture(str(path))
+            if not capture.isOpened():
+                raise DetectionServiceError("无法打开视频，请确认文件编码完整")
+
+            total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = float(capture.get(cv2.CAP_PROP_FPS))
+            width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if total_frames <= 0:
+                raise DetectionServiceError("无法读取视频总帧数")
+            if not math.isfinite(fps) or fps <= 0:
+                fps = 30.0
+            duration_seconds = total_frames / fps
+            effective_interval = max(
+                frame_sample_rate,
+                math.ceil(total_frames / max_frames),
+            )
+            sample_indices = list(range(0, total_frames, effective_interval))[:max_frames]
+            task.total_images = len(sample_indices)
+            db.commit()
+
+            items: list[dict[str, Any]] = []
+            class_counts: Counter[str] = Counter()
+            total_objects = 0
+            total_inference = 0.0
+            for position, frame_index in enumerate(sample_indices, start=1):
+                capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+                ok, frame = capture.read()
+                if not ok or frame is None:
+                    logger.warning("跳过无法读取的视频帧: %s#%d", path.name, frame_index)
+                    continue
+                with _PREDICT_LOCK:
+                    prediction = model.predict(
+                        source=frame,
+                        conf=conf,
+                        iou=iou,
+                        imgsz=image_size,
+                        verbose=False,
+                    )[0]
+                frame_path = Path(f"{path.name}.frame_{frame_index:06d}.jpg")
+                item = self._serialize_prediction(prediction, frame_path)
+                item.update(
+                    {
+                        "frame_index": frame_index,
+                        "timestamp_seconds": round(frame_index / fps, 2),
+                    }
+                )
+                self._persist_results(db, task, frame_path, item)
+                items.append(item)
+                class_counts.update(item["class_counts"])
+                total_objects += item["object_count"]
+                total_inference += item["inference_time_ms"]
+                task.total_objects = total_objects
+                task.total_inference_time = round(total_inference, 2)
+                db.commit()
+                if progress_callback:
+                    progress = 5 + round(position / len(sample_indices) * 90)
+                    progress_callback(
+                        min(progress, 95),
+                        f"正在检测关键帧 {position}/{len(sample_indices)}",
+                    )
+
+            if not items:
+                raise DetectionServiceError("视频中没有可读取的关键帧")
+            task.status = "completed"
+            task.total_images = len(items)
+            task.total_objects = total_objects
+            task.total_inference_time = round(total_inference, 2)
+            task.completed_at = datetime.now()
+            db.commit()
+            result = {
+                "task_id": task.id,
+                "source": "video",
+                "scene": scene.display_name,
+                "model": model_path.name,
+                "filename": path.name,
+                "total_frames": total_frames,
+                "processed_frames": len(items),
+                "total_images": len(items),
+                "frame_sample_rate": effective_interval,
+                "fps": round(fps, 2),
+                "duration_seconds": round(duration_seconds, 2),
+                "video_resolution": {"width": width, "height": height},
+                "total_objects": total_objects,
+                "object_count_mode": "sampled_detections",
+                "class_counts": dict(class_counts),
+                "total_inference_time_ms": round(total_inference, 2),
+                "items": items,
+            }
+            if progress_callback:
+                progress_callback(100, "视频检测完成")
+            return result
+        except Exception as exc:
+            db.rollback()
+            task = db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+            if task:
+                task.status = "failed"
+                task.error_message = str(exc)
+                db.commit()
+            if isinstance(exc, DetectionServiceError):
+                raise
+            logger.error("视频检测失败: %s", exc, exc_info=True)
+            raise DetectionServiceError(f"视频检测失败: {exc}") from exc
+        finally:
+            if capture is not None:
+                capture.release()
+            db.close()
 
     @staticmethod
     def validate_image(path: str | Path) -> Path:
@@ -319,13 +616,14 @@ class DetectionService:
             db.refresh(task)
 
             model = self._load_model(model_path)
-            raw_results = model.predict(
-                source=[str(path) for path in paths],
-                conf=conf,
-                iou=iou,
-                imgsz=image_size,
-                verbose=False,
-            )
+            with _PREDICT_LOCK:
+                raw_results = model.predict(
+                    source=[str(path) for path in paths],
+                    conf=conf,
+                    iou=iou,
+                    imgsz=image_size,
+                    verbose=False,
+                )
             items = []
             for path, raw_result in zip(paths, raw_results):
                 item = self._serialize_prediction(raw_result, path)
