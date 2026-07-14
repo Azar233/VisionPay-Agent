@@ -331,6 +331,17 @@ VITE_CHECKOUT_PUBLIC_ORIGIN=http://192.168.1.100:5173
 | `VIDEO_MAX_KEY_FRAMES` | `50` | 否 | 单个视频最多检测关键帧数 |
 | `VIDEO_TASK_TTL_SECONDS` | `3600` | 否 | 视频任务进度缓存有效期（秒） |
 | `VIDEO_RESULT_DIR` | `runs/detect/video-results` | 否 | 视频完整结果文件目录 |
+| `IP_WEBCAM_URL` | `http://10.172.52.70:8080` | 否 | 手机 IP Webcam 默认地址，前端可覆盖 |
+| `CAMERA_CONFIDENCE` | `0.30` | 否 | 实时检测最低置信度 |
+| `CAMERA_IMAGE_SIZE` | `512` | 否 | CPU 实时推理输入尺寸 |
+| `CAMERA_TARGET_FPS` | `3` | 否 | 实时检测目标帧率 |
+| `CAMERA_JPEG_QUALITY` | `62` | 否 | 标注帧 JPEG 质量 |
+| `CAMERA_OUTPUT_MAX_WIDTH` | `960` | 否 | 发送到前端的标注画面最大宽度 |
+| `CAMERA_READ_TIMEOUT_MS` | `2000` | 否 | MJPEG 单次读取超时 |
+| `CAMERA_STALE_TIMEOUT_SECONDS` | `5` | 否 | 无新画面后的会话失败时间 |
+| `CAMERA_STABILITY_MIN_HITS` | `2` | 否 | 目标至少连续命中的帧数 |
+| `CAMERA_STABILITY_MAX_MISSES` | `2` | 否 | 稳定目标允许短暂漏检的帧数 |
+| `CAMERA_STABILITY_IOU` | `0.25` | 否 | 跨帧目标空间匹配阈值 |
 | `TRAIN_OUTPUT_DIR` | `runs/train` | 否 | 训练输出目录 |
 | `DATASET_BASE_DIR` | `datasets` | 否 | 数据集根目录 |
 | `YOLO_CONFIG_DIR` | `.ultralytics` | 否 | Ultralytics 配置目录 |
@@ -363,7 +374,16 @@ VITE_CHECKOUT_PUBLIC_ORIGIN=http://192.168.1.100:5173
 
 检测结果中的 `price_summary` 会说明价格是否完整。缺少价格的商品会显示“未定价”，且不会被悄悄计入完整总价。
 
-视频模式支持 MP4、AVI、MOV 和 MKV，单文件最大 50MB。上传成功后后端异步处理，默认每 5 帧采样一次，并根据视频总帧数自动增大间隔，将关键帧限制在 50 个以内。页面展示检测进度、标注关键帧、视频信息和类别统计；其中商品数量是各采样帧检测次数之和，暂不做跨帧目标去重，也不生成完整标注视频。
+#### 上传视频检测
+
+1. 按照 6.6 和 6.7 节启动后端与前端，登录后进入 `/detection`。
+2. 在检测模式中选择“视频”。
+3. 选择一个 MP4、AVI、MOV 或 MKV 文件；默认单文件最大为 50MB。
+4. 根据需要设置场景 ID、置信度和 IoU，然后点击“立即识别”。
+5. 上传成功后，后端会创建异步任务；保持页面打开，前端会自动查询并显示处理进度。
+6. 任务完成后，可查看视频时长、FPS、分辨率、标注关键帧和类别统计。
+
+后端默认每 5 帧采样一次，并根据视频总帧数自动增大采样间隔，将关键帧限制在 50 个以内。结果中的商品数量是所有采样帧检测次数之和，暂不进行跨帧目标跟踪或去重，也不会生成一份完整的标注视频。因此，同一件商品持续出现在多个采样帧时，可能被统计多次。
 
 ### 8.2 自助结算 `/checkout`
 
@@ -378,15 +398,103 @@ VITE_CHECKOUT_PUBLIC_ORIGIN=http://192.168.1.100:5173
 
 模拟支付金额和商品快照由后端保存，手机端不能提交金额；订单只允许从 `pending` 原子更新为 `paid`，重复确认不会重复付款。二维码过期后需在收银端重新生成。
 
-### 8.3 IP Webcam
+### 8.3 IP Webcam 实时检测
 
-1. 手机和电脑连接同一个 Wi-Fi。
-2. 在 Android IP Webcam 中启动服务器。
-3. 确认电脑能访问手机显示的局域网地址。
-4. 默认地址为 `http://10.172.52.70:8080`；也可以在 `backend/.env` 中修改 `IP_WEBCAM_URL`。
-5. 打开 `/checkout` 的 Webcam 模式，或在开发者检测工作台选择“实时”，在面板顶部可直接修改手机地址。
+实时检测使用 Android 手机上的 IP Webcam 提供 MJPEG 视频流。手机负责拍摄，运行后端的电脑负责执行 YOLO 推理。
 
-后端只接受私有局域网 IP Webcam 地址。前端填写的地址会保存在当前浏览器，连接时由后端再次校验并自动补全 `/video`。实时模式由后端直接读取 MJPEG 流，以 CPU 416×416、目标 3 FPS 执行 YOLO 推理，通过 `/api/detection/camera` WebSocket 返回标注帧、当前帧商品统计和价格。系统一次只允许一个实时检测会话。
+#### 8.3.1 安装并设置手机应用
+
+1. 在 Android 应用商店或 [Google Play](https://play.google.com/store/apps/details?id=com.pas.webcam) 搜索并安装 **IP Webcam**（开发者 Pavel Khlebovich），然后授予相机权限。
+2. 为兼顾 CPU 检测速度和画面清晰度，建议先使用以下手机参数：
+   - 分辨率：`640 × 480`
+   - 帧率：`10–15 FPS`
+   - 视频质量：`50–70`
+   - 音频：关闭（检测不使用音频）
+3. 将手机和运行本项目的电脑连接到同一个普通 Wi-Fi。不要使用开启了客户端隔离的访客网络；手机热点也可以使用，但必须保证电脑能够访问手机的局域网地址。
+4. 在 IP Webcam 设置页面滑到底部，点击“启动服务器”。应用会在画面底部显示类似 `http://10.172.52.70:8080` 的地址，请记录实际显示的地址；手机重新联网后，该 IP 可能发生变化。
+
+#### 8.3.2 检查电脑与手机的连接
+
+将下面示例中的 IP 和端口替换为手机实际显示的值：
+
+```powershell
+Test-NetConnection 10.172.52.70 -Port 8080
+```
+
+确认输出中的 `TcpTestSucceeded` 为 `True`，再用电脑浏览器打开：
+
+```text
+http://10.172.52.70:8080/video
+```
+
+能够看到实时 MJPEG 画面后，再继续启动检测。如果端口不通，优先检查手机服务是否仍在运行、两台设备是否在同一局域网、手机 IP 是否变化，以及 Windows 防火墙或路由器的 AP/客户端隔离设置。
+
+#### 8.3.3 配置后端 `.env`
+
+`backend/.env` 属于本机配置，不会随 Git 提交或 `pull` 到另一台电脑。首次运行或换电脑后，需要在项目根目录执行：
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+```
+
+至少检查模型路径和默认摄像头地址：
+
+```env
+DETECTION_MODEL_PATH=D:/absolute/path/to/best.pt
+IP_WEBCAM_URL=http://10.172.52.70:8080
+
+# 以下是适合 CPU 实时检测的默认参数，可按机器性能调整
+CAMERA_CONFIDENCE=0.30
+CAMERA_IMAGE_SIZE=512
+CAMERA_TARGET_FPS=3
+```
+
+`DETECTION_MODEL_PATH` 必须是当前电脑上真实存在的 `best.pt` 绝对路径，不能直接沿用另一台电脑的路径。`IP_WEBCAM_URL` 填写基础地址即可，不需要添加 `/video`。修改 `.env` 后必须重启后端进程。
+
+#### 8.3.4 启动并在前端连接
+
+在第一个 PowerShell 中启动后端：
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+在第二个 PowerShell 中启动前端：
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+登录前端后，可通过以下任一入口使用实时检测：
+
+- 进入 `/checkout`，切换到 Webcam 模式。
+- 进入 `/detection`，选择“实时”模式。
+
+在实时检测面板顶部直接输入手机显示的基础地址，例如 `http://10.172.52.70:8080`，然后连接。后端会校验该地址是否为私有局域网 IPv4，并自动补全 `/video`。
+
+#### 8.3.5 摄像头地址保存与覆盖规则
+
+摄像头地址按以下规则生效：
+
+1. 前端输入的地址优先级最高。它保存在当前浏览器的 `localStorage` 中，键名为 `visionpay-ip-webcam-url`，并在建立 WebSocket 时作为 `camera_url` 发送给后端。
+2. 当前浏览器没有保存地址时，页面会显示并发送前端内置的默认地址 `http://10.172.52.70:8080`，使用者可以直接改成手机当前地址。
+3. 只有调用方没有向 WebSocket 发送 `camera_url` 时，后端才回退到 `backend/.env` 中的 `IP_WEBCAM_URL`；如果该变量也未配置，则使用后端代码中的默认值。
+
+因此，在前端修改 IP 会立即改变当前浏览器后续使用的摄像头地址，但**不会修改 `backend/.env` 文件**。清除该网站的浏览器存储后，前端保存的地址会消失，页面会恢复为前端内置默认地址。正常使用网页时，以面板中当前显示的地址为准；`IP_WEBCAM_URL` 可作为后端接口或其他 WebSocket 客户端未传地址时的默认配置。
+
+#### 8.3.6 常见问题
+
+- **另一台电脑 `pull` 后无法检测**：确认已创建自己的 `backend/.env`，并将 `DETECTION_MODEL_PATH` 改为该电脑上的有效绝对路径；同时重新测试手机端口是否可达。
+- **提示无法连接摄像头**：确认 IP Webcam 仍在前台或后台运行，重新核对手机当前 IP，并检查两台设备是否处于同一局域网且未启用客户端隔离。
+- **提示摄像头被其他会话使用**：打开新检测页面会接管旧会话。如果仍持续提示，关闭旧页面并重启后端，避免旧版本后端进程仍占用端口或摄像头连接。
+- **画面延迟高**：优先将手机分辨率调至 `640 × 480`、帧率调至 `10–15 FPS` 并关闭音频；也可适当降低 `CAMERA_IMAGE_SIZE` 或 `CAMERA_TARGET_FPS`，但会牺牲一定精度或流畅度。
+- **检测结果不稳定或精度低**：使用均匀光照，让商品占据画面较大区域并尽量保持稳定；避免直接拍摄电脑显示器，以免摩尔纹和反光降低识别精度。
+
+实时模式使用独立采集线程持续丢弃 MJPEG 旧帧，只对最新帧执行 CPU 512×512、目标 3 FPS 的 YOLO 推理。检测结果经过跨帧空间匹配、类别加权投票和框位置平滑后展示；标注画面限制为最大 960px，并通过 `/api/detection/camera` WebSocket 返回。系统一次只保留一个实时检测会话，新页面会接管并停止旧页面的会话。
 
 ### 8.4 前端页面
 

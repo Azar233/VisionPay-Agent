@@ -181,7 +181,7 @@ const modeCopy = computed(() => ({
   batch: { title: '选择多张商品图片', hint: '最多 30 张图片' },
   zip: { title: '选择一个 ZIP 文件', hint: 'ZIP 内最多 30 张图片' },
   video: { title: '选择一个商品视频', hint: 'MP4 / AVI / MOV / MKV · 最大 50MB' },
-  camera: { title: 'IP Webcam 实时检测', hint: 'CPU 416 × 416 · 当前帧计数' },
+  camera: { title: 'IP Webcam 实时检测', hint: 'CPU 512 × 512 · 跨帧稳定' },
 })[inputMode.value])
 
 onMounted(async () => {
@@ -252,6 +252,7 @@ function formatSessionTime(value) {
 }
 function selectMode(mode) {
   if (busy.value) return
+  if (mode === 'camera' && confidence.value < 0.30) confidence.value = 0.30
   inputMode.value = mode
   clearSelectedFiles()
   if (mode !== 'camera') openModePicker(mode)

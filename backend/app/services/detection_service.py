@@ -124,8 +124,8 @@ class DetectionService:
         self,
         *,
         scene_id: int | None = None,
-        image_size: int = 416,
-        conf: float = 0.25,
+        image_size: int = 512,
+        conf: float = 0.30,
         iou: float = 0.45,
     ) -> dict[str, Any]:
         """Resolve, load and warm the model used by an IP Webcam session."""
@@ -165,10 +165,12 @@ class DetectionService:
         model: Any,
         frame: Any,
         *,
-        conf: float = 0.25,
+        conf: float = 0.30,
         iou: float = 0.45,
-        image_size: int = 416,
+        image_size: int = 512,
         jpeg_quality: int = 70,
+        output_max_width: int = 960,
+        finalize: bool = True,
     ) -> dict[str, Any]:
         """Run one CPU inference and return a compact WebSocket payload."""
         import cv2
@@ -200,9 +202,85 @@ class DetectionService:
                     }
                 )
 
+        speed = result.speed or {}
+        inference_time_ms = round(float(speed.get("inference", 0)), 2)
+        if not finalize:
+            return {
+                "detections": detections,
+                "inference_time_ms": inference_time_ms,
+            }
+        return self.finalize_realtime_frame(
+            frame,
+            detections,
+            inference_time_ms=inference_time_ms,
+            jpeg_quality=jpeg_quality,
+            output_max_width=output_max_width,
+        )
+
+    def finalize_realtime_frame(
+        self,
+        frame: Any,
+        detections: list[dict[str, Any]],
+        *,
+        inference_time_ms: float,
+        jpeg_quality: int = 70,
+        output_max_width: int = 960,
+    ) -> dict[str, Any]:
+        """Render stabilized detections and calculate their price summary."""
+        import cv2
+
+        annotated = frame.copy()
+        palette = [
+            (235, 64, 52),
+            (46, 204, 113),
+            (52, 152, 219),
+            (155, 89, 182),
+            (241, 196, 15),
+            (230, 126, 34),
+        ]
+        line_width = max(2, round(min(annotated.shape[:2]) / 320))
+        for detection in detections:
+            x1, y1, x2, y2 = [round(float(value)) for value in detection["bbox"]]
+            color = palette[int(detection["class_id"]) % len(palette)]
+            label = f'{detection["class_name"]} {float(detection["confidence"]):.2f}'
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, line_width)
+            (text_width, text_height), baseline = cv2.getTextSize(
+                label,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                1,
+            )
+            label_top = max(0, y1 - text_height - baseline - 6)
+            cv2.rectangle(
+                annotated,
+                (x1, label_top),
+                (x1 + text_width + 8, label_top + text_height + baseline + 6),
+                color,
+                -1,
+            )
+            cv2.putText(
+                annotated,
+                label,
+                (x1 + 4, label_top + text_height + 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+        height, width = annotated.shape[:2]
+        if output_max_width > 0 and width > output_max_width:
+            scale = output_max_width / width
+            annotated = cv2.resize(
+                annotated,
+                (output_max_width, max(1, round(height * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
+
         ok, encoded = cv2.imencode(
             ".jpg",
-            result.plot(),
+            annotated,
             [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality],
         )
         if not ok:
@@ -214,13 +292,12 @@ class DetectionService:
         finally:
             db.close()
 
-        speed = result.speed or {}
         return {
             "annotated_frame": base64.b64encode(encoded).decode("ascii"),
             "detections": detections,
             "object_count": len(detections),
             "class_counts": dict(Counter(item["class_name"] for item in detections)),
-            "inference_time_ms": round(float(speed.get("inference", 0)), 2),
+            "inference_time_ms": inference_time_ms,
             "price_summary": price_summary,
         }
 

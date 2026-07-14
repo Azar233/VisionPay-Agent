@@ -35,7 +35,7 @@
       <div><span>当前商品</span><strong>{{ result.object_count || 0 }}</strong></div>
       <div><span>处理帧率</span><strong>{{ Number(result.fps || 0).toFixed(1) }} FPS</strong></div>
       <div><span>推理耗时</span><strong>{{ Number(result.inference_time_ms || 0).toFixed(0) }} ms</strong></div>
-      <div><span>已处理</span><strong>{{ result.frame_count || 0 }} 帧</strong></div>
+      <div><span>采集到画面</span><strong>{{ Number(result.pipeline_latency_ms || 0).toFixed(0) }} ms</strong></div>
     </div>
 
     <div v-if="classes.length" class="camera-classes">
@@ -46,7 +46,7 @@
     <footer class="camera-actions">
       <div>
         <span>{{ modelInfo }}</span>
-        <small>416 × 416 · 目标 3 FPS · 当前帧计数</small>
+        <small>{{ runtimeInfo }} · 已处理 {{ result.frame_count || 0 }} 帧 · 主动丢弃 {{ result.dropped_frames || 0 }} 个旧帧</small>
       </div>
       <el-button v-if="!active" type="primary" :loading="loading" @click="start">开始实时检测</el-button>
       <el-button v-else type="danger" plain @click="stop">停止检测</el-button>
@@ -60,7 +60,7 @@ import { VideoCamera } from '@element-plus/icons-vue'
 
 const props = defineProps({
   sceneId: { type: Number, default: undefined },
-  conf: { type: Number, default: 0.25 },
+  conf: { type: Number, default: 0.30 },
   iou: { type: Number, default: 0.45 },
   autoStart: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
@@ -75,6 +75,7 @@ const hasFrame = ref(false)
 const error = ref('')
 const statusText = ref('等待启动')
 const modelInfo = ref('模型将在连接后加载')
+const runtimeInfo = ref('CPU 低延迟模式')
 const result = ref({})
 const defaultCameraUrl = 'http://10.172.52.70:8080'
 const cameraUrl = ref(window.localStorage.getItem('visionpay-ip-webcam-url') || defaultCameraUrl)
@@ -82,6 +83,10 @@ let socket = null
 let intentionalClose = false
 let reconnectAttempts = 0
 let reconnectTimer = null
+let serverRejected = false
+let pendingFrame = ''
+let renderingFrame = false
+let renderGeneration = 0
 
 const classes = computed(() => Object.entries(result.value.class_counts || {}).map(([name, count]) => ({ name, count })))
 
@@ -101,17 +106,45 @@ function setStatus(value) {
   emit('status', { active: active.value, running: running.value, loading: loading.value, error: error.value, text: value })
 }
 
-async function renderFrame(base64) {
+function decodeFrame(base64) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = reject
+    image.src = `data:image/jpeg;base64,${base64}`
+  })
+}
+
+async function renderLatestFrame(base64) {
+  pendingFrame = base64
+  if (renderingFrame) return
+  renderingFrame = true
+  const generation = renderGeneration
   const canvas = canvasRef.value
-  if (!canvas || !base64) return
-  const image = new Image()
-  image.onload = () => {
-    canvas.width = image.naturalWidth
-    canvas.height = image.naturalHeight
-    canvas.getContext('2d')?.drawImage(image, 0, 0)
-    hasFrame.value = true
+  try {
+    while (pendingFrame && generation === renderGeneration) {
+      const current = pendingFrame
+      pendingFrame = ''
+      const image = await decodeFrame(current)
+      // A newer frame arrived while decoding: skip drawing the stale one.
+      if (pendingFrame) continue
+      if (!canvas || generation !== renderGeneration) break
+      if (canvas.width !== image.naturalWidth) canvas.width = image.naturalWidth
+      if (canvas.height !== image.naturalHeight) canvas.height = image.naturalHeight
+      const context = canvas.getContext('2d', { alpha: false })
+      if (context) {
+        context.imageSmoothingEnabled = true
+        context.imageSmoothingQuality = 'high'
+        context.drawImage(image, 0, 0)
+      }
+      hasFrame.value = true
+    }
+  } catch {
+    // A later WebSocket frame can recover rendering without reconnecting.
+  } finally {
+    renderingFrame = false
+    if (pendingFrame) renderLatestFrame(pendingFrame)
   }
-  image.src = `data:image/jpeg;base64,${base64}`
 }
 
 function connect() {
@@ -121,6 +154,7 @@ function connect() {
   active.value = true
   running.value = false
   intentionalClose = false
+  serverRejected = false
   setStatus('正在连接')
   socket = new WebSocket(socketUrl())
   socket.onopen = () => {
@@ -141,13 +175,14 @@ function connect() {
       loading.value = false
       running.value = true
       modelInfo.value = `${message.model} · ${message.scene}`
+      runtimeInfo.value = `${message.image_size} × ${message.image_size} · 目标 ${Number(message.target_fps).toFixed(1)} FPS · 跨帧稳定`
       setStatus('实时识别中')
       return
     }
     if (message.type === 'result') {
       result.value = message
       await nextTick()
-      renderFrame(message.annotated_frame)
+      renderLatestFrame(message.annotated_frame)
       emit('result', message)
       return
     }
@@ -155,16 +190,31 @@ function connect() {
       error.value = message.message || '实时检测失败'
       loading.value = false
       running.value = false
+      active.value = false
+      serverRejected = true
       setStatus('检测异常')
+      socket?.close()
     }
   }
   socket.onerror = () => {
     error.value = '无法建立实时检测连接，请确认后端和 IP Webcam 已启动'
   }
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     socket = null
     running.value = false
     loading.value = false
+    if (event.code === 4001) {
+      active.value = false
+      serverRejected = true
+      error.value = event.reason || '摄像头检测已由新的页面会话接管'
+      setStatus('会话已被接管')
+      return
+    }
+    if (serverRejected) {
+      active.value = false
+      setStatus('检测异常')
+      return
+    }
     if (intentionalClose || !active.value) {
       active.value = false
       setStatus('已停止')
@@ -201,6 +251,8 @@ function stop() {
   running.value = false
   loading.value = false
   window.clearTimeout(reconnectTimer)
+  renderGeneration += 1
+  pendingFrame = ''
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'close' }))
   socket?.close()
   socket = null
@@ -216,7 +268,7 @@ defineExpose({ start, stop })
 .ip-camera-panel { overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }
 .camera-head { height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; color: #dfe7ec; background: #1e2a34; font-size: 11px; }.camera-head > div { display: flex; align-items: center; gap: 7px; }.camera-head i { width: 7px; height: 7px; border-radius: 50%; background: #71808c; }.camera-head i.live { background: #2bd88f; box-shadow: 0 0 0 4px rgba(43,216,143,.13); }.camera-head small { color: #8fa0ad; }
 .camera-address { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid $border-color; background: $surface-muted; }.camera-address label { color: $text-primary; font-size: 11px; font-weight: 700; }.camera-address small { color: $text-secondary; font-size: 9px; }
-.camera-screen { position: relative; min-height: 360px; display: grid; place-items: center; overflow: hidden; background: #101820; }.camera-screen canvas { display: block; width: 100%; height: 100%; max-height: 58vh; object-fit: contain; }.camera-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: #aebbc5; text-align: center; }.camera-empty .el-icon { font-size: 44px; color: #657682; }.camera-empty strong { color: #d8e1e7; }.camera-empty span { max-width: 430px; font-size: 11px; line-height: 1.6; }.live-badge { position: absolute; top: 12px; left: 12px; padding: 4px 7px; border-radius: 3px; color: #fff; background: #dc2626; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.camera-screen { position: relative; min-height: 360px; display: grid; place-items: center; overflow: hidden; background: #101820; }.camera-screen canvas { display: block; width: 100%; height: auto; max-width: 100%; max-height: 58vh; object-fit: contain; }.camera-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: #aebbc5; text-align: center; }.camera-empty .el-icon { font-size: 44px; color: #657682; }.camera-empty strong { color: #d8e1e7; }.camera-empty span { max-width: 430px; font-size: 11px; line-height: 1.6; }.live-badge { position: absolute; top: 12px; left: 12px; padding: 4px 7px; border-radius: 3px; color: #fff; background: #dc2626; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
 .camera-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid $border-color; border-bottom: 1px solid $border-color; }.camera-metrics > div { padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; border-right: 1px solid $border-color; }.camera-metrics > div:last-child { border-right: 0; }.camera-metrics span { color: $text-secondary; font-size: 9px; }.camera-metrics strong { color: $text-primary; font-size: 13px; }
 .camera-classes { display: flex; gap: 6px; padding: 9px 12px; overflow-x: auto; background: $surface-muted; }.camera-classes span { flex-shrink: 0; padding: 5px 8px; border: 1px solid $border-color; border-radius: 4px; background: $surface-color; color: $text-secondary; font-size: 10px; }.camera-classes b { margin-left: 4px; color: $text-primary; }.camera-error { margin: 0; padding: 9px 13px; color: #9c2938; background: #fff0f2; font-size: 11px; }
 .camera-actions { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; }.camera-actions > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.camera-actions span { overflow: hidden; color: $text-primary; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }.camera-actions small { color: $text-secondary; font-size: 9px; }

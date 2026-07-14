@@ -48,11 +48,17 @@ class Settings(BaseSettings):
     # ── IP Webcam 实时检测配置 ─────────────────────────
     # 前端可以覆盖该默认地址；后端仍会校验为安全的局域网 HTTP 地址。
     IP_WEBCAM_URL: str = "http://10.172.52.70:8080"
-    CAMERA_CONFIDENCE: float = 0.25
+    CAMERA_CONFIDENCE: float = 0.30
     CAMERA_IOU: float = 0.45
-    CAMERA_IMAGE_SIZE: int = 416
+    CAMERA_IMAGE_SIZE: int = 512
     CAMERA_TARGET_FPS: float = 3.0
-    CAMERA_JPEG_QUALITY: int = 70
+    CAMERA_JPEG_QUALITY: int = 62
+    CAMERA_OUTPUT_MAX_WIDTH: int = 960
+    CAMERA_READ_TIMEOUT_MS: int = 2000
+    CAMERA_STALE_TIMEOUT_SECONDS: float = 5.0
+    CAMERA_STABILITY_MIN_HITS: int = 2
+    CAMERA_STABILITY_MAX_MISSES: int = 2
+    CAMERA_STABILITY_IOU: float = 0.25
 
     # ── DeepSeek Agent 配置（OpenAI 兼容接口）─────────
     DEEPSEEK_API_KEY: str = ""
