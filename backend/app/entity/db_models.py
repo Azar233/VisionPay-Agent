@@ -8,12 +8,13 @@
   智能体：  chat_sessions, chat_messages
   系统运维：operation_logs
   商品价格：product_prices
+  模拟支付：mock_payment_orders
 """
 from datetime import datetime
 
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey,
-    JSON, Text, Boolean, Enum, Table, BigInteger
+    JSON, Text, Boolean, Enum, Table, BigInteger, Numeric
 )
 from sqlalchemy.orm import relationship
 
@@ -412,3 +413,26 @@ class ProductPrice(Base):
     currency = Column(String(10), default="CNY", comment="货币")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="更新时间")
+
+
+# ══════════════════════════════════════════════════════════════
+# 七、模拟支付订单
+# ══════════════════════════════════════════════════════════════
+
+class MockPaymentOrder(Base):
+    """仅用于演示扫码支付流程，不连接真实资金渠道。"""
+    __tablename__ = "mock_payment_orders"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_uuid = Column(String(36), unique=True, nullable=False, index=True)
+    payment_token = Column(String(64), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    currency = Column(String(10), nullable=False, default="CNY")
+    amount = Column(Numeric(10, 2), nullable=False)
+    item_count = Column(Integer, nullable=False)
+    items_snapshot = Column(JSON, nullable=False)
+    payment_method = Column(String(20), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    paid_at = Column(DateTime, nullable=True)

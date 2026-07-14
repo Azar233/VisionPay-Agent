@@ -85,7 +85,7 @@
 
         <footer class="settlement-panel">
           <div class="settlement-summary"><span>应付金额</span><strong>{{ formatMoney(totalPrice) }}</strong><small>{{ pricing ? '正在重新计价' : pricingComplete ? '价格已由服务端按当前数量计算' : '总价不含未定价商品' }}</small></div>
-          <button type="button" :disabled="!products.length || !pricingComplete || detecting || pricing" @click="goToPayment"><span>确认商品并去结算</span><el-icon><ArrowRight /></el-icon></button>
+          <button type="button" :disabled="!products.length || !pricingComplete || detecting || pricing || creatingOrder" @click="goToPayment"><span>{{ creatingOrder ? '正在创建支付订单' : '确认商品并去结算' }}</span><el-icon><ArrowRight /></el-icon></button>
           <p>继续即表示您已确认以上商品和数量</p>
         </footer>
       </section>
@@ -98,7 +98,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Camera, CircleCheckFilled, Delete, InfoFilled, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
-import { calculateCheckoutApi, detectCheckoutApi } from '@/api/checkout'
+import { calculateCheckoutApi, createMockPaymentOrderApi, detectCheckoutApi } from '@/api/checkout'
 
 const router = useRouter()
 const sourceMode = ref('camera')
@@ -111,6 +111,7 @@ const cameraStatusText = ref('等待连接')
 const cameraError = ref('')
 const detecting = ref(false)
 const pricing = ref(false)
+const creatingOrder = ref(false)
 const detectionResult = ref(null)
 const checkoutSummary = ref(null)
 const detectionError = ref('')
@@ -216,10 +217,17 @@ async function removeProduct(classId) {
 }
 function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; detectionError.value = ''; selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
 function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
-function goToPayment() {
+async function goToPayment() {
   const order = { items: products.value, itemCount: totalItems.value, totalPrice: totalPrice.value, currency: 'CNY' }
   sessionStorage.setItem('visionpay-checkout-order', JSON.stringify(order))
-  router.push('/checkout/payment')
+  creatingOrder.value = true
+  try {
+    const paymentOrder = await createMockPaymentOrderApi(products.value)
+    sessionStorage.setItem('visionpay-payment-order', JSON.stringify(paymentOrder))
+    router.push({ path: '/checkout/payment', query: { token: paymentOrder.payment_token } })
+  } finally {
+    creatingOrder.value = false
+  }
 }
 function connectIpCamera() {
   cameraError.value = ''

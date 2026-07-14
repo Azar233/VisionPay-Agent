@@ -9,7 +9,7 @@ Pydantic 请求/响应模型
   - List 模型：分页列表查询的参数和响应
 """
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -265,6 +265,37 @@ class CheckoutItemQuantity(ProjectBaseModel):
 class CheckoutCalculateRequest(ProjectBaseModel):
     """服务端重新计价请求；单价始终从数据库读取。"""
     items: list[CheckoutItemQuantity] = Field(..., min_length=1, max_length=200)
+
+
+class MockPaymentConfirmRequest(ProjectBaseModel):
+    """模拟付款确认；金额始终由服务端订单决定。"""
+    payment_method: Literal["wechat", "alipay"] = "wechat"
+
+
+class MockPaymentOrderView(ProjectBaseModel):
+    """电脑端和手机端共享的只读订单快照。"""
+    order_uuid: str
+    status: Literal["pending", "paid", "expired"]
+    currency: str
+    amount: float
+    item_count: int
+    items: list[dict]
+    payment_method: Optional[str] = None
+    created_at: datetime
+    expires_at: datetime
+    paid_at: Optional[datetime] = None
+
+
+class MockPaymentOrderCreated(MockPaymentOrderView):
+    """创建订单时额外返回一次不可预测的扫码令牌。"""
+    payment_token: str
+
+
+class MockPaymentStatusResponse(ProjectBaseModel):
+    order_uuid: str
+    status: Literal["pending", "paid", "expired"]
+    expires_at: datetime
+    paid_at: Optional[datetime] = None
 
 
 # ══════════════════════════════════════════════════════════════

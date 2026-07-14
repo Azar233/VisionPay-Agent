@@ -33,8 +33,8 @@ import {
   Camera,
   Cpu,
   Clock,
-  Connection,
   DataAnalysis,
+  ShoppingCart,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -58,7 +58,7 @@ const menuItems = [
   { path: '/training', title: '模型训练', icon: Cpu },
   { path: '/history', title: '历史记录', icon: Clock },
   { path: '/dashboard', title: '数据看板', icon: DataAnalysis },
-  { path: '/customer-side', title: '用户侧跳转', icon: Connection },
+  { path: '/checkout', title: '用户结算端', icon: ShoppingCart },
 ]
 </script>
 
