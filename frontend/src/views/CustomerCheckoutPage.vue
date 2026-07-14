@@ -20,20 +20,14 @@
           <button type="button" :class="{ active: sourceMode === 'upload' }" @click="selectSource('upload')"><el-icon><UploadFilled /></el-icon>图片上传</button>
         </div>
 
-        <div v-show="sourceMode === 'camera'" class="camera-stage">
-          <div class="camera-toolbar"><span><i :class="{ inactive: !cameraConnected }"></i>{{ cameraStatusText }}</span><small>IP WEBCAM · MJPEG</small></div>
-          <div class="camera-view">
-            <img v-if="cameraStreamUrl" :src="cameraStreamUrl" alt="IP Webcam 实时画面" @load="handleCameraLoaded" @error="handleCameraError" />
-            <div class="scan-frame"><span></span><span></span><span></span><span></span><b></b></div>
-            <div v-if="!cameraConnected" class="camera-placeholder"><el-icon><Camera /></el-icon><strong>{{ cameraStreamUrl ? '正在连接手机摄像头' : '尚未连接 IP Webcam' }}</strong><span>先在手机启动服务器，再输入应用显示的局域网地址</span></div>
-          </div>
-          <div class="phone-connect-panel">
-            <div><span>固定视频源</span><strong>{{ IP_WEBCAM_URL }}</strong></div>
-            <button v-if="!cameraStreamUrl || !cameraConnected" type="button" @click="connectIpCamera">重新连接</button>
-            <button v-else type="button" class="disconnect-button" @click="disconnectIpCamera">断开</button>
-          </div>
-          <p v-if="cameraError" class="camera-error">{{ cameraError }}</p>
-          <div class="capture-tip"><el-icon><CircleCheckFilled /></el-icon><span>{{ cameraConnected ? '手机画面已接入，当前尚未发送至 YOLO' : '手机与电脑需连接同一个 Wi-Fi；推荐关闭 IP Webcam 的登录验证' }}</span></div>
+        <div v-if="sourceMode === 'camera'" class="camera-stage">
+          <IpCameraDetectionPanel
+            ref="cameraDetectionRef"
+            compact
+            auto-start
+            @result="applyRealtimeDetection"
+            @status="handleCameraStatus"
+          />
         </div>
 
         <div v-show="sourceMode === 'upload'" class="upload-stage" @dragover.prevent @drop.prevent="handleDrop">
@@ -94,28 +88,25 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Camera, CircleCheckFilled, Delete, InfoFilled, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Camera, Delete, InfoFilled, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
 import { calculateCheckoutApi, createMockPaymentOrderApi, detectCheckoutApi } from '@/api/checkout'
+import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
 
 const router = useRouter()
 const sourceMode = ref('camera')
 const uploadInputRef = ref(null)
 const previewUrl = ref('')
-const IP_WEBCAM_URL = 'http://192.168.1.109:8080'
-const cameraStreamUrl = ref('')
-const cameraConnected = ref(false)
-const cameraStatusText = ref('等待连接')
-const cameraError = ref('')
+const cameraDetectionRef = ref(null)
+const cameraState = ref({ loading: false, running: false, error: '' })
 const detecting = ref(false)
 const pricing = ref(false)
 const creatingOrder = ref(false)
 const detectionResult = ref(null)
 const checkoutSummary = ref(null)
 const detectionError = ref('')
-let cameraConnectTimer = null
 let detectionSequence = 0
 let pricingSequence = 0
 const products = ref([])
@@ -123,12 +114,52 @@ const totalItems = computed(() => products.value.reduce((sum, item) => sum + ite
 const totalPrice = computed(() => Number(checkoutSummary.value?.total_price || 0))
 const unpricedItems = computed(() => Number(checkoutSummary.value?.unpriced_objects || 0))
 const pricingComplete = computed(() => products.value.length > 0 && checkoutSummary.value?.pricing_complete === true)
-const detectionStatus = computed(() => detecting.value ? '识别中' : detectionError.value ? '识别失败' : detectionResult.value ? '已完成' : '待扫描')
+const detectionStatus = computed(() => cameraState.value.running && sourceMode.value === 'camera' ? '实时识别中' : detecting.value || cameraState.value.loading ? '识别中' : detectionError.value ? '识别失败' : detectionResult.value ? '已完成' : '待扫描')
 const averageConfidence = computed(() => {
   const detections = detectionResult.value?.items?.flatMap((item) => item.detections || []) || []
   if (!detections.length) return '--'
   return `${(detections.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / detections.length * 100).toFixed(1)}%`
 })
+
+function productsFromDetection(detections, priceSummary) {
+  const confidences = new Map()
+  for (const detection of detections || []) {
+    const values = confidences.get(detection.class_id) || []
+    values.push(Number(detection.confidence || 0))
+    confidences.set(detection.class_id, values)
+  }
+  return (priceSummary?.items || []).map((item) => {
+    const values = confidences.get(item.class_id) || []
+    const confidence = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
+    const displayName = item.name || item.sku_name || item.class_name || `商品 ${item.class_id}`
+    return {
+      classId: item.class_id,
+      name: displayName,
+      category: item.class_name,
+      confidence: `${(confidence * 100).toFixed(1)}%`,
+      short: displayName.slice(0, 2),
+      quantity: item.count,
+      unitPrice: Number(item.unit_price || 0),
+      hasPrice: Boolean(item.has_price),
+      currency: item.currency || 'CNY',
+      barcode: item.barcode || '',
+    }
+  })
+}
+
+function applyRealtimeDetection(result) {
+  const item = { filename: 'IP Webcam 当前帧', detections: result.detections || [] }
+  detectionResult.value = { source: 'camera', items: [item] }
+  checkoutSummary.value = result.price_summary
+  products.value = productsFromDetection(item.detections, result.price_summary)
+  detectionError.value = ''
+}
+
+function handleCameraStatus(status) {
+  cameraState.value = status
+  detecting.value = status.loading
+  if (status.error) detectionError.value = status.error
+}
 
 async function setPreview(file) {
   if (!file?.type?.startsWith('image/')) return
@@ -144,29 +175,10 @@ async function setPreview(file) {
     if (sequence !== detectionSequence) return
     detectionResult.value = result
     checkoutSummary.value = result.price_summary
-    const confidences = new Map()
-    for (const detection of result.items?.flatMap((item) => item.detections || []) || []) {
-      const values = confidences.get(detection.class_id) || []
-      values.push(Number(detection.confidence || 0))
-      confidences.set(detection.class_id, values)
-    }
-    products.value = (result.price_summary?.items || []).map((item) => {
-      const values = confidences.get(item.class_id) || []
-      const confidence = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
-      const displayName = item.name || item.sku_name || item.class_name || `商品 ${item.class_id}`
-      return {
-        classId: item.class_id,
-        name: displayName,
-        category: item.class_name,
-        confidence: `${(confidence * 100).toFixed(1)}%`,
-        short: displayName.slice(0, 2),
-        quantity: item.count,
-        unitPrice: Number(item.unit_price || 0),
-        hasPrice: Boolean(item.has_price),
-        currency: item.currency || 'CNY',
-        barcode: item.barcode || '',
-      }
-    })
+    products.value = productsFromDetection(
+      result.items?.flatMap((item) => item.detections || []) || [],
+      result.price_summary,
+    )
     if (!products.value.length) ElMessage.warning('当前阈值下未识别到商品')
   } catch {
     if (sequence !== detectionSequence) return
@@ -215,7 +227,7 @@ async function removeProduct(classId) {
   try { await recalculateCart() }
   catch { products.value = previous }
 }
-function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; detectionError.value = ''; selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
+function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; detectionError.value = ''; if (sourceMode.value === 'camera') cameraDetectionRef.value?.start(); else selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
 function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 async function goToPayment() {
   const order = { items: products.value, itemCount: totalItems.value, totalPrice: totalPrice.value, currency: 'CNY' }
@@ -229,22 +241,8 @@ async function goToPayment() {
     creatingOrder.value = false
   }
 }
-function connectIpCamera() {
-  cameraError.value = ''
-  cameraConnected.value = false
-  cameraStatusText.value = '正在连接'
-  cameraStreamUrl.value = `/api/camera/ip-webcam/stream?url=${encodeURIComponent(IP_WEBCAM_URL)}&t=${Date.now()}`
-  window.clearTimeout(cameraConnectTimer)
-  cameraConnectTimer = window.setTimeout(() => {
-    if (!cameraConnected.value && cameraStreamUrl.value) handleCameraError()
-  }, 8000)
-}
-function handleCameraLoaded() { window.clearTimeout(cameraConnectTimer); cameraConnected.value = true; cameraStatusText.value = '实时画面' }
-function handleCameraError() { window.clearTimeout(cameraConnectTimer); cameraConnected.value = false; cameraStatusText.value = '连接失败'; cameraError.value = '无法读取视频流，请确认手机已点击“启动服务器”、地址正确且两台设备在同一 Wi-Fi' }
-function disconnectIpCamera() { window.clearTimeout(cameraConnectTimer); cameraStreamUrl.value = ''; cameraConnected.value = false; cameraStatusText.value = '等待连接'; cameraError.value = '' }
-function selectSource(mode) { sourceMode.value = mode; if (mode === 'camera') connectIpCamera(); else disconnectIpCamera() }
-onMounted(connectIpCamera)
-onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); disconnectIpCamera() })
+function selectSource(mode) { sourceMode.value = mode }
+onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); cameraDetectionRef.value?.stop() })
 </script>
 
 <style lang="scss" scoped>
