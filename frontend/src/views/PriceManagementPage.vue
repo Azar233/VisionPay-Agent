@@ -34,14 +34,12 @@
             {{ formatTime(row.updated_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="176" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button type="primary" link :icon="Edit" @click="openEditDialog(row)">
-              编辑
-            </el-button>
-            <el-button type="danger" link :icon="Delete" @click="handleDelete(row)">
-              删除
-            </el-button>
+            <div class="table-actions">
+              <el-button class="row-action edit-action" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
+              <el-button class="row-action delete-action" size="small" :icon="Delete" @click="handleDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -51,6 +49,7 @@
       v-model="dialogVisible"
       :title="isEdit ? '编辑商品' : '新增商品'"
       width="520px"
+      append-to-body
       destroy-on-close
       @closed="resetForm"
     >
@@ -62,11 +61,16 @@
         status-icon
       >
         <el-form-item label="类别 ID" prop="category_id">
+          <el-input
+            v-if="isEdit"
+            :model-value="String(editingCategoryId ?? '')"
+            disabled
+          />
           <el-input-number
+            v-else
             v-model="form.category_id"
-            :min="0"
-            :max="199"
-            :disabled="isEdit"
+            :min="1"
+            :max="200"
             controls-position="right"
             style="width: 100%"
           />
@@ -120,11 +124,12 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+const editingCategoryId = ref(null)
 const priceList = ref([])
 
 const formRef = ref(null)
 const form = ref({
-  category_id: 0,
+  category_id: 1,
   sku_name: '',
   name: '',
   barcode: '',
@@ -160,8 +165,9 @@ async function fetchPrices() {
 }
 
 function resetForm() {
+  editingCategoryId.value = null
   form.value = {
-    category_id: 0,
+    category_id: 1,
     sku_name: '',
     name: '',
     barcode: '',
@@ -174,8 +180,9 @@ function resetForm() {
 
 function openCreateDialog() {
   isEdit.value = false
+  editingCategoryId.value = null
   form.value = {
-    category_id: 0,
+    category_id: 1,
     sku_name: '',
     name: '',
     barcode: '',
@@ -187,6 +194,7 @@ function openCreateDialog() {
 
 function openEditDialog(row) {
   isEdit.value = true
+  editingCategoryId.value = Number(row.category_id)
   form.value = {
     category_id: row.category_id,
     sku_name: row.sku_name || '',
@@ -213,7 +221,7 @@ async function handleSubmit() {
     }
 
     if (isEdit.value) {
-      await updatePriceApi(form.value.category_id, payload)
+      await updatePriceApi(editingCategoryId.value, payload)
       ElMessage.success('商品更新成功')
     } else {
       await createPriceApi({ category_id: form.value.category_id, ...payload })
@@ -276,6 +284,49 @@ onMounted(() => {
       margin: 0;
       color: #6b7280;
       font-size: 13px;
+    }
+  }
+
+  .table-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    .row-action {
+      min-width: 68px;
+      margin-left: 0;
+      border-radius: 8px;
+      font-weight: 500;
+      transition: color .2s ease, border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
+    }
+
+    .edit-action {
+      color: #0969da;
+      border-color: #b9d7f8;
+      background: #f2f8ff;
+
+      &:hover,
+      &:focus-visible {
+        color: #fff;
+        border-color: #0969da;
+        background: #0969da;
+        box-shadow: 0 4px 12px rgba(9, 105, 218, .18);
+      }
+    }
+
+    .delete-action {
+      color: #cf3f4f;
+      border-color: #f0c4ca;
+      background: #fff6f7;
+
+      &:hover,
+      &:focus-visible {
+        color: #fff;
+        border-color: #cf3f4f;
+        background: #cf3f4f;
+        box-shadow: 0 4px 12px rgba(207, 63, 79, .16);
+      }
     }
   }
 }
