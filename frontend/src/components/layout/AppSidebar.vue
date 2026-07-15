@@ -15,7 +15,6 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { useUserStore } from '@/stores/user'
 import {
   ChatDotRound,
   Camera,
@@ -27,7 +26,6 @@ import {
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
-const userStore = useUserStore()
 
 defineProps({
   collapsed: {
@@ -38,22 +36,15 @@ defineProps({
 
 const activeMenu = computed(() => '/' + route.path.split('/')[1])
 
-const menuItems = computed(() => {
-  const items = [
-    { path: '/detection', title: '检测工作台', icon: Camera },
-    { path: '/chat', title: '智能对话', icon: ChatDotRound },
-    { path: '/training', title: '模型训练', icon: Cpu },
-    { path: '/history', title: '历史记录', icon: Clock },
-    { path: '/dashboard', title: '数据概览', icon: DataAnalysis },
-    { path: '/checkout', title: '顾客结算', icon: ShoppingCart },
-  ]
-
-  if (userStore.isSuperuser) {
-    items.push({ path: '/prices', title: '价目表管理', icon: PriceTag })
-  }
-
-  return items
-})
+const menuItems = computed(() => [
+  { path: '/detection', title: '检测工作台', icon: Camera },
+  { path: '/chat', title: '智能对话', icon: ChatDotRound },
+  { path: '/training', title: '模型训练', icon: Cpu },
+  { path: '/history', title: '历史记录', icon: Clock },
+  { path: '/dashboard', title: '数据概览', icon: DataAnalysis },
+  { path: '/checkout', title: '顾客结算', icon: ShoppingCart },
+  { path: '/prices', title: '价目表管理', icon: PriceTag },
+])
 </script>
 
 <style lang="scss" scoped>

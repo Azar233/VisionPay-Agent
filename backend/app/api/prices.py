@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, require_admin
+from app.api.auth import get_current_user
 from app.database.session import get_db
 from app.entity.db_models import ProductPrice
 from app.entity.schemas import ProductPriceCreate, ProductPriceResponse, ProductPriceUpdate
@@ -44,7 +44,7 @@ def get_price(
 def create_price(
     payload: ProductPriceCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
+    current_user=Depends(get_current_user),
 ):
     """创建单个商品价格。category_id 不能已存在。"""
     existing = (
@@ -70,7 +70,7 @@ def update_price(
     category_id: int,
     payload: ProductPriceUpdate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
+    current_user=Depends(get_current_user),
 ):
     """根据 category_id 更新单个商品价格。"""
     price = db.query(ProductPrice).filter(ProductPrice.category_id == category_id).first()
@@ -89,7 +89,7 @@ def update_price(
 def delete_price(
     category_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
+    current_user=Depends(get_current_user),
 ):
     """根据 category_id 删除单个商品价格。"""
     price = db.query(ProductPrice).filter(ProductPrice.category_id == category_id).first()
@@ -105,7 +105,7 @@ def delete_price(
 def batch_set_prices(
     items: list[ProductPriceCreate],
     db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
+    current_user=Depends(get_current_user),
 ):
     """批量创建或更新商品价格。如果 category_id 已存在则更新，否则新增。"""
     for item in items:

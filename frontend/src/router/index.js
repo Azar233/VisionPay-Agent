@@ -1,6 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { useUserStore } from '@/stores/user'
 
 const routes = [
   {
@@ -67,7 +65,7 @@ const routes = [
         path: 'prices',
         name: 'PriceManagement',
         component: () => import('@/views/PriceManagementPage.vue'),
-        meta: { title: '价目表管理', icon: 'PriceTag', requiresAdmin: true },
+        meta: { title: '价目表管理', icon: 'PriceTag' },
       },
       {
         path: 'checkout/payment',
@@ -108,14 +106,6 @@ router.beforeEach((to) => {
 
   if ((to.path === '/login' || to.path === '/register') && token) {
     return '/'
-  }
-
-  if (to.meta.requiresAdmin) {
-    const userStore = useUserStore()
-    if (!userStore.isSuperuser) {
-      ElMessage.error('需要管理员权限')
-      return '/'
-    }
   }
 
   return true
