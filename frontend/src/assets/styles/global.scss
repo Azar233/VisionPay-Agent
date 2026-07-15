@@ -394,6 +394,31 @@ html.dark .el-table tr,
 html.dark .el-table th.el-table__cell,
 html.dark .el-table td.el-table__cell { color: #d1d1d6; background: #1c1c1e; border-color: rgba(255, 255, 255, .08); }
 html.dark .el-table__inner-wrapper::before { background: rgba(255, 255, 255, .08); }
+html.dark .price-management-page .subtitle { color: #a1a1a6; }
+html.dark .price-management-page .table-actions .edit-action {
+  color: #409cff;
+  border-color: rgba(64, 156, 255, .38);
+  background: rgba(10, 132, 255, .14);
+}
+html.dark .price-management-page .table-actions .edit-action:hover,
+html.dark .price-management-page .table-actions .edit-action:focus-visible {
+  color: #fff;
+  border-color: #0a84ff;
+  background: #0a84ff;
+  box-shadow: 0 4px 12px rgba(10, 132, 255, .24);
+}
+html.dark .price-management-page .table-actions .delete-action {
+  color: #ff6961;
+  border-color: rgba(255, 105, 97, .38);
+  background: rgba(255, 69, 58, .14);
+}
+html.dark .price-management-page .table-actions .delete-action:hover,
+html.dark .price-management-page .table-actions .delete-action:focus-visible {
+  color: #fff;
+  border-color: #ff453a;
+  background: #ff453a;
+  box-shadow: 0 4px 12px rgba(255, 69, 58, .24);
+}
 html.dark .el-input__wrapper,
 html.dark .el-textarea__inner,
 html.dark .el-select__wrapper,
