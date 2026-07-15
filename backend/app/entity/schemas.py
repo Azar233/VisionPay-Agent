@@ -418,6 +418,7 @@ class DatasetProductBox(ProjectBaseModel):
     y1: float = Field(..., ge=0)
     x2: float = Field(..., gt=0)
     y2: float = Field(..., gt=0)
+    product_id: Optional[int] = Field(None, ge=1)
 
 
 class DatasetProductStagingImage(ProjectBaseModel):
@@ -435,6 +436,7 @@ class DatasetProductStagingImage(ProjectBaseModel):
 
 class DatasetProductStagingResponse(ProjectBaseModel):
     staging_token: str
+    mode: Literal["train_new", "train_existing", "scene"]
     expires_at: datetime
     images: list[DatasetProductStagingImage]
     total_images: int
@@ -449,8 +451,10 @@ class DatasetProductCommitImage(ProjectBaseModel):
 
 class DatasetProductCommitRequest(ProjectBaseModel):
     staging_token: str = Field(..., min_length=32, max_length=64)
-    name: str = Field(..., min_length=1, max_length=150)
-    unit_price: float = Field(..., ge=0)
+    mode: Literal["train_new", "train_existing", "scene"] = "train_new"
+    existing_product_id: Optional[int] = Field(None, ge=1)
+    name: Optional[str] = Field(None, min_length=1, max_length=150)
+    unit_price: Optional[float] = Field(None, ge=0)
     class_name: Optional[str] = Field(None, max_length=200)
     barcode: Optional[str] = Field(None, max_length=100)
     product_key: Optional[str] = Field(None, max_length=100)

@@ -9,8 +9,8 @@ export function attachFilesToStagedImages(stage, filesBySplit, createObjectUrl =
       ...item,
       file,
       previewUrl: createObjectUrl(file),
-      boxes: (item.boxes || []).map((box) => ({ ...box })),
-      reviewed: !item.needs_review && Boolean(item.boxes?.length),
+      boxes: [],
+      reviewed: false,
       edited: false,
     }
   })
@@ -19,14 +19,22 @@ export function attachFilesToStagedImages(stage, filesBySplit, createObjectUrl =
 export function buildDatasetProductCommitPayload(stage, product, images) {
   return {
     staging_token: stage.staging_token,
-    name: product.name.trim(),
-    class_name: (product.class_name || product.name).trim(),
-    unit_price: Number(product.unit_price || 0),
+    mode: product.mode,
+    existing_product_id: product.mode === 'train_existing' ? Number(product.existing_product_id) : null,
+    name: product.mode === 'train_new' ? product.name.trim() : null,
+    class_name: product.mode === 'train_new' ? product.class_name.trim() : null,
+    unit_price: product.mode === 'train_new' ? Number(product.unit_price) : null,
     barcode: product.barcode?.trim() || null,
     images: images.map((item) => ({
       image_id: item.image_id,
       reviewed: Boolean(item.reviewed),
-      boxes: item.boxes.map(({ x1, y1, x2, y2 }) => ({ x1, y1, x2, y2 })),
+      boxes: item.boxes.map(({ x1, y1, x2, y2, product_id }) => ({
+        x1,
+        y1,
+        x2,
+        y2,
+        product_id: product.mode === 'scene' ? Number(product_id) : null,
+      })),
     })),
   }
 }

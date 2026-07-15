@@ -502,101 +502,160 @@ class DatasetWorkspaceService:
             raise
 
     @classmethod
-    def add_product(
+    def add_samples(
         cls,
         db: Session,
         *,
         dataset_id: int,
-        name: str,
-        unit_price: float,
+        mode: str,
         files: list[tuple[str, str, bytes]],
-        annotations: list[list[tuple[float, float, float, float]]] | None = None,
+        annotations: list[list[dict[str, Any]]],
+        existing_product_id: int | None = None,
+        name: str | None = None,
+        unit_price: float | None = None,
         class_name: str | None = None,
         barcode: str | None = None,
         product_key: str | None = None,
         progress_callback: Callable[[int, str], None] | None = None,
-    ) -> tuple[DatasetVersion, Product, int]:
-        cls._report(progress_callback, 2, "正在检查商品与数据集")
+    ) -> tuple[DatasetVersion, Product | None, int]:
+        """Add single-product train samples or multi-product val/test scenes."""
+
+        cls._report(progress_callback, 2, "正在检查样本模式与数据集")
         dataset = dataset_service.get(db, dataset_id)
         if dataset.status != "draft":
             raise DatasetLifecycleError("只能修改派生草稿数据集")
-        if not files:
-            raise DatasetLifecycleError("至少上传一张商品图片")
-        if annotations is not None and len(annotations) != len(files):
-            raise DatasetLifecycleError("图片数量与审核标注数量不一致")
-        root = cls._local_root(dataset)
-        normalized_barcode = (barcode or "").strip() or None
-        key = product_key or (
-            f"barcode:{normalized_barcode}" if normalized_barcode else f"prod:{uuid.uuid4()}"
-        )
-        product = db.query(Product).filter(Product.product_key == key).first()
-        if product is None:
-            product = Product(
-                product_key=key,
-                name=name,
-                sku_name=class_name or name,
-                barcode=normalized_barcode,
-            )
-            db.add(product)
-            db.flush()
-        product.is_active = True
-        class_index = len(dataset.classes)
-        if any(item.product_id == product.id for item in dataset.classes):
-            raise DatasetConflictError("该商品已存在于当前数据集")
-        category_id = int(db.query(func.max(ProductPrice.category_id)).scalar() or 0) + 1
-        price = db.query(ProductPrice).filter(ProductPrice.product_id == product.id).first()
-        if price is None:
-            price = ProductPrice(
-                product_id=product.id,
-                category_id=category_id,
-                sku_name=class_name or name,
-                name=name,
-                barcode=normalized_barcode,
-                unit_price=unit_price,
-                currency="CNY",
-            )
-            db.add(price)
-        else:
-            price.unit_price = unit_price
-        mapping = DatasetClassMapping(
-            dataset_version_id=dataset.id,
-            class_index=class_index,
-            product_id=product.id,
-            product_key=product.product_key,
-            category_id=price.category_id,
-            class_name=class_name or f"product_{product.id}",
-            display_name=name,
-        )
-        dataset.classes.append(mapping)
-        db.flush()
+        if mode not in {"train_new", "train_existing", "scene"}:
+            raise DatasetLifecycleError("不支持的样本添加模式")
+        if not files or len(files) != len(annotations):
+            raise DatasetLifecycleError("图片与人工标注数量不一致")
 
+        root = cls._local_root(dataset)
+        product: Product | None = None
+        target_mapping: DatasetClassMapping | None = None
+        mappings_by_product = {
+            item.product_id: item for item in dataset.classes if item.product_id is not None
+        }
+        train_product_ids = {
+            product_id
+            for (product_id,) in (
+                db.query(DatasetAnnotation.product_id)
+                .join(DatasetImage, DatasetAnnotation.dataset_image_id == DatasetImage.id)
+                .filter(
+                    DatasetImage.dataset_version_id == dataset.id,
+                    DatasetImage.split == "train",
+                )
+                .distinct()
+                .all()
+            )
+        }
+
+        if mode == "train_new":
+            if not (name or "").strip() or not (class_name or "").strip() or unit_price is None:
+                raise DatasetLifecycleError("新商品必须填写商品名称、类别名称和价格")
+            normalized_barcode = (barcode or "").strip() or None
+            key = product_key or (
+                f"barcode:{normalized_barcode}" if normalized_barcode else f"prod:{uuid.uuid4()}"
+            )
+            product = db.query(Product).filter(Product.product_key == key).first()
+            if product is None:
+                product = Product(
+                    product_key=key,
+                    name=name.strip(),
+                    sku_name=class_name.strip(),
+                    barcode=normalized_barcode,
+                )
+                db.add(product)
+                db.flush()
+            if product.id in mappings_by_product:
+                raise DatasetConflictError("该商品已存在，请选择‘给已有商品新增训练图’")
+            product.is_active = True
+            category_id = int(db.query(func.max(ProductPrice.category_id)).scalar() or 0) + 1
+            price = db.query(ProductPrice).filter(ProductPrice.product_id == product.id).first()
+            if price is None:
+                price = ProductPrice(
+                    product_id=product.id,
+                    category_id=category_id,
+                    sku_name=class_name.strip(),
+                    name=name.strip(),
+                    barcode=normalized_barcode,
+                    unit_price=unit_price,
+                    currency="CNY",
+                )
+                db.add(price)
+            else:
+                price.unit_price = unit_price
+                category_id = price.category_id
+            target_mapping = DatasetClassMapping(
+                dataset_version_id=dataset.id,
+                class_index=len(dataset.classes),
+                product_id=product.id,
+                product_key=product.product_key,
+                category_id=category_id,
+                class_name=class_name.strip(),
+                display_name=name.strip(),
+            )
+            dataset.classes.append(target_mapping)
+            db.flush()
+            mappings_by_product[product.id] = target_mapping
+        elif mode == "train_existing":
+            target_mapping = mappings_by_product.get(existing_product_id)
+            if target_mapping is None:
+                raise DatasetNotFoundError("所选已有商品不在当前数据集版本中")
+            product = db.query(Product).filter(Product.id == existing_product_id).first()
+
+        allowed_splits = {"train"} if mode != "scene" else {"val", "test"}
+        if any(split not in allowed_splits for split, _filename, _content in files):
+            raise DatasetLifecycleError(
+                "训练样本只能写入 train" if mode != "scene" else "结账场景只能写入 val/test"
+            )
+
+        resolved_annotations: list[list[tuple[DatasetClassMapping, dict[str, Any]]]] = []
+        for (_split, filename, _content), image_annotations in zip(files, annotations):
+            if not image_annotations:
+                raise DatasetLifecycleError(f"图片 {filename} 至少需要一个人工检测框")
+            resolved_image: list[tuple[DatasetClassMapping, dict[str, Any]]] = []
+            for annotation in image_annotations:
+                submitted_product_id = annotation.get("product_id")
+                if mode == "scene":
+                    mapping = mappings_by_product.get(submitted_product_id)
+                    if mapping is None:
+                        raise DatasetLifecycleError(
+                            f"图片 {filename} 包含未在 train 商品目录中的 product_id={submitted_product_id}"
+                        )
+                    if submitted_product_id not in train_product_ids:
+                        raise DatasetLifecycleError(
+                            f"图片 {filename} 的 product_id={submitted_product_id} 尚无 train 标注，不能加入 val/test"
+                        )
+                else:
+                    if submitted_product_id not in {None, target_mapping.product_id}:
+                        raise DatasetLifecycleError("训练图片中的检测框只能标记为当前商品")
+                    mapping = target_mapping
+                resolved_image.append((mapping, annotation))
+            resolved_annotations.append(resolved_image)
+
+        cls._report(progress_callback, 5, "正在准备写入人工矩形框标注")
         added = 0
-        safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", product.product_key)
         total_files = max(1, len(files))
-        for sequence, (split, filename, content) in enumerate(files, 1):
-            if split not in SPLITS:
-                raise DatasetLifecycleError(f"不支持的数据集分区: {split}")
+        batch_token = uuid.uuid4().hex[:12]
+        for sequence, ((split, filename, content), image_annotations) in enumerate(
+            zip(files, resolved_annotations), 1
+        ):
             suffix = Path(filename).suffix.lower()
             if suffix not in IMAGE_SUFFIXES:
                 raise DatasetLifecycleError(f"不支持的图片格式: {filename}")
-            stem = f"{safe_key}_{sequence:04d}"
+            stem = f"manual_{batch_token}_{sequence:04d}"
             image_dir = root / "images" / split
             label_dir = root / "labels" / split
             image_dir.mkdir(parents=True, exist_ok=True)
             label_dir.mkdir(parents=True, exist_ok=True)
             (image_dir / f"{stem}{suffix}").write_bytes(content)
-            image_annotations = (
-                annotations[sequence - 1]
-                if annotations is not None
-                else [(0.5, 0.5, 1.0, 1.0)]
-            )
-            if not image_annotations:
-                raise DatasetLifecycleError(f"图片 {filename} 至少需要一个检测框")
-            label_lines = []
-            for coords in image_annotations:
-                if len(coords) != 4:
-                    raise DatasetLifecycleError(f"图片 {filename} 的检测框格式无效")
-                x_center, y_center, box_width, box_height = (float(value) for value in coords)
+
+            label_lines: list[str] = []
+            for mapping, annotation in image_annotations:
+                x_center = float(annotation["x_center"])
+                y_center = float(annotation["y_center"])
+                box_width = float(annotation["width"])
+                box_height = float(annotation["height"])
                 if not (
                     0 <= x_center <= 1
                     and 0 <= y_center <= 1
@@ -605,18 +664,17 @@ class DatasetWorkspaceService:
                 ):
                     raise DatasetLifecycleError(f"图片 {filename} 的检测框超出 YOLO 坐标范围")
                 label_lines.append(
-                    f"{class_index} {x_center:.8f} {y_center:.8f} {box_width:.8f} {box_height:.8f}"
+                    f"{mapping.class_index} {x_center:.8f} {y_center:.8f} "
+                    f"{box_width:.8f} {box_height:.8f}"
                 )
-            (label_dir / f"{stem}.txt").write_text(
-                "\n".join(label_lines) + "\n",
-                encoding="utf-8",
-            )
+            (label_dir / f"{stem}.txt").write_text("\n".join(label_lines) + "\n", encoding="utf-8")
             added += 1
             cls._report(
                 progress_callback,
-                4 + round(sequence / total_files * 8),
-                f"正在写入商品图片与标注 {sequence}/{len(files)}",
+                8 + round(sequence / total_files * 12),
+                f"正在写入人工样本 {sequence}/{len(files)}",
             )
+
         cls._write_data_yaml(root, list(dataset.classes))
         return (
             cls.scan(
@@ -624,7 +682,7 @@ class DatasetWorkspaceService:
                 dataset,
                 progress_callback=lambda progress, message: cls._report(
                     progress_callback,
-                    14 + round(progress * 0.84),
+                    22 + round(progress * 0.76),
                     message,
                 ),
             ),
@@ -668,9 +726,16 @@ class DatasetWorkspaceService:
             for label_path in labels_by_split[split]:
                 lines = [line.strip() for line in label_path.read_text(encoding="utf-8").splitlines() if line.strip()]
                 parsed = [(int(line.split()[0]), line.split()) for line in lines]
-                hits = sum(class_id == deleted_index for class_id, _ in parsed)
-                if hits:
-                    annotations_deleted += hits
+                hits = sum(class_id == deleted_index for class_id, _parts in parsed)
+                annotations_deleted += hits
+                rewritten = []
+                for class_id, parts in parsed:
+                    if class_id == deleted_index:
+                        continue
+                    if class_id > deleted_index:
+                        parts[0] = str(class_id - 1)
+                    rewritten.append(" ".join(parts))
+                if hits and not rewritten:
                     for image_path in image_dir.glob(f"{label_path.stem}.*"):
                         if image_path.suffix.lower() in IMAGE_SUFFIXES:
                             image_path.unlink()
@@ -683,11 +748,6 @@ class DatasetWorkspaceService:
                         f"正在删除商品样本并重排标注 {processed_labels}/{total_labels}",
                     )
                     continue
-                rewritten = []
-                for class_id, parts in parsed:
-                    if class_id > deleted_index:
-                        parts[0] = str(class_id - 1)
-                    rewritten.append(" ".join(parts))
                 label_path.write_text(("\n".join(rewritten) + "\n") if rewritten else "", encoding="utf-8")
                 processed_labels += 1
                 cls._report(
