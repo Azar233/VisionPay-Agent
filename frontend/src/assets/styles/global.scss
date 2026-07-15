@@ -183,11 +183,24 @@ html.dark .dashboard-page p,
 html.dark .dashboard-page .metric-card > span,
 html.dark .dashboard-page .metric-card small,
 html.dark .dashboard-page .readiness small { color: #a1a1a6; }
-html.dark .dashboard-page .metric-icon { color: #0a84ff; background: rgba(10, 132, 255, .16); }
+html.dark .dashboard-page .metric-icon.blue { color: #0a84ff; background: rgba(10, 132, 255, .16); }
+html.dark .dashboard-page .metric-icon.green { color: #30d158; background: rgba(48, 209, 88, .14); }
+html.dark .dashboard-page .metric-icon.orange { color: #ff9f0a; background: rgba(255, 159, 10, .14); }
+html.dark .dashboard-page .metric-icon.purple { color: #bf5af2; background: rgba(191, 90, 242, .14); }
 html.dark .dashboard-page .visual-orbit { border-color: rgba(10, 132, 255, .22); }
 
 html.dark .session-sidebar,
 html.dark .control-rail { background: rgba(22, 22, 24, .9); border-color: rgba(255, 255, 255, .09); }
+html.dark .session-sidebar.collapsed,
+html.dark .control-rail.collapsed { background: transparent; border-color: transparent; }
+html.dark .session-sidebar.collapsed .session-toolbar,
+html.dark .control-rail.collapsed .rail-toolbar { background: #2c2c2e; border-color: rgba(255, 255, 255, .12); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
+html.dark .session-sidebar.collapsed .new-chat-button,
+html.dark .session-sidebar.collapsed .panel-toggle,
+html.dark .control-rail.collapsed .panel-toggle { color: #d1d1d6; background: transparent; border-color: transparent; }
+html.dark .session-sidebar.collapsed .new-chat-button:hover,
+html.dark .session-sidebar.collapsed .panel-toggle:hover,
+html.dark .control-rail.collapsed .panel-toggle:hover { color: #fff; background: #3a3a3c; border-color: transparent; }
 html.dark .conversation-panel,
 html.dark .composer { background: rgba(28, 28, 30, .78); border-color: rgba(255, 255, 255, .09); }
 html.dark .new-chat-button,
@@ -197,6 +210,12 @@ html.dark .summary-metrics div,
 html.dark .summary-price { color: #f5f5f7; background: #2c2c2e; border-color: rgba(255, 255, 255, .1); }
 html.dark .session-item:hover { background: rgba(255, 255, 255, .06); }
 html.dark .session-item.active { color: #fff; background: #2c2c2e; }
+html.dark .session-item > .el-icon { color: #a1a1a6; background: transparent; }
+html.dark .session-item:hover > .el-icon,
+html.dark .session-item.active > .el-icon { color: #d1d1d6; }
+html.dark .session-item .session-delete { color: #a1a1a6; background: transparent; }
+html.dark .session-item .session-delete:hover,
+html.dark .session-item .session-delete:focus-visible { color: #ff453a; background: rgba(255, 69, 58, .14); }
 html.dark .starter-grid button { color: #a1a1a6; background: rgba(44, 44, 46, .72); border-color: rgba(255, 255, 255, .1); }
 html.dark .starter-grid button:hover { color: #fff; background: #3a3a3c; border-color: rgba(255, 255, 255, .16); }
 html.dark .input-modes { background: rgba(255, 255, 255, .07); }
@@ -205,6 +224,9 @@ html.dark .input-modes button.active { color: #fff; background: #3a3a3c; }
 html.dark .message-row.user .avatar,
 html.dark .selected-files > span,
 html.dark .message-files span { color: #f5f5f7; background: #2c2c2e; border-color: rgba(255, 255, 255, .1); }
+html.dark .message-bubble { color: #f5f5f7; background: #2c2c2e; border-color: rgba(255, 255, 255, .1); }
+html.dark .message-row.user .message-bubble { color: #fff; background: #0a84ff; border-color: transparent; }
+html.dark .message-row.user .message-files span { color: #fff; background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .24); }
 
 /* Authentication */
 html.dark .login-page,
@@ -326,6 +348,25 @@ html.dark .el-message-box,
 html.dark .el-dialog,
 html.dark .el-drawer,
 html.dark .el-picker-panel { color: #f5f5f7; background: #2c2c2e; border-color: rgba(255, 255, 255, .1); }
+
+.el-message-box.logout-confirm-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 24px;
+  background: var(--vp-surface);
+  border: 1px solid var(--vp-border);
+  border-radius: 20px;
+  box-shadow: var(--vp-shadow-lg);
+}
+.logout-confirm-dialog .el-message-box__header { padding: 0 36px 10px 0; }
+.logout-confirm-dialog .el-message-box__title { font-size: 18px; font-weight: 600; }
+.logout-confirm-dialog .el-message-box__content { padding: 8px 0 4px; }
+.logout-confirm-dialog .el-message-box__btns { gap: 10px; padding: 18px 0 0; }
+.logout-confirm-dialog .el-message-box__btns .el-button {
+  min-width: 68px;
+  height: 44px;
+  margin-left: 0;
+  border-radius: 999px;
+}
 html.dark .el-dropdown-menu__item { color: #d1d1d6; }
 html.dark .el-dropdown-menu__item:not(.is-disabled):focus,
 html.dark .el-dropdown-menu__item:not(.is-disabled):hover { color: #fff; background: rgba(10, 132, 255, .16); }
