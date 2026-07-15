@@ -1,0 +1,42 @@
+export function attachFilesToStagedImages(stage, filesBySplit, createObjectUrl = (file) => URL.createObjectURL(file)) {
+  const pairs = (stage?.images || []).map((item) => {
+    const file = filesBySplit[item.split]?.[item.split_index]
+    if (!file) throw new Error(`找不到暂存图片对应的本地文件：${item.filename}`)
+    return { item, file }
+  })
+  return pairs.map(({ item, file }) => {
+    return {
+      ...item,
+      file,
+      previewUrl: createObjectUrl(file),
+      boxes: (item.boxes || []).map((box) => ({ ...box })),
+      reviewed: !item.needs_review && Boolean(item.boxes?.length),
+      edited: false,
+    }
+  })
+}
+
+export function buildDatasetProductCommitPayload(stage, product, images) {
+  return {
+    staging_token: stage.staging_token,
+    name: product.name.trim(),
+    class_name: (product.class_name || product.name).trim(),
+    unit_price: Number(product.unit_price || 0),
+    barcode: product.barcode?.trim() || null,
+    images: images.map((item) => ({
+      image_id: item.image_id,
+      reviewed: Boolean(item.reviewed),
+      boxes: item.boxes.map(({ x1, y1, x2, y2 }) => ({ x1, y1, x2, y2 })),
+    })),
+  }
+}
+
+export function annotationReviewSummary(images) {
+  return images.reduce((summary, item) => {
+    summary.total += 1
+    summary.boxes += item.boxes.length
+    if (!item.boxes.length) summary.missing += 1
+    if (!item.reviewed) summary.pending += 1
+    return summary
+  }, { total: 0, boxes: 0, missing: 0, pending: 0 })
+}

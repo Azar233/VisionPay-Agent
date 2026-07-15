@@ -154,7 +154,10 @@ async function regenerateOrder() {
   if (!cartOrder.value?.items?.length) return router.push('/checkout')
   regenerating.value = true
   try {
-    paymentOrder.value = await createMockPaymentOrderApi(cartOrder.value.items)
+    paymentOrder.value = await createMockPaymentOrderApi(
+      cartOrder.value.items,
+      cartOrder.value.modelVersionId || null,
+    )
     sessionStorage.setItem('visionpay-payment-order', JSON.stringify(paymentOrder.value))
     router.replace({ path: '/checkout/payment', query: { token: paymentOrder.value.payment_token } })
     now.value = Date.now()

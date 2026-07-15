@@ -59,9 +59,14 @@ export function setupErrorReporting(app) {
             stack: err.stack,
             component: info, // 错误发生所在组件的生命周期钩子
         });
+        // HTTP 请求错误已经由 Axios 响应拦截器给出准确提示。这里再次提示会把
+        // mounted/event handler 中的请求失败误报成“页面渲染出错”。
+        if (err?.isAxiosError || err?.response) {
+            return;
+        }
         // 给用户友好的错误提示
         try {
-            ElMessage?.error("页面渲染出错,请刷新重试");
+            ElMessage?.error("页面运行出错，请刷新重试");
         } catch {
             // Element Plus 未加载时静默处理
         }

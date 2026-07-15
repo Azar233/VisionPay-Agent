@@ -266,6 +266,211 @@ class ProductPriceResponse(ProjectBaseModel):
     }
 
 
+# --- 数据集版本管理 ---
+
+class DatasetClassMappingInput(ProjectBaseModel):
+    class_index: int = Field(..., ge=0, description="YOLO class_id")
+    product_key: str = Field(..., min_length=1, max_length=100)
+    product_id: Optional[int] = Field(None, ge=1)
+    category_id: Optional[int] = Field(None, ge=1)
+    class_name: str = Field(..., min_length=1, max_length=200)
+    display_name: Optional[str] = Field(None, max_length=200)
+    extra_metadata: Optional[dict] = None
+
+
+class DatasetClassMappingResponse(DatasetClassMappingInput):
+    id: int
+
+
+class DatasetVersionCreate(ProjectBaseModel):
+    scene_id: int = Field(..., ge=1)
+    parent_id: Optional[int] = Field(None, ge=1)
+    version: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    )
+    name: str = Field(..., min_length=1, max_length=150)
+    description: Optional[str] = None
+    storage_path: str = Field(..., min_length=1, max_length=1000)
+    data_yaml_path: str = Field(..., min_length=1, max_length=1000)
+    manifest_path: Optional[str] = Field(None, max_length=1000)
+    content_hash: Optional[str] = Field(None, max_length=128)
+    class_count: int = Field(default=0, ge=0)
+    train_image_count: int = Field(default=0, ge=0)
+    val_image_count: int = Field(default=0, ge=0)
+    test_image_count: int = Field(default=0, ge=0)
+    train_annotation_count: int = Field(default=0, ge=0)
+    val_annotation_count: int = Field(default=0, ge=0)
+    test_annotation_count: int = Field(default=0, ge=0)
+    extra_metadata: Optional[dict] = None
+    classes: list[DatasetClassMappingInput] = Field(default_factory=list)
+
+
+class DatasetVersionUpdate(ProjectBaseModel):
+    parent_id: Optional[int] = Field(None, ge=1)
+    version: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=50,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    )
+    name: Optional[str] = Field(None, min_length=1, max_length=150)
+    description: Optional[str] = None
+    storage_path: Optional[str] = Field(None, min_length=1, max_length=1000)
+    data_yaml_path: Optional[str] = Field(None, min_length=1, max_length=1000)
+    manifest_path: Optional[str] = Field(None, max_length=1000)
+    content_hash: Optional[str] = Field(None, max_length=128)
+    class_count: Optional[int] = Field(None, ge=0)
+    train_image_count: Optional[int] = Field(None, ge=0)
+    val_image_count: Optional[int] = Field(None, ge=0)
+    test_image_count: Optional[int] = Field(None, ge=0)
+    train_annotation_count: Optional[int] = Field(None, ge=0)
+    val_annotation_count: Optional[int] = Field(None, ge=0)
+    test_annotation_count: Optional[int] = Field(None, ge=0)
+    extra_metadata: Optional[dict] = None
+    classes: Optional[list[DatasetClassMappingInput]] = None
+
+
+class DatasetVersionResponse(ProjectBaseModel):
+    id: int
+    scene_id: int
+    scene_name: Optional[str] = None
+    parent_id: Optional[int] = None
+    parent_version: Optional[str] = None
+    version: str
+    name: str
+    description: Optional[str] = None
+    status: Literal["draft", "ready", "archived"]
+    is_current: bool
+    storage_path: str
+    data_yaml_path: str
+    manifest_path: Optional[str] = None
+    content_hash: Optional[str] = None
+    class_count: int
+    train_image_count: int
+    val_image_count: int
+    test_image_count: int
+    total_image_count: int
+    train_annotation_count: int
+    val_annotation_count: int
+    test_annotation_count: int
+    total_annotation_count: int
+    extra_metadata: Optional[dict] = None
+    validation_report: Optional[dict] = None
+    created_by: int
+    creator_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    validated_at: Optional[datetime] = None
+    frozen_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
+    training_status: Literal["untrained", "queued", "training", "trained", "failed"]
+    training_task_count: int
+    completed_training_count: int
+    latest_training_task_id: Optional[int] = None
+    latest_training_task_uuid: Optional[str] = None
+    latest_training_status: Optional[str] = None
+    model_version_count: int
+    classes: list[DatasetClassMappingResponse] = Field(default_factory=list)
+
+
+class DatasetVersionListResponse(ProjectBaseModel):
+    total: int
+    items: list[DatasetVersionResponse]
+
+
+class DatasetValidationRequest(ProjectBaseModel):
+    check_filesystem: bool = Field(
+        default=False,
+        description="是否在后端所在机器检查目录和 data.yaml；集群注册时再开启",
+    )
+
+
+class DatasetValidationResponse(ProjectBaseModel):
+    dataset_id: int
+    valid: bool
+    errors: list[str]
+    warnings: list[str]
+    checked_filesystem: bool
+    checked_at: datetime
+
+
+class DatasetBaselineImportRequest(ProjectBaseModel):
+    scene_id: int = Field(..., ge=1)
+    source_path: str = Field(..., min_length=1, max_length=1000)
+    version: str = Field(..., min_length=1, max_length=50, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    name: str = Field(..., min_length=1, max_length=150)
+    description: Optional[str] = None
+    copy_files: bool = True
+    set_current: bool = True
+
+
+class DatasetDeriveRequest(ProjectBaseModel):
+    version: str = Field(..., min_length=1, max_length=50, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    name: str = Field(..., min_length=1, max_length=150)
+    description: Optional[str] = None
+
+
+class DatasetProductBox(ProjectBaseModel):
+    x1: float = Field(..., ge=0)
+    y1: float = Field(..., ge=0)
+    x2: float = Field(..., gt=0)
+    y2: float = Field(..., gt=0)
+
+
+class DatasetProductStagingImage(ProjectBaseModel):
+    image_id: str
+    split: Literal["train", "val", "test"]
+    split_index: int = Field(..., ge=0)
+    filename: str
+    width: int = Field(..., ge=1)
+    height: int = Field(..., ge=1)
+    boxes: list[DatasetProductBox] = Field(default_factory=list)
+    confidence: float = Field(..., ge=0, le=1)
+    needs_review: bool
+    detection_method: str
+
+
+class DatasetProductStagingResponse(ProjectBaseModel):
+    staging_token: str
+    expires_at: datetime
+    images: list[DatasetProductStagingImage]
+    total_images: int
+    needs_review_count: int
+
+
+class DatasetProductCommitImage(ProjectBaseModel):
+    image_id: str
+    boxes: list[DatasetProductBox] = Field(default_factory=list)
+    reviewed: bool = False
+
+
+class DatasetProductCommitRequest(ProjectBaseModel):
+    staging_token: str = Field(..., min_length=32, max_length=64)
+    name: str = Field(..., min_length=1, max_length=150)
+    unit_price: float = Field(..., ge=0)
+    class_name: Optional[str] = Field(None, max_length=200)
+    barcode: Optional[str] = Field(None, max_length=100)
+    product_key: Optional[str] = Field(None, max_length=100)
+    images: list[DatasetProductCommitImage] = Field(..., min_length=1)
+
+
+class DatasetProductDeleteRequest(ProjectBaseModel):
+    deactivate_product: bool = True
+
+
+class DatasetMutationResponse(ProjectBaseModel):
+    dataset: DatasetVersionResponse
+    product_id: Optional[int] = None
+    product_key: Optional[str] = None
+    images_added: int = 0
+    images_deleted: int = 0
+    annotations_deleted: int = 0
+    classes_reindexed: int = 0
+
+
 class CheckoutItemQuantity(ProjectBaseModel):
     """结算清单中由客户端确认的类别和数量。"""
     class_id: int = Field(..., ge=0, le=199, description="YOLO 类别 ID（0-199）")
@@ -275,6 +480,7 @@ class CheckoutItemQuantity(ProjectBaseModel):
 class CheckoutCalculateRequest(ProjectBaseModel):
     """服务端重新计价请求；单价始终从数据库读取。"""
     items: list[CheckoutItemQuantity] = Field(..., min_length=1, max_length=200)
+    model_version_id: Optional[int] = Field(None, ge=1)
 
 
 class MockPaymentConfirmRequest(ProjectBaseModel):
@@ -339,6 +545,11 @@ class TrainingTaskCreate(ProjectBaseModel):
     optimizer: str = Field(default="SGD", description="优化器")
     lr0: float = Field(default=0.01, description="初始学习率")
     augment_config: Optional[dict] = Field(None, description="数据增强配置")
+    dataset_version_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="已冻结的数据集版本 ID；新版训练入口应始终提供",
+    )
     dataset_path: Optional[str] = Field(None, description="数据集目录，默认 datasets/vision_pay")
     data_yaml: Optional[str] = Field(None, description="data.yaml 路径，默认在数据集目录下查找")
 
@@ -365,6 +576,11 @@ class TrainingRunImportRequest(ProjectBaseModel):
     optimizer: Optional[str] = Field(None, description="优化器；默认读取 args.yaml")
     lr0: Optional[float] = Field(None, description="初始学习率；默认读取 args.yaml")
     augment_config: Optional[dict] = Field(None, description="数据增强配置；可选")
+    dataset_version_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="离线训练实际使用的数据集版本 ID",
+    )
     dataset_path: Optional[str] = Field(None, description="数据集目录；默认由 data_yaml 推断")
     data_yaml: Optional[str] = Field(None, description="data.yaml 路径；默认读取 args.yaml")
     log_path: Optional[str] = Field(None, description="sbatch/训练日志路径；可选，会导入尾部日志")
@@ -389,6 +605,10 @@ class TrainingTaskResponse(ProjectBaseModel):
     img_size: int
     batch_size: int
     device: str
+    dataset_version_id: Optional[int] = None
+    dataset_version: Optional[str] = None
+    dataset_name: Optional[str] = None
+    dataset_content_hash: Optional[str] = None
     dataset_size: Optional[int] = None
     error_message: Optional[str] = None
     created_at: datetime
@@ -449,6 +669,7 @@ class ModelVersionBrief(ProjectBaseModel):
     version: str
     model_name: str
     model_type: str
+    dataset_version_id: Optional[int] = None
     map50: Optional[float] = None
     is_default: bool
     created_at: datetime
@@ -465,6 +686,8 @@ class ModelVersionResponse(ProjectBaseModel):
     scene_id: int
     scene_name: Optional[str] = None
     training_task_id: Optional[int] = None
+    dataset_version_id: Optional[int] = None
+    dataset_version: Optional[str] = None
     version: str
     model_name: str
     model_type: str

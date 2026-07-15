@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # ── 训练配置 ──────────────────────────────────────
     TRAIN_OUTPUT_DIR: str = "runs/train"
     DATASET_BASE_DIR: str = "datasets"
+    DATASET_VERSION_ROOT: str = "dataset_versions"
+    DATASET_STAGING_ROOT: str = "../.runtime/dataset-staging"
+    DATASET_STAGING_TTL_SECONDS: int = 3600
+    DATASET_OPERATION_TTL_SECONDS: int = 3600
+    DATASET_MAX_UPLOAD_MB: int = 20
+    DATASET_MAX_BATCH_SIZE: int = 500
     YOLO_CONFIG_DIR: str = ".ultralytics"
 
     # ── 检测推理配置 ──────────────────────────────────

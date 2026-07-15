@@ -12,21 +12,23 @@ export function detectCheckoutApi(file, options = {}) {
   })
 }
 
-export function calculateCheckoutApi(items) {
+export function calculateCheckoutApi(items, modelVersionId = null) {
   return request.post('/checkout/calculate', {
     items: items.map((item) => ({
       class_id: item.classId,
       quantity: item.quantity,
     })),
+    model_version_id: modelVersionId,
   })
 }
 
-export function createMockPaymentOrderApi(items) {
+export function createMockPaymentOrderApi(items, modelVersionId = null) {
   return request.post('/mock-pay/orders', {
     items: items.map((item) => ({
       class_id: item.classId ?? item.class_id,
       quantity: item.quantity ?? item.count,
     })),
+    model_version_id: modelVersionId,
   })
 }
 

@@ -54,4 +54,8 @@ def calculate_checkout(
         if next_count > 99:
             raise HTTPException(status_code=422, detail="单个商品数量不能超过 99")
         counts[item.class_id] = next_count
-    return detection_service.calculate_price(db, dict(counts))
+    return detection_service.calculate_price(
+        db,
+        dict(counts),
+        model_version_id=payload.model_version_id,
+    )

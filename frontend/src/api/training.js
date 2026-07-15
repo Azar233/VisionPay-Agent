@@ -8,6 +8,16 @@ export function getTrainingTasksApi() {
   return request.get('/training/tasks')
 }
 
+export function getDetectionModelVersionsApi(sceneId = null) {
+  return request.get('/training/model-versions', {
+    params: sceneId ? { scene_id: sceneId } : {},
+  })
+}
+
+export function setDefaultDetectionModelApi(modelVersionId) {
+  return request.post(`/training/model-versions/${modelVersionId}/set-default`)
+}
+
 export function importTrainingRunApi(data) {
   return request.post('/training/import-run', data, { timeout: 0 })
 }

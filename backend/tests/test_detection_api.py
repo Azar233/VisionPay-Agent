@@ -8,8 +8,8 @@ import pytest
 from PIL import Image
 from sqlalchemy.orm import sessionmaker
 
-from app.entity.db_models import DetectionScene, DetectionTask, ProductPrice, User
-from app.services.detection_service import DetectionService
+from app.entity.db_models import DetectionScene, DetectionTask, ModelVersion, ProductPrice, User
+from app.services.detection_service import DetectionService, DetectionServiceError
 
 
 def _auth_headers(client):
@@ -51,6 +51,57 @@ def test_camera_options_are_cpu_only_and_bounded():
         _camera_options({"conf": 0.01})
     with pytest.raises(ValueError, match="局域网"):
         _camera_options({"camera_url": "http://8.8.8.8:8080"})
+
+
+def test_resolve_model_prefers_selected_registry_version(
+    db_session,
+    monkeypatch,
+    tmp_path,
+):
+    from app.config.settings import settings
+    from app.services import detection_service as detection_module
+
+    scene = DetectionScene(
+        name="selected_model_scene",
+        display_name="Selected Model Scene",
+        category="retail",
+        class_names=["product"],
+    )
+    db_session.add(scene)
+    db_session.flush()
+    selected_weights = tmp_path / "selected" / "best.pt"
+    selected_weights.parent.mkdir(parents=True)
+    selected_weights.write_bytes(b"selected")
+    environment_weights = tmp_path / "environment-best.pt"
+    environment_weights.write_bytes(b"environment")
+    selected = ModelVersion(
+        scene_id=scene.id,
+        version="训练-selected",
+        model_name="selected",
+        model_type="yolov11n",
+        status="active",
+        model_path=str(selected_weights),
+        is_default=True,
+    )
+    db_session.add(selected)
+    db_session.commit()
+    db_session.refresh(selected)
+
+    monkeypatch.setattr(
+        detection_module.model_version_service,
+        "ensure_builtin",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(settings, "DETECTION_MODEL_PATH", str(environment_weights))
+
+    resolved_path, model_version_id = DetectionService()._resolve_model(db_session, scene.id)
+
+    assert resolved_path == selected_weights.resolve()
+    assert model_version_id == selected.id
+
+    selected_weights.unlink()
+    with pytest.raises(DetectionServiceError, match="当前检测模型.*文件不存在"):
+        DetectionService()._resolve_model(db_session, scene.id)
 
 
 def test_latest_camera_frame_discards_buffered_frames():
@@ -212,6 +263,8 @@ def test_price_summary_groups_detections_and_reports_missing_prices(db_session):
     assert summary["items"][0] == {
         "class_id": 0,
         "category_id": 1,
+        "product_id": None,
+        "product_key": None,
         "class_name": "1_puffed_food",
         "sku_name": "cola-330",
         "name": "可口可乐 330ml",

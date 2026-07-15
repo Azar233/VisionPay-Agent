@@ -40,6 +40,7 @@ from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
 from app.entity.db_models import ModelVersion, TrainingMetric, TrainingTask
+from app.services.model_version_service import model_version_service
 
 logger = get_logger(__name__)
 
@@ -649,8 +650,11 @@ class TrainingService:
             f"model_name={model_name}\n"
             f"data_yaml={data_yaml}\n"
             f"dataset_path={dataset_path}\n"
+            f"dataset_version_id={config.get('dataset_version_id')}\n"
+            f"dataset_content_hash={config.get('dataset_content_hash')}\n"
             f"device={device}",
         )
+        configured_dataset_size = config.get("dataset_size")
         task = TrainingTask(
             user_id=user_id,
             scene_id=scene_id,
@@ -664,9 +668,15 @@ class TrainingService:
             optimizer=str(config.get("optimizer", "SGD")),
             lr0=float(config.get("lr0", 0.01)),
             augment_config=config.get("augment_config"),
+            dataset_version_id=config.get("dataset_version_id"),
             dataset_path=str(dataset_path),
-            dataset_size=_count_dataset_images(dataset_path),
+            dataset_size=(
+                int(configured_dataset_size)
+                if configured_dataset_size is not None
+                else _count_dataset_images(dataset_path)
+            ),
             data_yaml=str(data_yaml),
+            dataset_content_hash=config.get("dataset_content_hash"),
         )
         db.add(task)
         db.commit()
@@ -879,6 +889,22 @@ class TrainingService:
             if results_monitor is not None:
                 results_monitor.join(timeout=10)
             TrainingService._parse_final_results(db, task_id, task_uuid, output_dir)
+            task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
+            if task is not None:
+                try:
+                    registered_model = model_version_service.register_training_output(
+                        db,
+                        task=task,
+                        weights_path=_best_weights_path(task_uuid),
+                    )
+                    if registered_model is not None:
+                        _append_task_log(
+                            task_uuid,
+                            f"model version auto-registered\nmodel_version_id={registered_model.id}",
+                        )
+                except Exception as exc:  # noqa: BLE001 - training result remains valid.
+                    logger.error("训练完成但模型版本自动登记失败 | task=%s error=%s", task_uuid, exc)
+                    _append_task_log(task_uuid, f"model version registration failed | error={exc}")
             _set_live_progress(
                 task_uuid,
                 _build_tqdm_progress(
@@ -1322,8 +1348,17 @@ class TrainingService:
         task.optimizer = optimizer
         task.lr0 = lr0
         task.augment_config = augment_config
+        if "dataset_version_id" in config:
+            task.dataset_version_id = config.get("dataset_version_id")
+        if "dataset_content_hash" in config:
+            task.dataset_content_hash = config.get("dataset_content_hash")
         task.dataset_path = str(dataset_path)
-        task.dataset_size = _count_dataset_images(dataset_path) if dataset_path.exists() else None
+        configured_dataset_size = config.get("dataset_size")
+        task.dataset_size = (
+            int(configured_dataset_size)
+            if configured_dataset_size is not None
+            else (_count_dataset_images(dataset_path) if dataset_path.exists() else None)
+        )
         task.data_yaml = str(data_yaml) if data_yaml is not None else None
         task.error_message = None if status == "completed" else f"imported offline run as {status}"
         task.started_at = datetime.fromtimestamp(args_yaml.stat().st_mtime if args_yaml.exists() else run_dir.stat().st_mtime)
@@ -1388,6 +1423,15 @@ class TrainingService:
 
         best_weights = expected_run_dir / "weights" / "best.pt"
         last_weights = expected_run_dir / "weights" / "last.pt"
+        registered_model = (
+            model_version_service.register_training_output(
+                db,
+                task=task,
+                weights_path=best_weights,
+            )
+            if status == "completed" and best_weights.exists()
+            else None
+        )
         return {
             "message": "离线训练结果已导入",
             "task": TrainingService._serialize_task(task),
@@ -1397,6 +1441,11 @@ class TrainingService:
             "results_csv": str(results_csv),
             "best_weights": str(best_weights) if best_weights.exists() else None,
             "last_weights": str(last_weights) if last_weights.exists() else None,
+            "model_version": (
+                model_version_service.serialize(db, registered_model)
+                if registered_model is not None
+                else None
+            ),
         }
 
     @staticmethod
@@ -1542,25 +1591,35 @@ class TrainingService:
                 {"is_default": False}
             )
 
-        model_version = ModelVersion(
-            scene_id=task.scene_id,
-            training_task_id=task.id,
-            version=version_value,
-            model_name=f"{task.model_name}_{task.task_uuid}",
-            model_type=task.model_name,
-            status="active",
-            model_path=str(exported_weights),
-            minio_url=None,
-            map50=_safe_float(overall.get("map50")),
-            map50_95=_safe_float(overall.get("map50_95")),
-            precision=_safe_float(overall.get("precision")),
-            recall=_safe_float(overall.get("recall")),
-            per_class_ap=report.get("per_class_ap") or None,
-            description=description,
-            file_size=exported_weights.stat().st_size,
-            is_default=set_default,
+        model_version = (
+            db.query(ModelVersion)
+            .filter(ModelVersion.training_task_id == task.id)
+            .order_by(ModelVersion.id)
+            .first()
         )
-        db.add(model_version)
+        if model_version is None:
+            model_version = ModelVersion(
+                scene_id=task.scene_id,
+                training_task_id=task.id,
+                status="active",
+                minio_url=None,
+            )
+            db.add(model_version)
+        model_version.dataset_version_id = task.dataset_version_id
+        model_version.version = version_value
+        model_version.model_name = f"{task.model_name}_{task.task_uuid}"
+        model_version.model_type = task.model_name
+        # Detection uses the best.pt produced by this exact training run.
+        # The exported copy remains an archive together with the report.
+        model_version.model_path = str(weights_path.resolve())
+        model_version.map50 = _safe_float(overall.get("map50"))
+        model_version.map50_95 = _safe_float(overall.get("map50_95"))
+        model_version.precision = _safe_float(overall.get("precision"))
+        model_version.recall = _safe_float(overall.get("recall"))
+        model_version.per_class_ap = report.get("per_class_ap") or None
+        model_version.description = description or model_version.description
+        model_version.file_size = weights_path.stat().st_size
+        model_version.is_default = set_default
         db.commit()
         db.refresh(model_version)
         _append_task_log(
@@ -1767,6 +1826,7 @@ class TrainingService:
 
     @staticmethod
     def _serialize_task(task: TrainingTask) -> dict[str, Any]:
+        dataset_version = getattr(task, "dataset_version", None)
         return {
             "id": task.id,
             "task_uuid": task.task_uuid,
@@ -1778,6 +1838,10 @@ class TrainingService:
             "device": task.device,
             "batch_size": task.batch_size,
             "img_size": task.img_size,
+            "dataset_version_id": task.dataset_version_id,
+            "dataset_version": getattr(dataset_version, "version", None),
+            "dataset_name": getattr(dataset_version, "name", None),
+            "dataset_content_hash": task.dataset_content_hash,
             "dataset_size": task.dataset_size,
             "dataset_path": task.dataset_path,
             "data_yaml": task.data_yaml,
@@ -1805,11 +1869,14 @@ class TrainingService:
     @staticmethod
     def _serialize_model_version(model_version: ModelVersion) -> dict[str, Any]:
         scene = getattr(model_version, "scene", None)
+        dataset_version = getattr(model_version, "dataset_version", None)
         return {
             "id": model_version.id,
             "scene_id": model_version.scene_id,
             "scene_name": getattr(scene, "name", None),
             "training_task_id": model_version.training_task_id,
+            "dataset_version_id": model_version.dataset_version_id,
+            "dataset_version": getattr(dataset_version, "version", None),
             "version": model_version.version,
             "model_name": model_version.model_name,
             "model_type": model_version.model_type,

@@ -6,6 +6,7 @@ import secrets
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -94,7 +95,11 @@ def create_mock_payment_order(
             raise HTTPException(status_code=422, detail="单个商品数量不能超过 99")
         counts[item.class_id] = next_count
 
-    summary = detection_service.calculate_price(db, dict(counts))
+    summary = detection_service.calculate_price(
+        db,
+        dict(counts),
+        model_version_id=payload.model_version_id,
+    )
     if not summary["pricing_complete"]:
         raise HTTPException(status_code=422, detail="订单中存在未定价商品，无法创建支付订单")
     if Decimal(str(summary["total_price"])) <= 0:

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
@@ -151,3 +152,306 @@ def test_training_start_uses_vision_pay_dataset(client, db_session, monkeypatch)
     assert captured["data_yaml"].endswith("datasets\\vision_pay\\data.yaml") or captured[
         "data_yaml"
     ].endswith("datasets/vision_pay/data.yaml")
+
+
+def test_training_start_uses_registered_dataset_version(
+    client,
+    db_session,
+    monkeypatch,
+    tmp_path,
+):
+    from app.api import training as training_api
+    from app.entity.db_models import DatasetVersion, DetectionScene, User
+
+    headers = _auth_headers(client)
+    user = db_session.query(User).filter_by(username="training_api_user").first()
+    scene = DetectionScene(
+        name="registered_dataset_scene",
+        display_name="Registered Dataset Scene",
+        description="Versioned training scene",
+        category="retail",
+        class_names=["product"],
+        created_by=user.id,
+    )
+    db_session.add(scene)
+    db_session.flush()
+    (tmp_path / "data.yaml").write_text(
+        "path: .\ntrain: images/train\nval: images/val\ntest: images/test\nnc: 1\nnames: [product]\n",
+        encoding="utf-8",
+    )
+    dataset = DatasetVersion(
+        scene_id=scene.id,
+        version="v-cluster-1",
+        name="Cluster Dataset",
+        status="ready",
+        is_current=True,
+        storage_path=str(tmp_path),
+        data_yaml_path="data.yaml",
+        content_hash="sha256:registered",
+        class_count=1,
+        train_image_count=80,
+        val_image_count=10,
+        test_image_count=10,
+        train_annotation_count=80,
+        val_annotation_count=10,
+        test_annotation_count=10,
+        created_by=user.id,
+    )
+    db_session.add(dataset)
+    db_session.commit()
+    db_session.refresh(dataset)
+
+    captured = {}
+
+    def fake_start_training(db, user_id, scene_id, config):
+        captured.update(config)
+        return SimpleNamespace(
+            id=321,
+            task_uuid="registered1",
+            status="pending",
+            model_name=config["model_name"],
+            epochs=config["epochs"],
+            dataset_size=config["dataset_size"],
+            dataset_version_id=config["dataset_version_id"],
+            dataset_version=SimpleNamespace(version=dataset.version),
+        )
+
+    monkeypatch.setattr(training_api.training_service, "start_training", fake_start_training)
+    response = client.post(
+        "/api/training/start",
+        headers=headers,
+        json={
+            "scene_id": scene.id,
+            "dataset_version_id": dataset.id,
+            "model_name": "yolov11s",
+            "epochs": 3,
+            "device": "cpu",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["dataset_version_id"] == dataset.id
+    assert response.json()["dataset_version"] == "v-cluster-1"
+    assert captured["dataset_content_hash"] == "sha256:registered"
+    assert captured["dataset_size"] == 100
+    assert captured["dataset_path"] == str(tmp_path.resolve())
+    assert captured["data_yaml"] == str((tmp_path / "data.yaml").resolve())
+
+
+def test_model_versions_register_builtin_best_pt(
+    client,
+    db_session,
+    monkeypatch,
+    tmp_path,
+):
+    from app.entity.db_models import DetectionScene, ModelVersion, User
+    from app.services.model_version_service import ModelVersionService
+
+    headers = _auth_headers(client)
+    user = db_session.query(User).filter_by(username="training_api_user").first()
+    scene = DetectionScene(
+        name="builtin_model_scene",
+        display_name="Builtin Model Scene",
+        category="retail",
+        class_names=["product"],
+        created_by=user.id,
+    )
+    db_session.add(scene)
+    db_session.commit()
+    db_session.refresh(scene)
+
+    builtin_weights = tmp_path / "best.pt"
+    builtin_weights.write_bytes(b"builtin-model")
+    monkeypatch.setattr(
+        ModelVersionService,
+        "_builtin_path",
+        staticmethod(lambda: builtin_weights.resolve()),
+    )
+
+    response = client.get(
+        "/api/training/model-versions",
+        headers=headers,
+        params={"scene_id": scene.id},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["version"] == "正式版v1.0"
+    assert items[0]["model_name"] == "backend/best.pt"
+    assert Path(items[0]["model_path"]) == builtin_weights.resolve()
+    assert items[0]["file_exists"] is True
+    assert items[0]["is_default"] is True
+    assert items[0]["dataset_version_id"] is None
+    assert items[0]["training_task_id"] is None
+    assert db_session.query(ModelVersion).filter_by(scene_id=scene.id).count() == 1
+
+    # Re-reading the registry is idempotent and must not create another v1.0.
+    repeated = client.get(
+        "/api/training/model-versions",
+        headers=headers,
+        params={"scene_id": scene.id},
+    )
+    assert repeated.status_code == 200
+    assert len(repeated.json()["items"]) == 1
+    db_session.expire_all()
+    assert db_session.query(ModelVersion).filter_by(scene_id=scene.id).count() == 1
+
+
+def test_training_outputs_create_distinct_versions_and_can_switch_detection_default(
+    client,
+    db_session,
+    monkeypatch,
+    tmp_path,
+):
+    from app.entity.db_models import (
+        DatasetVersion,
+        DetectionScene,
+        ModelVersion,
+        TrainingMetric,
+        TrainingTask,
+        User,
+    )
+    from app.services.model_version_service import ModelVersionService, model_version_service
+
+    headers = _auth_headers(client)
+    user = db_session.query(User).filter_by(username="training_api_user").first()
+    scene = DetectionScene(
+        name="retrained_dataset_scene",
+        display_name="Retrained Dataset Scene",
+        category="retail",
+        class_names=["product"],
+        created_by=user.id,
+    )
+    db_session.add(scene)
+    db_session.flush()
+    dataset = DatasetVersion(
+        scene_id=scene.id,
+        version="dataset-v3",
+        name="Dataset V3",
+        status="ready",
+        is_current=True,
+        storage_path=str(tmp_path / "dataset"),
+        data_yaml_path="data.yaml",
+        content_hash="sha256:dataset-v3",
+        created_by=user.id,
+    )
+    db_session.add(dataset)
+    db_session.flush()
+
+    tasks = []
+    weights = []
+    for index, optimizer in enumerate(("SGD", "AdamW"), start=1):
+        task = TrainingTask(
+            user_id=user.id,
+            scene_id=scene.id,
+            dataset_version_id=dataset.id,
+            task_uuid=f"repeat{index}",
+            status="completed",
+            model_name="yolov11n",
+            epochs=10 * index,
+            img_size=640,
+            batch_size=8,
+            device="cpu",
+            optimizer=optimizer,
+            lr0=0.01 / index,
+            augment_config={"degrees": index * 5},
+            current_epoch=10 * index,
+            dataset_content_hash=dataset.content_hash,
+        )
+        db_session.add(task)
+        db_session.flush()
+        db_session.add(
+            TrainingMetric(
+                task_id=task.id,
+                epoch=task.epochs,
+                box_loss=0.1 * index,
+                cls_loss=0.2 * index,
+                dfl_loss=0.3 * index,
+                precision=0.80 + index / 100,
+                recall=0.70 + index / 100,
+                map50=0.90 + index / 100,
+                map50_95=0.60 + index / 100,
+            )
+        )
+        weight_path = tmp_path / f"run-{index}" / "weights" / "best.pt"
+        weight_path.parent.mkdir(parents=True)
+        weight_path.write_bytes(f"trained-model-{index}".encode())
+        tasks.append(task)
+        weights.append(weight_path)
+    db_session.commit()
+
+    # Keep this test independent from the real backend/best.pt file.
+    monkeypatch.setattr(
+        ModelVersionService,
+        "_builtin_path",
+        staticmethod(lambda: (tmp_path / "missing-builtin.pt").resolve()),
+    )
+    first = model_version_service.register_training_output(
+        db_session,
+        task=tasks[0],
+        weights_path=weights[0],
+    )
+    second = model_version_service.register_training_output(
+        db_session,
+        task=tasks[1],
+        weights_path=weights[1],
+    )
+
+    assert first.id != second.id
+    assert first.dataset_version_id == second.dataset_version_id == dataset.id
+    assert first.is_default is True
+    assert second.is_default is False
+    assert db_session.query(ModelVersion).filter_by(dataset_version_id=dataset.id).count() == 2
+
+    # Registering the same training run again updates it instead of duplicating it.
+    same_first = model_version_service.register_training_output(
+        db_session,
+        task=tasks[0],
+        weights_path=weights[0],
+    )
+    assert same_first.id == first.id
+    assert db_session.query(ModelVersion).filter_by(dataset_version_id=dataset.id).count() == 2
+
+    listed = client.get(
+        "/api/training/model-versions",
+        headers=headers,
+        params={"scene_id": scene.id},
+    )
+    assert listed.status_code == 200
+    by_task = {item["training_task_uuid"]: item for item in listed.json()["items"]}
+    assert set(by_task) == {"repeat1", "repeat2"}
+    assert by_task["repeat2"]["dataset_version"] == "dataset-v3"
+    assert by_task["repeat2"]["dataset_content_hash"] == "sha256:dataset-v3"
+    assert by_task["repeat2"]["training_parameters"] == {
+        "model_name": "yolov11n",
+        "epochs": 20,
+        "img_size": 640,
+        "batch_size": 8,
+        "device": "cpu",
+        "optimizer": "AdamW",
+        "lr0": 0.005,
+        "augment_config": {"degrees": 10},
+    }
+    assert by_task["repeat2"]["training_result"]["map50"] == pytest.approx(0.92)
+    assert by_task["repeat2"]["training_result"]["box_loss"] == pytest.approx(0.2)
+
+    switched = client.post(
+        f"/api/training/model-versions/{second.id}/set-default",
+        headers=headers,
+    )
+    assert switched.status_code == 200
+    assert switched.json()["is_default"] is True
+    db_session.expire_all()
+    assert db_session.get(ModelVersion, first.id).is_default is False
+    assert db_session.get(ModelVersion, second.id).is_default is True
+
+    weights[0].unlink()
+    missing = client.post(
+        f"/api/training/model-versions/{first.id}/set-default",
+        headers=headers,
+    )
+    assert missing.status_code == 400
+    assert "模型文件不存在" in missing.json()["message"]
+    db_session.expire_all()
+    assert db_session.get(ModelVersion, second.id).is_default is True
