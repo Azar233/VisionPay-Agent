@@ -5,7 +5,12 @@
         <span class="brand-mark"><img src="/favicon.svg" alt="VisionPay" /></span>
         <div><strong>VisionPay</strong><span>自助视觉结算</span></div>
       </div>
-      <div class="header-status"><i></i><span>设备就绪</span><small>原型模式</small></div>
+      <div class="header-actions">
+        <button type="button" class="history-button" @click="router.push('/checkout/history')">
+          <el-icon><List /></el-icon>订单历史
+        </button>
+        <div class="header-status"><i></i><span>设备就绪</span><small>原型模式</small></div>
+      </div>
     </header>
 
     <main class="checkout-main">
@@ -91,7 +96,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Camera, Delete, InfoFilled, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Camera, Delete, InfoFilled, List, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
 import { calculateCheckoutApi, createMockPaymentOrderApi, detectCheckoutApi } from '@/api/checkout'
 import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
 
@@ -257,4 +262,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
 .settlement-panel { padding-top: 18px; border-top: 1px solid #dce2e7; }.settlement-summary { display: grid; grid-template-columns: 1fr auto; align-items: end; margin-bottom: 14px; }.settlement-summary span { color: #52616e; font-size: 13px; }.settlement-summary strong { grid-row: span 2; color: #152331; font-size: 28px; }.settlement-summary small { color: #9a6a16; font-size: 10px; }.settlement-panel > button { width: 100%; height: 50px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 0; border-radius: 6px; color: #fff; background: #1d4ed8; cursor: pointer; font-size: 15px; font-weight: 800; }.settlement-panel > button:hover { background: #173fae; }.settlement-panel > button:disabled { background: #aeb9c5; cursor: not-allowed; }.settlement-panel p { margin: 9px 0 0; color: #919ca6; text-align: center; font-size: 10px; }
 @media (max-width: 1050px) { .checkout-main { grid-template-columns: 1fr; }.capture-section { border-right: 0; border-bottom: 1px solid #d8dfe5; }.basket-section { min-height: 620px; }.camera-view { min-height: 0; } }
 @media (max-width: 640px) { .checkout-header { height: 66px; padding: 0 16px; }.header-status small { display: none; }.checkout-main { min-height: calc(100vh - 66px); }.capture-section, .basket-section { padding: 20px 16px; }.section-heading h1, .basket-heading h2 { font-size: 20px; }.source-tabs { width: 100%; }.source-tabs button { min-width: 0; }.capture-footer { grid-template-columns: 1fr; }.capture-footer div { border-right: 0; border-bottom: 1px solid #dfe5ea; }.capture-footer div:last-child { border-bottom: 0; }.product-item { grid-template-columns: 48px minmax(0, 1fr) 27px; }.product-thumb { width: 48px; height: 48px; }.quantity-control { grid-column: 2 / 3; justify-self: start; }.remove-button { grid-column: 3; grid-row: 1; } }
+.header-actions { display: flex; align-items: center; gap: 14px; }
+.history-button { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #cfd8df; border-radius: 5px; color: #526170; background: #fff; cursor: pointer; font-size: 12px; }
+.history-button:hover { border-color: #1d4ed8; color: #1d4ed8; }
 </style>

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import secrets
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.config.settings import settings
 from app.database.session import get_db
 from app.entity.db_models import MockPaymentOrder
@@ -18,6 +20,7 @@ from app.entity.schemas import (
     CheckoutCalculateRequest,
     MockPaymentConfirmRequest,
     MockPaymentOrderCreated,
+    MockPaymentOrderHistoryResponse,
     MockPaymentOrderView,
     MockPaymentStatusResponse,
 )
@@ -82,6 +85,7 @@ def _get_by_token(db: Session, payment_token: str) -> MockPaymentOrder:
 def create_mock_payment_order(
     payload: CheckoutCalculateRequest,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     counts: Counter[int] = Counter()
     for item in payload.items:
@@ -105,6 +109,7 @@ def create_mock_payment_order(
         amount=Decimal(str(summary["total_price"])),
         item_count=sum(counts.values()),
         items_snapshot=summary["items"],
+        user_id=current_user.id,
         created_at=now,
         updated_at=now,
         expires_at=now + timedelta(minutes=settings.MOCK_PAYMENT_EXPIRE_MINUTES),
@@ -113,6 +118,94 @@ def create_mock_payment_order(
     db.commit()
     db.refresh(order)
     return _serialize_order(order, include_token=True)
+
+
+@router.get(
+    "/orders/history",
+    response_model=MockPaymentOrderHistoryResponse,
+    summary="查询订单历史",
+)
+def list_order_history(
+    start_date: date | None = Query(None, description="开始日期，如 2026-07-01"),
+    end_date: date | None = Query(None, description="结束日期，如 2026-07-15"),
+    status: Literal["pending", "paid", "expired"] | None = Query(None, description="订单状态筛选"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页条数"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """查询当前登录用户创建的订单历史；超级管理员可查看全部。
+    查询前会自动把已过期的待支付订单标记为 expired。"""
+    now = datetime.utcnow()
+    db.query(MockPaymentOrder).filter(
+        MockPaymentOrder.status == "pending",
+        MockPaymentOrder.expires_at <= now,
+    ).update({"status": "expired", "updated_at": now}, synchronize_session=False)
+    db.commit()
+
+    query = db.query(MockPaymentOrder)
+    if not current_user.is_superuser:
+        query = query.filter(MockPaymentOrder.user_id == current_user.id)
+    if start_date:
+        query = query.filter(func.date(MockPaymentOrder.created_at) >= start_date)
+    if end_date:
+        query = query.filter(func.date(MockPaymentOrder.created_at) <= end_date)
+    if status:
+        query = query.filter(MockPaymentOrder.status == status)
+
+    total = query.count()
+    orders = (
+        query.order_by(MockPaymentOrder.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "items": [_serialize_order(o) for o in orders],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get(
+    "/orders/{order_uuid}",
+    response_model=MockPaymentOrderCreated,
+    summary="查询订单详情",
+)
+def get_order_detail(
+    order_uuid: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """查询订单详情（包含商品快照和支付 token）。"""
+    order = db.query(MockPaymentOrder).filter(MockPaymentOrder.order_uuid == order_uuid).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if not current_user.is_superuser and order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权查看该订单")
+    return _serialize_order(_expire_if_needed(db, order), include_token=True)
+
+
+@router.delete(
+    "/orders/{order_uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除订单",
+)
+def delete_order(
+    order_uuid: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """删除订单（仅本人或超级管理员）。"""
+    order = db.query(MockPaymentOrder).filter(MockPaymentOrder.order_uuid == order_uuid).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if not current_user.is_superuser and order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权删除该订单")
+    db.delete(order)
+    db.commit()
+    return None
 
 
 @router.get(

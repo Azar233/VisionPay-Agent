@@ -45,3 +45,32 @@ export function confirmMockPaymentApi(paymentToken, paymentMethod) {
     { skipGlobalError: true },
   )
 }
+
+/**
+ * 查询订单历史
+ * @param {Object} params
+ * @param {string} [params.start_date]
+ * @param {string} [params.end_date]
+ * @param {string} [params.status]
+ * @param {number} [params.page]
+ * @param {number} [params.page_size]
+ */
+export function getMockPaymentOrderHistoryApi(params = {}) {
+  return request.get('/mock-pay/orders/history', { params })
+}
+
+/**
+ * 查询订单详情
+ * @param {string} orderUuid
+ */
+export function getMockPaymentOrderDetailApi(orderUuid) {
+  return request.get(`/mock-pay/orders/${orderUuid}`)
+}
+
+/**
+ * 删除订单
+ * @param {string} orderUuid
+ */
+export function deleteMockPaymentOrderApi(orderUuid) {
+  return request.delete(`/mock-pay/orders/${orderUuid}`)
+}

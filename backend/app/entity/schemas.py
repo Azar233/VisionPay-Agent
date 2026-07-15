@@ -291,6 +291,7 @@ class MockPaymentOrderView(ProjectBaseModel):
     item_count: int
     items: list[dict]
     payment_method: Optional[str] = None
+    user_id: Optional[int] = None
     created_at: datetime
     expires_at: datetime
     paid_at: Optional[datetime] = None
@@ -306,6 +307,19 @@ class MockPaymentStatusResponse(ProjectBaseModel):
     status: Literal["pending", "paid", "expired"]
     expires_at: datetime
     paid_at: Optional[datetime] = None
+
+
+class MockPaymentOrderHistoryItem(MockPaymentOrderView):
+    """订单历史列表项。"""
+    pass
+
+
+class MockPaymentOrderHistoryResponse(ProjectBaseModel):
+    """订单历史分页响应。"""
+    items: list[MockPaymentOrderHistoryItem]
+    total: int
+    page: int
+    page_size: int
 
 
 # ══════════════════════════════════════════════════════════════

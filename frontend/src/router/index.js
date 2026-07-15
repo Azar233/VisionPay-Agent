@@ -68,6 +68,12 @@ const routes = [
         meta: { title: '价目表管理', icon: 'PriceTag' },
       },
       {
+        path: 'checkout/history',
+        name: 'CheckoutHistory',
+        component: () => import('@/views/CheckoutHistoryPage.vue'),
+        meta: { title: '结算历史' },
+      },
+      {
         path: 'checkout/payment',
         name: 'CustomerPayment',
         component: () => import('@/views/CustomerPaymentPage.vue'),
