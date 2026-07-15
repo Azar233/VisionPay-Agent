@@ -76,6 +76,7 @@ function handleCommand(command) {
   if (command === 'logout') {
     ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
       confirmButtonText: '退出', cancelButtonText: '取消', type: 'warning',
+      customClass: 'logout-confirm-dialog',
     }).then(() => { userStore.logout(); router.push('/login') }).catch(() => {})
   }
 }

@@ -13,12 +13,26 @@
       </div>
     </header>
 
-    <div class="workspace-grid">
-      <aside class="session-sidebar">
-        <el-button class="new-chat-button" :icon="Plus" @click="createNewChat">
-          新对话
-        </el-button>
-        <div class="session-heading">
+    <div :class="['workspace-grid', { 'sessions-collapsed': sessionsCollapsed, 'controls-collapsed': controlsCollapsed }]">
+      <aside :class="['session-sidebar', { collapsed: sessionsCollapsed }]">
+        <div class="session-toolbar">
+          <el-tooltip content="创建新对话" placement="right" :show-arrow="false" :disabled="!sessionsCollapsed">
+            <el-button class="new-chat-button" :icon="Plus" :circle="sessionsCollapsed" aria-label="创建新对话" @click="createNewChat">
+              <span v-if="!sessionsCollapsed">新对话</span>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip :content="sessionsCollapsed ? '展开历史对话' : '收起历史对话'" placement="right" :show-arrow="false">
+            <el-button
+              class="panel-toggle"
+              :icon="sessionsCollapsed ? DArrowRight : DArrowLeft"
+              circle
+              :aria-label="sessionsCollapsed ? '展开历史对话' : '收起历史对话'"
+              :aria-expanded="!sessionsCollapsed"
+              @click="sessionsCollapsed = !sessionsCollapsed"
+            />
+          </el-tooltip>
+        </div>
+        <div v-show="!sessionsCollapsed" class="session-heading">
           <span>历史对话</span>
           <el-button
             text
@@ -28,7 +42,7 @@
             @click="loadSessions"
           />
         </div>
-        <div class="session-list" v-loading="sessionLoading">
+        <div v-show="!sessionsCollapsed" class="session-list" v-loading="sessionLoading">
           <button
             v-for="session in agentStore.sessions"
             :key="session.session_uuid"
@@ -39,7 +53,7 @@
             <el-icon><ChatLineSquare /></el-icon>
             <span><strong>{{ session.title }}</strong><small>{{ formatSessionTime(session.last_message_at || session.created_at) }}</small></span>
             <el-tooltip content="删除对话" placement="right" :show-arrow="false">
-              <i role="button" tabindex="0" @click.stop="removeSession(session)" @keydown.enter.stop="removeSession(session)"><el-icon><Delete /></el-icon></i>
+              <i class="session-delete" role="button" tabindex="0" @click.stop="removeSession(session)" @keydown.enter.stop="removeSession(session)"><el-icon><Delete /></el-icon></i>
             </el-tooltip>
           </button>
           <div v-if="!sessionLoading && !agentStore.sessions.length" class="no-sessions">暂无历史对话</div>
@@ -74,13 +88,15 @@
             <div class="avatar"><el-icon><User v-if="message.role === 'user'" /><Cpu v-else /></el-icon></div>
             <div class="message-body">
               <div class="message-label">{{ message.role === 'user' ? '你' : 'VisionPay Agent' }}</div>
-              <div v-if="message.content" class="message-content" v-html="message.role === 'assistant' ? renderMarkdown(message.content) : escapeText(message.content)"></div>
-              <span v-if="message.role === 'assistant' && message.loading && message.content" class="stream-cursor"></span>
-              <div v-if="message.files?.length" class="message-files">
-                <span v-for="file in message.files" :key="file.name"><el-icon><Document /></el-icon>{{ file.name }}</span>
+              <div v-if="message.content || message.loading || message.tool || message.files?.length" class="message-bubble">
+                <div v-if="message.content" class="message-content" v-html="message.role === 'assistant' ? renderMarkdown(message.content) : escapeText(message.content)"></div>
+                <span v-if="message.role === 'assistant' && message.loading && message.content" class="stream-cursor"></span>
+                <div v-if="message.files?.length" class="message-files">
+                  <span v-for="file in message.files" :key="file.name"><el-icon><Document /></el-icon>{{ file.name }}</span>
+                </div>
+                <div v-if="message.loading && !message.content" class="thinking" aria-label="Agent 正在思考"><span></span><span></span><span></span></div>
+                <div v-if="message.tool" class="tool-state"><el-icon><Operation /></el-icon>{{ toolName(message.tool) }} 正在处理</div>
               </div>
-              <div v-if="message.loading && !message.content" class="thinking"><span></span><span></span><span></span></div>
-              <div v-if="message.tool" class="tool-state"><el-icon><Operation /></el-icon>{{ toolName(message.tool) }} 正在处理</div>
               <DetectionResultCard v-if="message.result" :result="message.result" />
             </div>
           </article>
@@ -109,45 +125,60 @@
         </footer>
       </main>
 
-      <aside class="control-rail">
-        <section class="rail-section">
-          <div class="section-title"><span>添加素材</span><em>{{ selectedFiles.length }}</em></div>
-          <button class="drop-zone" type="button" :disabled="busy" @click="openModePicker(inputMode)">
-            <el-icon><UploadFilled /></el-icon><strong>{{ modeCopy.title }}</strong><span>{{ modeCopy.hint }}</span>
-          </button>
-          <div class="input-modes">
-            <button type="button" :class="{ active: inputMode === 'single' }" @click="selectMode('single')"><el-icon><Picture /></el-icon>单图</button>
-            <button type="button" :class="{ active: inputMode === 'batch' }" @click="selectMode('batch')"><el-icon><Files /></el-icon>多图</button>
-            <button type="button" :class="{ active: inputMode === 'zip' }" @click="selectMode('zip')"><el-icon><Folder /></el-icon>ZIP</button>
-            <button type="button" :class="{ active: inputMode === 'video' }" @click="selectMode('video')"><el-icon><VideoPlay /></el-icon>视频</button>
-            <button type="button" :class="{ active: inputMode === 'camera' }" @click="selectMode('camera')"><el-icon><VideoCamera /></el-icon>实时</button>
-          </div>
-        </section>
+      <aside :class="['control-rail', { collapsed: controlsCollapsed }]">
+        <div class="rail-toolbar">
+          <span v-show="!controlsCollapsed">识别设置</span>
+          <el-tooltip :content="controlsCollapsed ? '展开识别设置' : '收起识别设置'" placement="left" :show-arrow="false">
+            <el-button
+              class="panel-toggle"
+              :icon="controlsCollapsed ? DArrowLeft : DArrowRight"
+              circle
+              :aria-label="controlsCollapsed ? '展开识别设置' : '收起识别设置'"
+              :aria-expanded="!controlsCollapsed"
+              @click="controlsCollapsed = !controlsCollapsed"
+            />
+          </el-tooltip>
+        </div>
+        <div v-show="!controlsCollapsed" class="control-rail-body">
+          <section class="rail-section">
+            <div class="section-title"><span>添加素材</span><em>{{ selectedFiles.length }}</em></div>
+            <button class="drop-zone" type="button" :disabled="busy" @click="openModePicker(inputMode)">
+              <el-icon><UploadFilled /></el-icon><strong>{{ modeCopy.title }}</strong><span>{{ modeCopy.hint }}</span>
+            </button>
+            <div class="input-modes">
+              <button type="button" :class="{ active: inputMode === 'single' }" @click="selectMode('single')"><el-icon><Picture /></el-icon>单图</button>
+              <button type="button" :class="{ active: inputMode === 'batch' }" @click="selectMode('batch')"><el-icon><Files /></el-icon>多图</button>
+              <button type="button" :class="{ active: inputMode === 'zip' }" @click="selectMode('zip')"><el-icon><Folder /></el-icon>ZIP</button>
+              <button type="button" :class="{ active: inputMode === 'video' }" @click="selectMode('video')"><el-icon><VideoPlay /></el-icon>视频</button>
+              <button type="button" :class="{ active: inputMode === 'camera' }" @click="selectMode('camera')"><el-icon><VideoCamera /></el-icon>实时</button>
+            </div>
+          </section>
 
-        <section class="rail-section parameters">
-          <div class="section-title"><span>推理参数</span></div>
-          <label>置信度 <strong>{{ Math.round(confidence * 100) }}%</strong></label>
-          <el-slider v-model="confidence" :min="0.05" :max="0.95" :step="0.05" :show-tooltip="false" :disabled="inputMode === 'camera'" />
-          <label>NMS IoU <strong>{{ Math.round(iou * 100) }}%</strong></label>
-          <el-slider v-model="iou" :min="0.05" :max="0.95" :step="0.05" :show-tooltip="false" :disabled="inputMode === 'camera'" />
-          <label>场景 ID <el-tooltip content="留空时使用首个可用场景" :show-arrow="false"><el-icon><QuestionFilled /></el-icon></el-tooltip></label>
-          <el-input-number v-model="sceneId" :min="1" :controls="false" placeholder="自动" :disabled="inputMode === 'camera'" />
-        </section>
+          <section class="rail-section parameters">
+            <div class="section-title"><span>推理参数</span></div>
+            <label>置信度 <strong>{{ Math.round(confidence * 100) }}%</strong></label>
+            <el-slider v-model="confidence" :min="0.05" :max="0.95" :step="0.05" :show-tooltip="false" :disabled="inputMode === 'camera'" />
+            <label>NMS IoU <strong>{{ Math.round(iou * 100) }}%</strong></label>
+            <el-slider v-model="iou" :min="0.05" :max="0.95" :step="0.05" :show-tooltip="false" :disabled="inputMode === 'camera'" />
+            <label>场景 ID <el-tooltip content="留空时使用首个可用场景" :show-arrow="false"><el-icon><QuestionFilled /></el-icon></el-tooltip></label>
+            <el-input-number v-model="sceneId" :min="1" :controls="false" placeholder="自动" :disabled="inputMode === 'camera'" />
+          </section>
 
-        <section v-if="inputMode !== 'camera'" class="rail-section action-section">
-          <el-button type="primary" :icon="Aim" :loading="directLoading" :disabled="!selectedFiles.length || agentStore.isLoading" @click="runDirectDetection">开始识别</el-button>
-          <span>使用当前参数分析所选素材</span>
-        </section>
+          <section v-if="inputMode !== 'camera'" class="rail-section action-section">
+            <el-button type="primary" :icon="Aim" :loading="directLoading" :disabled="!selectedFiles.length || agentStore.isLoading" @click="runDirectDetection">开始识别</el-button>
+            <span>使用当前参数分析所选素材</span>
+          </section>
 
-        <section v-if="latestResult && inputMode !== 'camera'" class="rail-section summary-section">
-          <div class="section-title"><span>本次汇总</span><em>#{{ latestResult.task_id }}</em></div>
-          <div class="summary-metrics"><div><strong>{{ latestResult.total_objects }}</strong><span>商品</span></div><div><strong>{{ latestResult.total_images }}</strong><span>图片</span></div></div>
-          <div v-if="latestResult.price_summary" class="summary-price">
-            <span>检测总价</span><strong>¥ {{ Number(latestResult.price_summary.total_price || 0).toFixed(2) }}</strong>
-            <small v-if="!latestResult.price_summary.pricing_complete">{{ latestResult.price_summary.unpriced_objects }} 件商品未定价</small>
-          </div>
-          <ul><li v-for="(count, name) in latestResult.class_counts" :key="name"><span>{{ name }}</span><strong>{{ count }}</strong></li></ul>
-        </section>
+          <section v-if="latestResult && inputMode !== 'camera'" class="rail-section summary-section">
+            <div class="section-title"><span>本次汇总</span><em>#{{ latestResult.task_id }}</em></div>
+            <div class="summary-metrics"><div><strong>{{ latestResult.total_objects }}</strong><span>商品</span></div><div><strong>{{ latestResult.total_images }}</strong><span>图片</span></div></div>
+            <div v-if="latestResult.price_summary" class="summary-price">
+              <span>检测总价</span><strong>¥ {{ Number(latestResult.price_summary.total_price || 0).toFixed(2) }}</strong>
+              <small v-if="!latestResult.price_summary.pricing_complete">{{ latestResult.price_summary.unpriced_objects }} 件商品未定价</small>
+            </div>
+            <ul><li v-for="(count, name) in latestResult.class_counts" :key="name"><span>{{ name }}</span><strong>{{ count }}</strong></li></ul>
+          </section>
+        </div>
       </aside>
     </div>
   </div>
@@ -156,7 +187,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Aim, ChatLineSquare, Close, Cpu, Delete, Document, Files, Folder, FolderOpened, Operation, Paperclip, Picture, Plus, Promotion, QuestionFilled, Refresh, UploadFilled, User, VideoCamera, VideoPause, VideoPlay, View } from '@element-plus/icons-vue'
+import { Aim, ChatLineSquare, Close, Cpu, DArrowLeft, DArrowRight, Delete, Document, Files, Folder, FolderOpened, Operation, Paperclip, Picture, Plus, Promotion, QuestionFilled, Refresh, UploadFilled, User, VideoCamera, VideoPause, VideoPlay, View } from '@element-plus/icons-vue'
 import DetectionResultCard from '@/components/DetectionResultCard.vue'
 import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
 import { createDetectionSessionApi, deleteDetectionSessionApi, detectBatchApi, detectSingleApi, detectVideoApi, detectZipApi, getAgentStatusApi, getDetectionSessionApi, getDetectionSessionsApi, getVideoStatusApi, saveDetectionExchangeApi, uploadChatFilesApi } from '@/api/detection'
@@ -181,6 +212,8 @@ const agentStatus = ref({ configured: false, model: 'DeepSeek' })
 const latestResult = ref(null)
 const inputMode = ref('single')
 const sessionLoading = ref(false)
+const sessionsCollapsed = ref(false)
+const controlsCollapsed = ref(false)
 const busy = computed(() => directLoading.value || agentStore.isLoading)
 const canSend = computed(() => inputText.value.trim() || selectedFiles.value.length)
 const clipboardExtensionByType = {
@@ -423,7 +456,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .workspace-grid { min-height: 0; flex: 1; display: grid; grid-template-columns: 210px minmax(0, 1fr) 296px; border: 1px solid $border-color; border-top: 0; border-radius: 0 0 $border-radius-md $border-radius-md; overflow: hidden; background: $surface-color; }.conversation-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: $surface-color; }.workspace-camera { flex: 1; margin: 22px; }.message-list { min-height: 0; flex: 1; overflow-y: auto; padding: 28px max(22px, calc((100% - 840px) / 2)); }.empty-state { min-height: 100%; display: grid; align-content: center; justify-items: center; text-align: center; }.empty-mark { width: 58px; height: 58px; display: grid; place-items: center; border: 1px solid $border-color; border-radius: 50%; color: #fff; background: $primary-color; font-size: 25px; box-shadow: 0 16px 34px rgba(99, 102, 241, .24); }.empty-state h2 { margin: 16px 0 22px; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 22px; }.starter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 680px; }.starter-grid button { padding: 14px; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; color: $text-regular; cursor: pointer; font-size: 12px; font-weight: 700; transition: border-color .2s, box-shadow .2s, transform .2s; }.starter-grid button:hover { border-color: $primary-color; color: $primary-color; background: $primary-soft; box-shadow: $ring-primary; transform: translateY(-1px); }
 .new-chat-enter-active { transform-origin: center; transition: opacity .42s ease, transform .42s cubic-bezier(.22, 1, .36, 1), filter .42s ease; will-change: opacity, transform, filter; }
 .new-chat-enter-from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(5px); }
-.session-sidebar { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 14px 12px; border-right: 1px solid $border-color; background: $surface-muted; }.new-chat-button { width: 100%; }.session-heading { display: flex; align-items: center; justify-content: space-between; height: 38px; margin-top: 10px; padding-left: 5px; color: $text-secondary; font-size: 11px; font-weight: 800; }.session-list { min-height: 80px; flex: 1; overflow-y: auto; }.session-item { width: 100%; display: grid; grid-template-columns: 18px minmax(0, 1fr) 22px; align-items: center; gap: 8px; margin-bottom: 5px; padding: 9px 6px 9px 9px; border: 0; border-radius: $border-radius-sm; color: $text-secondary; background: transparent; text-align: left; cursor: pointer; transition: background .2s, color .2s; }.session-item:hover { background: #fff; }.session-item.active { color: $primary-color; background: $primary-soft; }.session-item > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.session-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }.session-item small { color: $text-placeholder; font-size: 9px; }.session-item i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 3px; opacity: 0; color: $text-secondary; cursor: pointer; }.session-item:hover i, .session-item.active i { opacity: 1; }.session-item i:hover { color: $danger-color; background: #fff; }.no-sessions { padding: 22px 4px; color: $text-placeholder; text-align: center; font-size: 11px; }
+.session-sidebar { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 14px 12px; border-right: 1px solid $border-color; background: $surface-muted; }.new-chat-button { width: 100%; }.session-heading { display: flex; align-items: center; justify-content: space-between; height: 38px; margin-top: 10px; padding-left: 5px; color: $text-secondary; font-size: 11px; font-weight: 800; }.session-list { min-height: 80px; flex: 1; overflow-y: auto; }.session-item { width: 100%; display: grid; grid-template-columns: 18px minmax(0, 1fr) 22px; align-items: center; gap: 8px; margin-bottom: 5px; padding: 9px 6px 9px 9px; border: 0; border-radius: $border-radius-sm; color: $text-secondary; background: transparent; text-align: left; cursor: pointer; transition: background .2s, color .2s; }.session-item:hover { background: #fff; }.session-item.active { color: $primary-color; background: $primary-soft; }.session-item > .el-icon { font-size: 15px; }.session-item > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.session-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; }.session-item small { color: $text-placeholder; font-size: 9px; }.session-item .session-delete { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; opacity: 0; color: $text-secondary; cursor: pointer; transition: color .2s, background .2s, opacity .2s; }.session-item:hover .session-delete, .session-item.active .session-delete { opacity: 1; }.session-item .session-delete:hover { color: $danger-color; background: rgba(239, 68, 68, .1); }.session-item .session-delete:focus-visible { opacity: 1; outline: 2px solid $primary-color; outline-offset: 2px; }.no-sessions { padding: 22px 4px; color: $text-placeholder; text-align: center; font-size: 11px; }
 .message-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; margin-bottom: 24px; }.avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: $primary-color; }.message-row.user .avatar { color: $text-primary; background: $surface-muted; }.message-label { margin-bottom: 6px; font-size: 11px; font-weight: 800; color: $text-secondary; }.message-content { color: $text-primary; line-height: 1.7; font-size: 14px; word-break: break-word; }.message-content :deep(p) { margin: 0 0 8px; }.message-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }.message-files span { display: flex; align-items: center; gap: 5px; max-width: 240px; padding: 6px 9px; border: 1px solid $border-color; border-radius: $border-radius-sm; color: $text-secondary; background: $surface-muted; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.thinking { display: flex; gap: 5px; padding: 8px 0; }.thinking span { width: 7px; height: 7px; border-radius: 50%; background: $text-secondary; animation: pulse 1.1s infinite; }.thinking span:nth-child(2) { animation-delay: .15s; }.thinking span:nth-child(3) { animation-delay: .3s; }.tool-state { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: $border-radius-sm; color: $warning-color; background: color-mix(in srgb, $warning-color 12%, $surface-color); font-size: 11px; font-weight: 700; }.stream-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -2px; background: $primary-color; animation: cursor-blink .8s steps(1) infinite; }
 .composer { padding: 14px max(22px, calc((100% - 840px) / 2)) 18px; border-top: 1px solid $border-color; background: $surface-color; }.composer-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; align-items: end; gap: 9px; padding: 8px; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: 0 10px 24px rgba(15, 23, 42, .06); }.composer-row:focus-within { border-color: $primary-color; box-shadow: $ring-primary; }.composer-row :deep(.el-textarea__inner) { min-height: 34px !important; padding: 7px 4px; border: 0; box-shadow: none; }.file-input { display: none; }.selected-files { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; }.selected-files > span { min-width: 0; max-width: 220px; height: 38px; display: grid; grid-template-columns: 28px minmax(0, 1fr) 22px; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-muted; }.selected-files img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; }.selected-files b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.selected-files button { border: 0; background: transparent; cursor: pointer; color: $text-secondary; }.send-button { align-self: end; }
 .control-rail { overflow-y: auto; border-left: 1px solid $border-color; background: $surface-muted; }.rail-section { padding: 18px; border-bottom: 1px solid $border-color; }.section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; font-size: 12px; font-weight: 800; color: $text-primary; }.section-title em { font-style: normal; font-size: 11px; color: $text-secondary; }.drop-zone { width: 100%; height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1px dashed $border-strong; border-radius: $border-radius-md; background: $surface-color; color: $text-secondary; cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s; }.drop-zone .el-icon { color: $primary-color; font-size: 26px; }.drop-zone strong { font-size: 12px; color: $text-primary; }.drop-zone span { font-size: 10px; color: $text-secondary; }.drop-zone:hover { border-color: $primary-color; background: $primary-soft; box-shadow: $ring-primary; }.input-modes { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.input-modes button { height: 32px; border: 0; border-right: 1px solid $border-color; background: $surface-color; color: $text-secondary; font-size: 10px; cursor: pointer; font-weight: 700; }.input-modes button:last-child { border-right: 0; }.input-modes button:hover { color: $primary-color; background: $primary-soft; }.input-modes button.active { color: $primary-color; background: $primary-soft; font-weight: 800; }.parameters label { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 2px; color: $text-secondary; font-size: 11px; }.parameters label strong { color: $text-primary; }.parameters :deep(.el-input-number) { width: 100%; }.action-section { text-align: center; }.action-section .el-button { width: 100%; }.action-section > span { display: block; margin-top: 7px; color: $text-placeholder; font-size: 10px; }.summary-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: $border-color; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.summary-metrics div { padding: 12px; display: flex; flex-direction: column; background: $surface-color; }.summary-metrics strong { font-size: 21px; }.summary-metrics span { font-size: 10px; color: $text-secondary; }.summary-price { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 3px 8px; margin-top: 10px; padding: 10px; border-radius: $border-radius-sm; background: $surface-color; }.summary-price span { color: $text-secondary; font-size: 10px; }.summary-price strong { font-size: 17px; }.summary-price small { grid-column: 1 / -1; color: $warning-color; font-size: 9px; }.summary-section ul { list-style: none; padding: 0; margin: 10px 0 0; }.summary-section li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid $border-color; font-size: 11px; }
@@ -468,18 +501,42 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .agent-status.ready i { box-shadow: 0 0 0 4px rgba(36, 138, 61, .1); }
 
 .workspace-grid {
-  grid-template-columns: 196px minmax(0, 1fr) 288px;
+  --session-column: 196px;
+  --control-column: 288px;
+  position: relative;
+  grid-template-columns: var(--session-column) minmax(0, 1fr) var(--control-column);
   border: 1px solid $border-color;
   border-radius: $border-radius-md;
   background: rgba(255, 255, 255, .82);
   box-shadow: 0 16px 50px rgba(0, 0, 0, .05);
   backdrop-filter: blur(20px) saturate(120%);
   -webkit-backdrop-filter: blur(20px) saturate(120%);
+  transition: grid-template-columns .22s ease;
 }
+.workspace-grid.sessions-collapsed { --session-column: 0px; }
+.workspace-grid.controls-collapsed { --control-column: 0px; }
+.workspace-grid.sessions-collapsed .message-list,
+.workspace-grid.controls-collapsed .message-list { padding-top: 96px; }
+.workspace-grid.sessions-collapsed .workspace-camera,
+.workspace-grid.controls-collapsed .workspace-camera { margin-top: 88px; }
 
 .session-sidebar, .control-rail { background: rgba(245, 245, 247, .72); }
-.session-sidebar { padding: 16px 12px; }
-.new-chat-button { background: rgba(255, 255, 255, .8); border-color: $border-color; box-shadow: none; }
+.session-sidebar { grid-column: 1; padding: 16px 12px; }
+.conversation-panel { grid-column: 2; }
+.control-rail { grid-column: 3; }
+.session-toolbar { display: flex; align-items: center; gap: 8px; }
+.new-chat-button { min-width: 44px; min-height: 44px; flex: 1; color: $text-primary; background: $surface-color; border-color: $border-color; box-shadow: none; }
+.panel-toggle { width: 44px; min-width: 44px; height: 44px; color: $text-secondary; background: $surface-color; border-color: $border-color; }
+.panel-toggle:hover { color: $primary-color; background: $surface-color; border-color: color-mix(in srgb, $primary-color 35%, $border-color); }
+.panel-toggle:focus-visible { outline: 3px solid color-mix(in srgb, $primary-color 35%, transparent); outline-offset: 2px; }
+.session-sidebar.collapsed { position: absolute; top: 0; left: 0; z-index: 10; width: 0; height: 0; min-height: 0; padding: 0; overflow: visible; background: transparent; border: 0; }
+.session-sidebar.collapsed .session-toolbar { position: absolute; top: 12px; left: 12px; width: max-content; gap: 4px; padding: 4px; border: 1px solid $border-color; border-radius: 999px; background: $surface-muted; box-shadow: $shadow-md; }
+.session-sidebar.collapsed .new-chat-button { width: 44px; flex: none; order: 2; }
+.session-sidebar.collapsed .panel-toggle { order: 1; }
+.session-sidebar.collapsed .new-chat-button,
+.session-sidebar.collapsed .panel-toggle { color: $text-secondary; background: transparent; border-color: transparent; }
+.session-sidebar.collapsed .new-chat-button:hover,
+.session-sidebar.collapsed .panel-toggle:hover { color: $primary-color; background: $surface-color; }
 .session-heading { margin-top: 14px; padding-inline: 8px; font-weight: 500; letter-spacing: .02em; }
 .session-item { min-height: 46px; padding: 9px; border-radius: 10px; }
 .session-item strong { font-size: 12px; font-weight: 500; }
@@ -512,8 +569,16 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 }
 .starter-grid button:hover { color: $text-primary; background: #fff; border-color: $border-strong; box-shadow: $shadow-sm; transform: translateY(-1px); }
 
-.avatar { background: $primary-color; box-shadow: 0 4px 14px rgba(0, 113, 227, .16); }
+.message-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 24px; }
+.message-row.user { flex-direction: row-reverse; }
+.message-body { min-width: 0; max-width: min(78%, 760px); }
+.message-row.user .message-body { display: flex; flex-direction: column; align-items: flex-end; }
+.avatar { flex: 0 0 34px; background: $primary-color; box-shadow: 0 4px 14px rgba(0, 113, 227, .16); }
+.message-row.user .avatar { color: $primary-color; background: color-mix(in srgb, $primary-color 11%, $surface-color); box-shadow: none; }
 .message-label { font-weight: 600; }
+.message-row.user .message-label { text-align: right; }
+.message-bubble { width: fit-content; max-width: 100%; padding: 12px 16px; color: $text-primary; background: $surface-muted; border: 1px solid $border-color; border-radius: 6px 18px 18px 18px; box-shadow: $shadow-sm; }
+.message-row.user .message-bubble { color: #fff; background: $primary-color; border-color: transparent; border-radius: 18px 6px 18px 18px; box-shadow: 0 8px 22px rgba(0, 113, 227, .18); }
 .message-content { font-size: 15px; line-height: 1.65; }
 .message-content :deep(h1),
 .message-content :deep(h2),
@@ -527,6 +592,17 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .message-content :deep(blockquote) { margin: 10px 0; padding-left: 14px; color: $text-secondary; border-left: 3px solid $primary-color; }
 .message-content :deep(th),
 .message-content :deep(td) { padding: 7px 9px; color: $text-primary; border: 1px solid $border-color; }
+.message-content :deep(p:last-child) { margin-bottom: 0; }
+.message-row.user .message-content,
+.message-row.user .message-content :deep(h1),
+.message-row.user .message-content :deep(h2),
+.message-row.user .message-content :deep(h3),
+.message-row.user .message-content :deep(h4),
+.message-row.user .message-content :deep(strong),
+.message-row.user .message-content :deep(a) { color: #fff; }
+.message-row.user .message-files span { color: #fff; background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .28); }
+.message-bubble .thinking { padding: 3px 0; }
+.message-bubble .tool-state { margin-top: 8px; }
 
 .composer { padding-top: 12px; background: rgba(255, 255, 255, .88); }
 .composer-row {
@@ -538,6 +614,13 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .composer-row :deep(.el-textarea__inner) { font-size: 14px; }
 
 .rail-section { padding: 20px; }
+.control-rail { display: flex; flex-direction: column; overflow: hidden; }
+.rail-toolbar { min-height: 60px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 8px 20px; border-bottom: 1px solid $border-color; color: $text-primary; background: $surface-muted; font-size: 13px; font-weight: 600; }
+.control-rail.collapsed { position: absolute; top: 0; right: 0; z-index: 10; width: 0; height: 0; min-height: 0; padding: 0; overflow: visible; background: transparent; border: 0; }
+.control-rail.collapsed .rail-toolbar { position: absolute; top: 12px; right: 12px; width: 52px; min-height: 52px; justify-content: center; padding: 4px; border: 1px solid $border-color; border-radius: 999px; background: $surface-muted; box-shadow: $shadow-md; }
+.control-rail.collapsed .panel-toggle { color: $text-secondary; background: transparent; border-color: transparent; }
+.control-rail.collapsed .panel-toggle:hover { color: $primary-color; background: $surface-color; }
+.control-rail-body { min-height: 0; flex: 1; overflow-y: auto; }
 .section-title { font-size: 13px; font-weight: 600; }
 .drop-zone {
   height: 128px;
@@ -562,7 +645,41 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .action-section .el-button { min-height: 46px; }
 .action-section > span { margin-top: 9px; font-size: 11px; }
 
-@media (max-width: 1180px) { .workspace-grid { grid-template-columns: 170px minmax(0, 1fr) 250px; }.rail-section { padding: 14px; } }
-@media (max-width: 980px) { .workspace-grid { grid-template-columns: 1fr; }.session-sidebar { min-height: 150px; max-height: 190px; border-right: 0; border-bottom: 1px solid $border-color; }.session-list { display: flex; gap: 6px; overflow-x: auto; }.session-item { min-width: 170px; max-width: 210px; }.control-rail { display: grid; grid-template-columns: repeat(2, 1fr); border-left: 0; border-top: 1px solid $border-color; max-height: 300px; }.conversation-panel { min-height: 620px; }.summary-section { display: none; } }
-@media (max-width: 640px) { .workspace { min-height: 100%; }.workspace-header { padding: 10px 12px; }.workspace-header h1 { font-size: 17px; }.agent-status { display: none; }.message-list, .composer { padding-left: 12px; padding-right: 12px; }.starter-grid { grid-template-columns: 1fr; width: 100%; }.control-rail { grid-template-columns: 1fr; max-height: none; }.parameters { display: none; }.conversation-panel { min-height: 560px; } }
+@media (max-width: 1180px) {
+  .workspace-grid { --session-column: 170px; --control-column: 250px; }
+  .workspace-grid.sessions-collapsed { --session-column: 0px; }
+  .workspace-grid.controls-collapsed { --control-column: 0px; }
+  .rail-section { padding: 14px; }
+}
+@media (max-width: 980px) {
+  .workspace-grid { grid-template-columns: 1fr; transition: none; }
+  .session-sidebar, .conversation-panel, .control-rail { grid-column: 1; }
+  .session-sidebar { min-height: 150px; max-height: 190px; border-right: 0; border-bottom: 1px solid $border-color; }
+  .session-sidebar.collapsed { min-height: 0; max-height: 0; }
+  .session-list { display: flex; gap: 6px; overflow-x: auto; }
+  .session-item { min-width: 170px; max-width: 210px; }
+  .control-rail { max-height: 360px; border-left: 0; border-top: 1px solid $border-color; }
+  .control-rail.collapsed { min-height: 0; max-height: 0; }
+  .control-rail-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .conversation-panel { min-height: 620px; }
+  .summary-section { display: none; }
+}
+@media (max-width: 640px) {
+  .workspace { min-height: 100%; }
+  .workspace-header { padding: 10px 12px; }
+  .workspace-header h1 { font-size: 17px; }
+  .agent-status { display: none; }
+  .message-list, .composer { padding-left: 12px; padding-right: 12px; }
+  .message-body { max-width: calc(100% - 46px); }
+  .message-bubble { padding: 10px 13px; }
+  .starter-grid { grid-template-columns: 1fr; width: 100%; }
+  .control-rail { max-height: none; }
+  .control-rail-body { grid-template-columns: 1fr; }
+  .parameters { display: none; }
+  .conversation-panel { min-height: 560px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-grid { transition: none; }
+}
 </style>
