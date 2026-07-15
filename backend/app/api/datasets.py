@@ -132,15 +132,18 @@ def _run_add_product_operation(
             token=payload.staging_token,
             dataset_id=dataset_id,
             user_id=user_id,
+            mode=payload.mode,
             images=payload.images,
         )
-        dataset, product, added = dataset_workspace_service.add_product(
+        dataset, product, added = dataset_workspace_service.add_samples(
             db,
             dataset_id=dataset_id,
-            name=payload.name,
-            unit_price=payload.unit_price,
+            mode=payload.mode,
             files=[item[:3] for item in reviewed_files],
             annotations=[item[3] for item in reviewed_files],
+            existing_product_id=payload.existing_product_id,
+            name=payload.name,
+            unit_price=payload.unit_price,
             class_name=payload.class_name,
             barcode=payload.barcode,
             product_key=payload.product_key,
@@ -158,11 +161,11 @@ def _run_add_product_operation(
             task_id,
             status="completed",
             progress=100,
-            message="商品图片、标注与索引已更新",
+            message="人工样本、标注与索引已更新",
             result={
                 "dataset": jsonable_encoder(dataset_service.serialize(dataset)),
-                "product_id": product.id,
-                "product_key": product.product_key,
+                "product_id": product.id if product else None,
+                "product_key": product.product_key if product else None,
                 "images_added": added,
             },
         )
@@ -416,10 +419,11 @@ def create_derive_dataset_task(
 @router.post(
     "/{dataset_id}/products/stage",
     response_model=DatasetProductStagingResponse,
-    summary="暂存商品图片并自动生成候选检测框",
+    summary="暂存待人工矩形框标注的训练或场景图片",
 )
 async def stage_dataset_product_images(
     dataset_id: int,
+    mode: Literal["train_new", "train_existing", "scene"] = Form(...),
     train_files: list[UploadFile] = File(default=[]),
     val_files: list[UploadFile] = File(default=[]),
     test_files: list[UploadFile] = File(default=[]),
@@ -451,6 +455,7 @@ async def stage_dataset_product_images(
             db,
             dataset_id=dataset_id,
             user_id=current_user.id,
+            mode=mode,
             files=uploads,
         )
     except (DatasetNotFoundError, DatasetConflictError, DatasetLifecycleError) as exc:
@@ -461,7 +466,7 @@ async def stage_dataset_product_images(
 @router.post(
     "/{dataset_id}/products/commit",
     response_model=DatasetMutationResponse,
-    summary="确认审核后的检测框并写入商品图片与 YOLO 标注",
+    summary="确认人工检测框并写入训练或 val/test 场景样本",
 )
 def commit_dataset_product_images(
     dataset_id: int,
@@ -474,15 +479,18 @@ def commit_dataset_product_images(
             token=payload.staging_token,
             dataset_id=dataset_id,
             user_id=current_user.id,
+            mode=payload.mode,
             images=payload.images,
         )
-        dataset, product, added = dataset_workspace_service.add_product(
+        dataset, product, added = dataset_workspace_service.add_samples(
             db,
             dataset_id=dataset_id,
-            name=payload.name,
-            unit_price=payload.unit_price,
+            mode=payload.mode,
             files=[item[:3] for item in reviewed_files],
             annotations=[item[3] for item in reviewed_files],
+            existing_product_id=payload.existing_product_id,
+            name=payload.name,
+            unit_price=payload.unit_price,
             class_name=payload.class_name,
             barcode=payload.barcode,
             product_key=payload.product_key,
@@ -497,8 +505,8 @@ def commit_dataset_product_images(
             pass
         return {
             "dataset": dataset_service.serialize(dataset),
-            "product_id": product.id,
-            "product_key": product.product_key,
+            "product_id": product.id if product else None,
+            "product_key": product.product_key if product else None,
             "images_added": added,
         }
     except (DatasetNotFoundError, DatasetConflictError, DatasetLifecycleError) as exc:
@@ -509,7 +517,7 @@ def commit_dataset_product_images(
 @router.post(
     "/{dataset_id}/products/commit-task",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="后台写入商品图片与标注并返回实时进度任务",
+    summary="后台写入人工样本与标注并返回实时进度任务",
 )
 def create_commit_dataset_product_task(
     dataset_id: int,
@@ -519,9 +527,9 @@ def create_commit_dataset_product_task(
     current_user=Depends(get_current_user),
 ):
     operation = dataset_operation_store.create(
-        operation="add_product",
+        operation="add_samples",
         user_id=current_user.id,
-        message="添加商品任务已创建，等待处理",
+        message="添加样本任务已创建，等待处理",
     )
     background_tasks.add_task(
         _run_add_product_operation,
@@ -558,7 +566,7 @@ def discard_dataset_product_stage(
 @router.post(
     "/{dataset_id}/products",
     response_model=DatasetMutationResponse,
-    summary="向派生草稿添加商品图片并生成全图 YOLO 标注",
+    summary="已停用：旧版全图自动标注入口",
 )
 async def add_dataset_product(
     dataset_id: int,
@@ -573,35 +581,12 @@ async def add_dataset_product(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    del current_user
-    uploads: list[tuple[str, str, bytes]] = []
-    for split, items in (
-        ("train", train_files),
-        ("val", val_files),
-        ("test", test_files),
-    ):
-        for item in items:
-            uploads.append((split, item.filename or "image.jpg", await item.read()))
-    try:
-        dataset, product, added = dataset_workspace_service.add_product(
-            db,
-            dataset_id=dataset_id,
-            name=name,
-            unit_price=unit_price,
-            files=uploads,
-            class_name=class_name,
-            barcode=barcode,
-            product_key=product_key,
-        )
-        return {
-            "dataset": dataset_service.serialize(dataset),
-            "product_id": product.id,
-            "product_key": product.product_key,
-            "images_added": added,
-        }
-    except (DatasetNotFoundError, DatasetConflictError, DatasetLifecycleError) as exc:
-        db.rollback()
-        _raise_service_error(exc)
+    del dataset_id, name, unit_price, class_name, barcode, product_key
+    del train_files, val_files, test_files, db, current_user
+    raise HTTPException(
+        status_code=410,
+        detail="全图自动标注接口已停用，请使用图片暂存、人工矩形框标注和提交接口",
+    )
 
 
 @router.delete(

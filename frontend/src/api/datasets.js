@@ -24,13 +24,6 @@ export function deriveDatasetVersionTaskApi(datasetId, data) {
   return request.post(`/datasets/${datasetId}/derive-task`, data)
 }
 
-export function addDatasetProductApi(datasetId, formData) {
-  return request.post(`/datasets/${datasetId}/products`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 0,
-  })
-}
-
 export function stageDatasetProductImagesApi(datasetId, formData) {
   return request.post(`/datasets/${datasetId}/products/stage`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

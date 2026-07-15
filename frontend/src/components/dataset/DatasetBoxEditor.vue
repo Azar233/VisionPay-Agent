@@ -43,8 +43,8 @@
             />
           </g>
           <g class="box-label" :transform="`translate(${box.x1} ${Math.max(labelHeight, box.y1)})`">
-            <rect :x="0" :y="-labelHeight" :width="labelWidth(index)" :height="labelHeight" rx="3" />
-            <text :x="labelHeight * 0.28" :y="-labelHeight * 0.28" :font-size="labelHeight * 0.55">目标 {{ index + 1 }}</text>
+            <rect :x="0" :y="-labelHeight" :width="labelWidth(index, box)" :height="labelHeight" rx="3" />
+            <text :x="labelHeight * 0.28" :y="-labelHeight * 0.28" :font-size="labelHeight * 0.55">{{ boxLabel(index, box) }}</text>
           </g>
         </g>
       </svg>
@@ -60,29 +60,25 @@ const props = defineProps({
   imageUrl: { type: String, required: true },
   imageWidth: { type: Number, required: true },
   imageHeight: { type: Number, required: true },
+  productOptions: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:modelValue', 'change'])
 const svgRef = ref(null)
 const selectedIndex = ref(-1)
 const dragState = ref(null)
-
 const boxes = computed(() => props.modelValue)
 const handleRadius = computed(() => Math.max(5, Math.min(props.imageWidth, props.imageHeight) * 0.012))
 const labelHeight = computed(() => Math.max(18, Math.min(props.imageWidth, props.imageHeight) * 0.045))
 
-function labelWidth(index) {
-  return labelHeight.value * (index > 8 ? 3.5 : 3.1)
+function productName(productId) {
+  const product = props.productOptions.find((item) => Number(item.product_id) === Number(productId))
+  return product?.display_name || product?.class_name || ''
 }
-
-function cloneBoxes() {
-  return boxes.value.map((item) => ({ ...item }))
-}
-
-function updateBoxes(next) {
-  emit('update:modelValue', next)
-}
-
+function boxLabel(index, box) { return productName(box.product_id) || `目标 ${index + 1}` }
+function labelWidth(index, box) { return Math.max(labelHeight.value * 3.2, boxLabel(index, box).length * labelHeight.value * 0.72) }
+function cloneBoxes() { return boxes.value.map((item) => ({ ...item })) }
+function updateBoxes(next) { emit('update:modelValue', next) }
 function point(event) {
   const svg = svgRef.value
   const cursor = svg.createSVGPoint()
@@ -94,53 +90,44 @@ function point(event) {
     y: Math.max(0, Math.min(props.imageHeight, transformed.y)),
   }
 }
-
-function capture(event) {
-  svgRef.value?.setPointerCapture?.(event.pointerId)
-}
-
+function capture(event) { svgRef.value?.setPointerCapture?.(event.pointerId) }
 function startDraw(event) {
   const start = point(event)
   const next = cloneBoxes()
-  next.push({ x1: start.x, y1: start.y, x2: start.x, y2: start.y })
+  next.push({ x1: start.x, y1: start.y, x2: start.x, y2: start.y, product_id: null })
   selectedIndex.value = next.length - 1
   dragState.value = { type: 'draw', index: selectedIndex.value, start }
   updateBoxes(next)
   capture(event)
 }
-
 function startMove(event, index) {
   selectedIndex.value = index
   dragState.value = { type: 'move', index, start: point(event), original: { ...boxes.value[index] } }
   capture(event)
 }
-
 function startResize(event, index, position) {
   selectedIndex.value = index
-  dragState.value = { type: 'resize', index, position, start: point(event), original: { ...boxes.value[index] } }
+  dragState.value = { type: 'resize', index, position, original: { ...boxes.value[index] } }
   capture(event)
 }
-
 function continueDrag(event) {
   const state = dragState.value
   if (!state) return
   const current = point(event)
   const next = cloneBoxes()
   const minimum = 2
-
   if (state.type === 'draw') {
     next[state.index] = {
-      x1: Math.min(state.start.x, current.x),
-      y1: Math.min(state.start.y, current.y),
-      x2: Math.max(state.start.x, current.x),
-      y2: Math.max(state.start.y, current.y),
+      ...next[state.index],
+      x1: Math.min(state.start.x, current.x), y1: Math.min(state.start.y, current.y),
+      x2: Math.max(state.start.x, current.x), y2: Math.max(state.start.y, current.y),
     }
   } else if (state.type === 'move') {
     const width = state.original.x2 - state.original.x1
     const height = state.original.y2 - state.original.y1
     const x1 = Math.max(0, Math.min(props.imageWidth - width, state.original.x1 + current.x - state.start.x))
     const y1 = Math.max(0, Math.min(props.imageHeight - height, state.original.y1 + current.y - state.start.y))
-    next[state.index] = { x1, y1, x2: x1 + width, y2: y1 + height }
+    next[state.index] = { ...state.original, x1, y1, x2: x1 + width, y2: y1 + height }
   } else {
     const resized = { ...state.original }
     if (state.position.includes('w')) resized.x1 = Math.min(current.x, resized.x2 - minimum)
@@ -151,7 +138,6 @@ function continueDrag(event) {
   }
   updateBoxes(next)
 }
-
 function finishDrag() {
   const state = dragState.value
   if (!state) return
@@ -165,16 +151,12 @@ function finishDrag() {
   }
   emit('change')
 }
-
 function handles(box) {
   return [
-    { position: 'nw', x: box.x1, y: box.y1 },
-    { position: 'ne', x: box.x2, y: box.y1 },
-    { position: 'sw', x: box.x1, y: box.y2 },
-    { position: 'se', x: box.x2, y: box.y2 },
+    { position: 'nw', x: box.x1, y: box.y1 }, { position: 'ne', x: box.x2, y: box.y1 },
+    { position: 'sw', x: box.x1, y: box.y2 }, { position: 'se', x: box.x2, y: box.y2 },
   ]
 }
-
 function removeSelected() {
   if (selectedIndex.value < 0) return
   const next = cloneBoxes()
@@ -183,12 +165,7 @@ function removeSelected() {
   updateBoxes(next)
   emit('change')
 }
-
-function clearBoxes() {
-  selectedIndex.value = -1
-  updateBoxes([])
-  emit('change')
-}
+function clearBoxes() { selectedIndex.value = -1; updateBoxes([]); emit('change') }
 </script>
 
 <style scoped lang="scss">

@@ -16,8 +16,8 @@ const stage = {
       filename: 'one.jpg',
       width: 100,
       height: 80,
-      boxes: [{ x1: 10, y1: 8, x2: 90, y2: 72 }],
-      needs_review: false,
+      boxes: [],
+      needs_review: true,
     },
     {
       image_id: 'image-2',
@@ -37,9 +37,9 @@ describe('dataset annotation review helpers', () => {
     const files = { train: [{ name: 'one.jpg' }], val: [{ name: 'two.jpg' }], test: [] }
     const images = attachFilesToStagedImages(stage, files, (file) => `blob:${file.name}`)
 
-    expect(images[0]).toMatchObject({ previewUrl: 'blob:one.jpg', reviewed: true })
+    expect(images[0]).toMatchObject({ previewUrl: 'blob:one.jpg', reviewed: false, boxes: [] })
     expect(images[1]).toMatchObject({ previewUrl: 'blob:two.jpg', reviewed: false })
-    expect(annotationReviewSummary(images)).toEqual({ total: 2, boxes: 1, missing: 1, pending: 1 })
+    expect(annotationReviewSummary(images)).toEqual({ total: 2, boxes: 0, missing: 2, pending: 2 })
   })
 
   it('builds a compact reviewed-box commit payload', () => {
@@ -52,17 +52,35 @@ describe('dataset annotation review helpers', () => {
     images[1].reviewed = true
     const payload = buildDatasetProductCommitPayload(
       stage,
-      { name: ' Cola ', class_name: '', unit_price: 3.5, barcode: '' },
+      { mode: 'train_new', name: ' Cola ', class_name: 'cola', unit_price: 3.5, barcode: '' },
       images,
     )
 
     expect(payload.name).toBe('Cola')
-    expect(payload.class_name).toBe('Cola')
+    expect(payload.class_name).toBe('cola')
+    expect(payload.mode).toBe('train_new')
     expect(payload.barcode).toBeNull()
     expect(payload.images[1]).toEqual({
       image_id: 'image-2',
       reviewed: true,
-      boxes: [{ x1: 4, y1: 5, x2: 60, y2: 70 }],
+      boxes: [{ x1: 4, y1: 5, x2: 60, y2: 70, product_id: null }],
     })
+  })
+
+  it('includes an existing product id on every scene box', () => {
+    const images = attachFilesToStagedImages(
+      stage,
+      { train: [{ name: 'one.jpg' }], val: [{ name: 'two.jpg' }], test: [] },
+      () => 'blob:test',
+    )
+    images[0].boxes = [{ x1: 1, y1: 2, x2: 20, y2: 30, product_id: 7 }]
+    images[0].reviewed = true
+    const payload = buildDatasetProductCommitPayload(
+      stage,
+      { mode: 'scene', name: '', class_name: '', unit_price: null, barcode: '' },
+      images,
+    )
+    expect(payload.images[0].boxes[0].product_id).toBe(7)
+    expect(payload.name).toBeNull()
   })
 })

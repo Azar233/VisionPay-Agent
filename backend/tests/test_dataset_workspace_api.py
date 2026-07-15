@@ -142,14 +142,16 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
     missing_train_response = client.post(
         f"/api/datasets/{derived['id']}/products/stage",
         headers=headers,
+        data={"mode": "train_new"},
         files=[("val_files", ("validation-only.jpg", _jpeg_bytes(), "image/jpeg"))],
     )
     assert missing_train_response.status_code == 400
-    assert "训练集文件夹至少需要一张图片" in missing_train_response.json()["message"]
+    assert "训练样本模式只能上传非空的 train 文件夹" in missing_train_response.json()["message"]
 
     flat_stage_response = client.post(
         f"/api/datasets/{derived['id']}/products/stage",
         headers=headers,
+        data={"mode": "train_new"},
         files=[("train_files", ("flat.jpg", _jpeg_bytes(), "image/jpeg"))],
     )
     assert flat_stage_response.status_code == 200, flat_stage_response.text
@@ -161,6 +163,7 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
         headers=headers,
         json={
             "staging_token": flat_stage["staging_token"],
+            "mode": "train_new",
             "name": "Invalid",
             "unit_price": 1,
             "images": [
@@ -183,19 +186,14 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
     stage_response = client.post(
         f"/api/datasets/{derived['id']}/products/stage",
         headers=headers,
-        files=[
-            ("train_files", ("third-train.jpg", upload, "image/jpeg")),
-            ("val_files", ("third-val.jpg", upload, "image/jpeg")),
-            ("test_files", ("third-test.jpg", upload, "image/jpeg")),
-        ],
+        data={"mode": "train_new"},
+        files=[("train_files", ("third-train.jpg", upload, "image/jpeg"))],
     )
     assert stage_response.status_code == 200, stage_response.text
     staged = stage_response.json()
-    assert staged["total_images"] == 3
-    assert all(item["boxes"] for item in staged["images"])
-    proposed = staged["images"][0]["boxes"][0]
-    assert 10 <= proposed["x1"] <= 25
-    assert 90 <= proposed["x2"] <= 110
+    assert staged["total_images"] == 1
+    assert staged["needs_review_count"] == 1
+    assert staged["images"][0]["boxes"] == []
 
     reviewed_images = [
         {
@@ -210,6 +208,7 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
         headers=headers,
         json={
             "staging_token": staged["staging_token"],
+            "mode": "train_new",
             "name": "Third",
             "unit_price": 9.9,
             "class_name": "third_product",
@@ -226,9 +225,9 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
     add_status = add_status_response.json()
     assert add_status["status"] == "completed"
     assert add_status["progress"] == 100
-    assert add_status["operation"] == "add_product"
+    assert add_status["operation"] == "add_samples"
     added = add_status["result"]
-    assert added["images_added"] == 3
+    assert added["images_added"] == 1
     assert added["dataset"]["class_count"] == 3
     third_product_id = added["product_id"]
     assert not (staging / staged["staging_token"]).exists()
@@ -246,7 +245,103 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
     assert 0.69 < float(box_width) < 0.71
     assert 0.75 < float(box_height) < 0.77
 
+    existing_product_id = baseline["classes"][1]["product_id"]
+    existing_stage_response = client.post(
+        f"/api/datasets/{derived['id']}/products/stage",
+        headers=headers,
+        data={"mode": "train_existing"},
+        files=[("train_files", ("second-extra-angle.jpg", upload, "image/jpeg"))],
+    )
+    assert existing_stage_response.status_code == 200, existing_stage_response.text
+    existing_stage = existing_stage_response.json()
+    existing_commit = client.post(
+        f"/api/datasets/{derived['id']}/products/commit",
+        headers=headers,
+        json={
+            "staging_token": existing_stage["staging_token"],
+            "mode": "train_existing",
+            "existing_product_id": existing_product_id,
+            "images": [
+                {
+                    "image_id": existing_stage["images"][0]["image_id"],
+                    "reviewed": True,
+                    "boxes": [{"x1": 18, "y1": 12, "x2": 102, "y2": 88}],
+                }
+            ],
+        },
+    )
+    assert existing_commit.status_code == 200, existing_commit.text
+    assert existing_commit.json()["product_id"] == existing_product_id
+    assert existing_commit.json()["dataset"]["class_count"] == 3
+
+    scene_stage_response = client.post(
+        f"/api/datasets/{derived['id']}/products/stage",
+        headers=headers,
+        data={"mode": "scene"},
+        files=[
+            ("val_files", ("checkout-val.jpg", upload, "image/jpeg")),
+            ("test_files", ("checkout-test.jpg", upload, "image/jpeg")),
+        ],
+    )
+    assert scene_stage_response.status_code == 200, scene_stage_response.text
+    scene_stage = scene_stage_response.json()
     first_product_id = baseline["classes"][0]["product_id"]
+    scene_images = [
+        {
+            "image_id": item["image_id"],
+            "reviewed": True,
+            "boxes": [
+                {"x1": 8, "y1": 8, "x2": 52, "y2": 60, "product_id": first_product_id},
+                {"x1": 60, "y1": 20, "x2": 112, "y2": 92, "product_id": third_product_id},
+            ],
+        }
+        for item in scene_stage["images"]
+    ]
+    scene_commit = client.post(
+        f"/api/datasets/{derived['id']}/products/commit",
+        headers=headers,
+        json={
+            "staging_token": scene_stage["staging_token"],
+            "mode": "scene",
+            "images": scene_images,
+        },
+    )
+    assert scene_commit.status_code == 200, scene_commit.text
+    assert scene_commit.json()["images_added"] == 2
+    assert scene_commit.json()["product_id"] is None
+
+    unknown_stage_response = client.post(
+        f"/api/datasets/{derived['id']}/products/stage",
+        headers=headers,
+        data={"mode": "scene"},
+        files=[("val_files", ("unknown-product.jpg", upload, "image/jpeg"))],
+    )
+    assert unknown_stage_response.status_code == 200, unknown_stage_response.text
+    unknown_stage = unknown_stage_response.json()
+    unknown_commit = client.post(
+        f"/api/datasets/{derived['id']}/products/commit",
+        headers=headers,
+        json={
+            "staging_token": unknown_stage["staging_token"],
+            "mode": "scene",
+            "images": [
+                {
+                    "image_id": unknown_stage["images"][0]["image_id"],
+                    "reviewed": True,
+                    "boxes": [
+                        {"x1": 8, "y1": 8, "x2": 52, "y2": 60, "product_id": 999999}
+                    ],
+                }
+            ],
+        },
+    )
+    assert unknown_commit.status_code == 400
+    assert "未在 train 商品目录" in unknown_commit.json()["message"]
+    assert client.delete(
+        f"/api/datasets/{derived['id']}/products/stage/{unknown_stage['staging_token']}",
+        headers=headers,
+    ).status_code == 204
+
     delete_task_response = client.post(
         f"/api/datasets/{derived['id']}/products/{first_product_id}/delete-task",
         headers=headers,
@@ -265,6 +360,7 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
     assert delete_status["operation"] == "delete_product"
     deleted = delete_status["result"]
     assert deleted["images_deleted"] == 3
+    assert deleted["annotations_deleted"] == 5
     assert deleted["dataset"]["class_count"] == 2
     assert [item["class_index"] for item in deleted["dataset"]["classes"]] == [0, 1]
     assert [item["product_id"] for item in deleted["dataset"]["classes"]] == [
@@ -272,6 +368,13 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
         third_product_id,
     ]
     assert db_session.query(Product).filter(Product.id == first_product_id).one().is_active is False
+
+    kept_scene_labels = [
+        path.read_text(encoding="utf-8").strip()
+        for path in (derived_root / "labels" / "val").glob("manual_*.txt")
+    ]
+    assert len(kept_scene_labels) == 1
+    assert kept_scene_labels[0].startswith("1 ")
 
     rewritten_yaml = yaml.safe_load((derived_root / "data.yaml").read_text(encoding="utf-8"))
     rewritten_manifest = json.loads(

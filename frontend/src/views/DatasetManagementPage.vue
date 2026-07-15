@@ -106,7 +106,7 @@
             <div class="row-actions">
               <el-button class="row-action-button" size="small" :icon="View" @click="openDetail(row)">详情</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Plus" @click="openAddProductDialog(row)">添加商品</el-button>
+              <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Plus" @click="openAddProductDialog(row)">添加样本</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="openDeleteProductDialog(row)">删除商品</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button" size="small" :icon="CircleCheck" @click="validateRow(row)">校验</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Lock" @click="freezeRow(row)">冻结</el-button>
@@ -266,7 +266,7 @@
 
     <el-dialog
       v-model="addProductVisible"
-      :title="`添加商品 · ${productDataset?.version || ''}`"
+      :title="`添加样本 · ${productDataset?.version || ''}`"
       class="annotation-review-dialog"
       width="1180px"
       top="3vh"
@@ -274,19 +274,36 @@
       :close-on-click-modal="false"
       @closed="handleAddProductClosed"
     >
-      <el-form ref="productFormRef" :model="productForm" :rules="productRules" label-width="96px" class="product-setup-form">
-        <div class="product-setup-grid">
+      <el-form ref="productFormRef" :model="productForm" :rules="productRules" label-width="108px" class="product-setup-form">
+        <el-form-item label="样本类型" prop="mode" required>
+          <el-radio-group v-model="productForm.mode" :disabled="Boolean(annotationStage)" @change="resetSampleFiles">
+            <el-radio-button value="train_new">新建商品训练图</el-radio-button>
+            <el-radio-button value="train_existing">已有商品训练图</el-radio-button>
+            <el-radio-button value="scene">val/test 结账场景</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <div v-if="productForm.mode === 'train_new'" class="product-setup-grid">
           <el-form-item label="商品名称" prop="name" required><el-input v-model="productForm.name" :disabled="Boolean(annotationStage)" /></el-form-item>
           <el-form-item label="类别名称" prop="class_name" required><el-input v-model="productForm.class_name" :disabled="Boolean(annotationStage)" placeholder="模型类别英文名" /></el-form-item>
           <el-form-item label="价格" prop="unit_price" required><el-input-number v-model="productForm.unit_price" :disabled="Boolean(annotationStage)" :min="0" :precision="2" /></el-form-item>
           <el-form-item label="商品条码"><el-input v-model="productForm.barcode" :disabled="Boolean(annotationStage)" clearable /></el-form-item>
         </div>
+        <el-form-item v-else-if="productForm.mode === 'train_existing'" label="已有商品" prop="existing_product_id" required>
+          <el-select v-model="productForm.existing_product_id" filterable :disabled="Boolean(annotationStage)" placeholder="搜索并选择 train 中已有商品" style="width: 100%">
+            <el-option
+              v-for="item in availableProducts"
+              :key="item.product_id"
+              :label="`${item.display_name || item.class_name} · class_id ${item.class_index} · product_id ${item.product_id}`"
+              :value="item.product_id"
+            />
+          </el-select>
+        </el-form-item>
         <div class="split-folder-grid">
           <div
-            v-for="split in productSplitOptions"
+            v-for="split in sampleSplitOptions"
             :key="split.value"
             class="split-folder-card"
-            :class="{ invalid: split.value === 'train' && trainFolderError }"
+            :class="{ invalid: sampleFolderError }"
           >
             <div class="split-folder-heading">
               <strong><span v-if="split.required" class="required-star">*</span>{{ split.label }}</strong>
@@ -313,13 +330,15 @@
                 <template v-if="productFolderInfo[split.value].ignoredCount"> · 已忽略 {{ productFolderInfo[split.value].ignoredCount }} 个非图片文件</template>
               </span>
             </div>
-            <div v-if="split.value === 'train' && trainFolderError" class="folder-error">{{ trainFolderError }}</div>
+            <div v-if="sampleFolderError" class="folder-error">{{ sampleFolderError }}</div>
           </div>
         </div>
         <el-alert
           v-if="!annotationStage"
-          title="请分别选择训练集、验证集和测试集文件夹"
-          description="训练集不能为空；验证集和测试集可暂时留空，系统不会再自动分割图片。图片会先暂存并生成候选检测框，确认或调整后才写入正式数据集。"
+          :title="productForm.mode === 'scene' ? '上传多商品结账场景' : '上传单一商品的多角度训练图'"
+          :description="productForm.mode === 'scene'
+            ? '只能选择 val 和/或 test 文件夹。请为每个商品手动画框，并从当前 train 商品目录中选择对应商品；不允许出现未知商品。'
+            : '只能选择 train 文件夹。每张图应只有当前这一种商品，可包含该商品的不同拍摄角度；所有检测框必须由用户手工绘制。'"
           type="info"
           :closable="false"
           show-icon
@@ -329,8 +348,8 @@
       <section v-if="annotationStage" class="annotation-review">
         <header class="review-heading">
           <div>
-            <h3>审核自动检测框</h3>
-            <p>高置信度图片已自动通过；橙色图片需要逐张确认或重新绘制。</p>
+            <h3>人工绘制检测框</h3>
+            <p>系统不再自动生成框。请逐张绘制普通矩形框，并确认标注。</p>
           </div>
           <div class="review-summary">
             <el-tag>{{ annotationSummary.total }} 张图片</el-tag>
@@ -365,26 +384,39 @@
             <div class="active-image-heading">
               <div>
                 <strong>{{ activeAnnotationImage.filename }}</strong>
-                <span>{{ activeAnnotationImage.width }} × {{ activeAnnotationImage.height }} · 自动置信度 {{ formatConfidence(activeAnnotationImage.confidence) }}</span>
+                <span>{{ activeAnnotationImage.width }} × {{ activeAnnotationImage.height }} · {{ splitText(activeAnnotationImage.split) }}</span>
               </div>
-              <el-tag :type="activeAnnotationImage.needs_review ? 'warning' : 'success'">
-                {{ activeAnnotationImage.needs_review ? '需要人工审核' : '自动框可信' }}
-              </el-tag>
+              <el-tag :type="activeAnnotationImage.reviewed ? 'success' : 'warning'">{{ activeAnnotationImage.reviewed ? '已完成人工标注' : '待人工标注' }}</el-tag>
             </div>
             <DatasetBoxEditor
               :model-value="activeAnnotationImage.boxes"
               :image-url="activeAnnotationImage.previewUrl"
               :image-width="activeAnnotationImage.width"
               :image-height="activeAnnotationImage.height"
+              :product-options="availableProducts"
               @update:model-value="updateActiveBoxes"
               @change="markActiveAnnotationReviewed"
             />
+            <div v-if="productForm.mode === 'scene' && activeAnnotationImage.boxes.length" class="box-product-assignments">
+              <div v-for="(box, boxIndex) in activeAnnotationImage.boxes" :key="boxIndex" class="box-product-row">
+                <span>检测框 {{ boxIndex + 1 }}</span>
+                <el-select v-model="box.product_id" filterable placeholder="选择该框中的商品" @change="markBoxProductChanged">
+                  <el-option
+                    v-for="item in availableProducts"
+                    :key="item.product_id"
+                    :label="`${item.display_name || item.class_name} · class_id ${item.class_index}`"
+                    :value="item.product_id"
+                  />
+                </el-select>
+              </div>
+            </div>
             <div class="active-review-actions">
               <span v-if="!activeAnnotationImage.boxes.length">请在图片上拖动鼠标绘制至少一个检测框。</span>
-              <span v-else>如果自动框位置正确，请点击确认；调整框后会自动标记为已审核。</span>
+              <span v-else-if="productForm.mode === 'scene' && activeImageUnassignedBoxes">还有 {{ activeImageUnassignedBoxes }} 个框没有选择商品。</span>
+              <span v-else>确认所有框都准确覆盖商品后，点击确认当前图片。</span>
               <el-button
                 type="success"
-                :disabled="!activeAnnotationImage.boxes.length || activeAnnotationImage.reviewed"
+                :disabled="!canConfirmActiveImage || activeAnnotationImage.reviewed"
                 @click="confirmActiveAnnotation"
               >
                 {{ activeAnnotationImage.reviewed ? '当前图片已确认' : '确认当前检测框' }}
@@ -408,10 +440,10 @@
           v-else
           type="primary"
           :loading="workspaceSubmitting"
-          :disabled="annotationSummary.pending > 0 || annotationSummary.missing > 0"
+          :disabled="annotationSummary.pending > 0 || annotationSummary.missing > 0 || unassignedBoxCount > 0"
           @click="submitAddProduct"
         >
-          确认标注并添加商品
+          确认标注并添加样本
         </el-button>
       </template>
     </el-dialog>
@@ -422,7 +454,7 @@
       width="820px"
     >
       <el-alert
-        title="删除商品会删除该商品相关的全部图片和标注，并自动重排后续 class_id。"
+        title="删除商品会移除其全部标注并自动重排后续 class_id；多商品场景仍有其他有效框时会保留图片。"
         type="warning"
         :closable="false"
         show-icon
@@ -575,13 +607,7 @@ const emptyProductFolderInfos = () => ({
   test: emptyProductFolderInfo(),
 })
 const productFolderInfo = ref(emptyProductFolderInfos())
-const trainFolderError = ref('')
 const productFormRef = ref(null)
-const productSplitOptions = [
-  { value: 'train', label: '训练集图片文件夹', required: true },
-  { value: 'val', label: '验证集图片文件夹', required: false },
-  { value: 'test', label: '测试集图片文件夹', required: false },
-]
 const baselineForm = ref({
   scene_id: 1,
   source_path: 'datasets/vision_pay',
@@ -592,7 +618,15 @@ const baselineForm = ref({
   set_current: true,
 })
 const deriveForm = ref({ version: '', name: '', description: '' })
-const productForm = ref({ name: '', class_name: '', unit_price: null, barcode: '' })
+const emptyProductForm = () => ({
+  mode: 'train_new',
+  existing_product_id: null,
+  name: '',
+  class_name: '',
+  unit_price: null,
+  barcode: '',
+})
+const productForm = ref(emptyProductForm())
 const formRef = ref(null)
 const filters = ref({ scene_id: null, status: '' })
 
@@ -624,11 +658,13 @@ const rules = {
   storage_path: [{ required: true, message: '请输入版本根目录', trigger: 'blur' }],
   data_yaml_path: [{ required: true, message: '请输入 data.yaml 路径', trigger: 'blur' }],
 }
-const productRules = {
-  name: [{ required: true, whitespace: true, message: '请输入商品名称', trigger: ['blur', 'change'] }],
-  class_name: [{ required: true, whitespace: true, message: '请输入类别名称', trigger: ['blur', 'change'] }],
-  unit_price: [{ required: true, type: 'number', message: '请输入价格', trigger: ['blur', 'change'] }],
-}
+const productRules = computed(() => ({
+  mode: [{ required: true, message: '请选择样本类型', trigger: 'change' }],
+  name: productForm.value.mode === 'train_new' ? [{ required: true, whitespace: true, message: '请输入商品名称', trigger: ['blur', 'change'] }] : [],
+  class_name: productForm.value.mode === 'train_new' ? [{ required: true, whitespace: true, message: '请输入类别名称', trigger: ['blur', 'change'] }] : [],
+  unit_price: productForm.value.mode === 'train_new' ? [{ required: true, type: 'number', message: '请输入价格', trigger: ['blur', 'change'] }] : [],
+  existing_product_id: productForm.value.mode === 'train_existing' ? [{ required: true, message: '请选择已有商品', trigger: 'change' }] : [],
+}))
 
 const currentDataset = computed(() => rows.value.find((item) => item.is_current))
 const operationFinished = computed(() => ['completed', 'failed'].includes(operationTask.value.status))
@@ -645,6 +681,34 @@ const operationStatusText = computed(() => ({
 }[operationTask.value.status] || '正在处理'))
 const annotationSummary = computed(() => annotationReviewSummary(annotationImages.value))
 const activeAnnotationImage = computed(() => annotationImages.value[activeAnnotationIndex.value] || null)
+const availableProducts = computed(() => productDataset.value?.classes || [])
+const sampleSplitOptions = computed(() => (
+  productForm.value.mode === 'scene'
+    ? [
+        { value: 'val', label: '验证集场景文件夹', required: false },
+        { value: 'test', label: '测试集场景文件夹', required: false },
+      ]
+    : [{ value: 'train', label: '训练集图片文件夹', required: true }]
+))
+const sampleFolderError = computed(() => {
+  if (productForm.value.mode === 'scene') {
+    return productFiles.value.val.length + productFiles.value.test.length > 0 ? '' : 'val 和 test 至少选择一个非空文件夹'
+  }
+  return productFiles.value.train.length ? '' : '训练集文件夹至少需要一张图片'
+})
+const unassignedBoxCount = computed(() => (
+  productForm.value.mode === 'scene'
+    ? annotationImages.value.reduce((count, image) => count + image.boxes.filter((box) => !box.product_id).length, 0)
+    : 0
+))
+const activeImageUnassignedBoxes = computed(() => (
+  productForm.value.mode === 'scene'
+    ? activeAnnotationImage.value?.boxes.filter((box) => !box.product_id).length || 0
+    : 0
+))
+const canConfirmActiveImage = computed(() => Boolean(
+  activeAnnotationImage.value?.boxes.length && activeImageUnassignedBoxes.value === 0
+))
 const filteredDeleteProducts = computed(() => {
   const products = deleteProductDataset.value?.classes || []
   const query = productSearch.value.trim().toLowerCase()
@@ -686,10 +750,6 @@ function formatBytes(value) {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`
-}
-
-function formatConfidence(value) {
-  return `${Math.round(Number(value || 0) * 100)}%`
 }
 
 function splitText(split) {
@@ -824,14 +884,24 @@ async function submitDerive() {
   await openDetail(result.dataset)
 }
 
-function openAddProductDialog(dataset) {
-  productDataset.value = dataset
-  productForm.value = { name: '', class_name: '', unit_price: null, barcode: '' }
+async function openAddProductDialog(dataset) {
+  workspaceSubmitting.value = true
+  try {
+    productDataset.value = await getDatasetVersionApi(dataset.id)
+  } finally {
+    workspaceSubmitting.value = false
+  }
+  productForm.value = emptyProductForm()
   productFiles.value = { train: [], val: [], test: [] }
   clearLocalAnnotationStage()
   productFolderInfo.value = emptyProductFolderInfos()
-  trainFolderError.value = ''
   addProductVisible.value = true
+}
+
+async function resetSampleFiles() {
+  if (annotationStage.value) await discardCurrentAnnotationStage()
+  productFiles.value = { train: [], val: [], test: [] }
+  productFolderInfo.value = emptyProductFolderInfos()
 }
 
 function setProductSplitFolder(split, event) {
@@ -842,7 +912,6 @@ function setProductSplitFolder(split, event) {
     ignoredCount: selection.ignoredCount,
     totalBytes: selection.totalBytes,
   } }
-  if (split === 'train') trainFolderError.value = selection.totalImages ? '' : '训练集文件夹至少需要一张图片'
   event.target.value = ''
   if (!selection.totalImages) ElMessage.warning('所选文件夹中没有支持的图片')
 }
@@ -872,24 +941,22 @@ async function handleAddProductClosed() {
   await discardCurrentAnnotationStage()
   productFiles.value = { train: [], val: [], test: [] }
   productFolderInfo.value = emptyProductFolderInfos()
-  trainFolderError.value = ''
 }
 
 async function restartAnnotationStage() {
   await discardCurrentAnnotationStage()
   productFiles.value = { train: [], val: [], test: [] }
   productFolderInfo.value = emptyProductFolderInfos()
-  trainFolderError.value = ''
 }
 
 async function generateProductAnnotations() {
   const formValid = await productFormRef.value?.validate().catch(() => false)
-  trainFolderError.value = productFiles.value.train.length ? '' : '训练集文件夹至少需要一张图片'
-  if (!productDataset.value || !formValid || trainFolderError.value) {
+  if (!productDataset.value || !formValid || sampleFolderError.value) {
     ElMessage.warning('请先完成所有必填项')
     return
   }
   const formData = new FormData()
+  formData.append('mode', productForm.value.mode)
   for (const split of ['train', 'val', 'test']) {
     for (const file of productFiles.value[split]) formData.append(`${split}_files`, file)
   }
@@ -900,11 +967,7 @@ async function generateProductAnnotations() {
     annotationImages.value = attachFilesToStagedImages(staged, productFiles.value)
     annotationStage.value = staged
     activeAnnotationIndex.value = Math.max(0, annotationImages.value.findIndex((item) => !item.reviewed))
-    if (staged.needs_review_count) {
-      ElMessage.warning(`${staged.needs_review_count} 张图片需要人工确认或重新绘制检测框`)
-    } else {
-      ElMessage.success('自动检测框已生成，请抽查后提交')
-    }
+    ElMessage.info(`已载入 ${staged.total_images} 张图片，请逐张手工绘制检测框`)
   } catch (error) {
     if (staged?.staging_token) {
       await discardDatasetProductStageApi(productDataset.value.id, staged.staging_token).catch(() => {})
@@ -923,11 +986,16 @@ function updateActiveBoxes(boxes) {
 function markActiveAnnotationReviewed() {
   if (!activeAnnotationImage.value) return
   activeAnnotationImage.value.edited = true
-  activeAnnotationImage.value.reviewed = activeAnnotationImage.value.boxes.length > 0
+  activeAnnotationImage.value.reviewed = false
+}
+
+function markBoxProductChanged() {
+  if (!activeAnnotationImage.value) return
+  activeAnnotationImage.value.reviewed = false
 }
 
 function confirmActiveAnnotation() {
-  if (!activeAnnotationImage.value?.boxes.length) return
+  if (!canConfirmActiveImage.value) return
   activeAnnotationImage.value.reviewed = true
   const nextPending = annotationImages.value.findIndex((item, index) => index > activeAnnotationIndex.value && !item.reviewed)
   if (nextPending >= 0) activeAnnotationIndex.value = nextPending
@@ -946,8 +1014,8 @@ async function openDeleteProductDialog(dataset) {
 
 async function submitAddProduct() {
   if (!productDataset.value || !annotationStage.value) return
-  if (annotationSummary.value.pending || annotationSummary.value.missing) {
-    ElMessage.warning('请先完成所有图片的检测框审核')
+  if (annotationSummary.value.pending || annotationSummary.value.missing || unassignedBoxCount.value) {
+    ElMessage.warning('请先完成所有图片的检测框和商品标注')
     return
   }
   const payload = buildDatasetProductCommitPayload(
@@ -955,20 +1023,24 @@ async function submitAddProduct() {
     productForm.value,
     annotationImages.value,
   )
-  const result = await runDatasetOperation('添加商品并更新数据集', () => (
+  const result = await runDatasetOperation('添加人工标注样本并更新数据集', () => (
     commitDatasetProductTaskApi(productDataset.value.id, payload)
   ))
   if (!result?.dataset) return
   clearLocalAnnotationStage()
   addProductVisible.value = false
   detail.value = result.dataset
-  ElMessage.success(`商品与审核标注已添加，稳定 product_id=${result.product_id}`)
+  ElMessage.success(
+    result.product_id
+      ? `训练样本已添加，稳定 product_id=${result.product_id}`
+      : 'val/test 多商品场景样本已添加',
+  )
   await fetchDatasets()
 }
 
 async function deleteProductMapping(dataset, mapping) {
   await ElMessageBox.confirm(
-    `将从派生版本删除 product_id=${mapping.product_id} 的相关图片和标注，并重排后续 class_id。是否继续？`,
+    `将从派生版本删除 product_id=${mapping.product_id} 的全部标注，并重排后续 class_id。单商品图片会删除；多商品场景仍有其他框时会保留。是否继续？`,
     '删除商品样本',
     { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
   )
@@ -980,7 +1052,7 @@ async function deleteProductMapping(dataset, mapping) {
     if (!result?.dataset) return
     deleteProductDataset.value = result.dataset
     if (detail.value?.id === result.dataset.id) detail.value = result.dataset
-    ElMessage.success(`已删除 ${result.images_deleted} 张相关图片并重建索引`)
+    ElMessage.success(`已删除 ${result.annotations_deleted} 个标注、${result.images_deleted} 张空样本图片并重建索引`)
     await fetchDatasets()
   } finally {
     deletingProductId.value = null
@@ -1169,6 +1241,7 @@ code { color: #42526e; font-size: 11px; }
 .split-folder-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 2px 0 16px; }.split-folder-card { min-width: 0; padding: 13px; border: 1px solid #dce3ee; border-radius: 10px; background: #fbfcfe; transition: border-color .2s ease, box-shadow .2s ease; }.split-folder-card.invalid { border-color: #f09aa5; box-shadow: 0 0 0 2px rgba(224, 90, 104, .08); }.split-folder-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }.split-folder-heading strong { color: $text-primary; font-size: 13px; }.split-folder-heading > span { color: $text-secondary; font-size: 11px; }.required-star { margin-right: 3px; color: #f56c6c; }.split-folder-summary { margin-top: 10px; padding: 9px 10px; border-radius: 7px; background: #f1f5fb; }.split-folder-summary strong, .split-folder-summary span { display: block; overflow-wrap: anywhere; }.split-folder-summary strong { color: $text-primary; font-size: 12px; }.split-folder-summary span { margin-top: 3px; color: $text-secondary; font-size: 11px; }.folder-error { margin-top: 7px; color: #f56c6c; font-size: 12px; line-height: 1.3; }
 .annotation-review { margin-top: 18px; padding-top: 18px; border-top: 1px solid $border-color; }.review-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 12px; }.review-heading h3 { margin: 0; color: $text-primary; font-size: 18px; }.review-heading p { margin: 5px 0 0; color: $text-secondary; font-size: 12px; }.review-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .review-workspace { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 460px; overflow: hidden; border: 1px solid #dce3ee; border-radius: 12px; background: #f8fafc; }.annotation-thumbnails { max-height: min(60vh, 620px); overflow-y: auto; padding: 9px; border-right: 1px solid #dce3ee; background: #fff; }.annotation-thumbnail { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; margin: 0 0 7px; padding: 7px; border: 1px solid #e2e7ef; border-radius: 9px; color: inherit; background: #fff; text-align: left; cursor: pointer; }.annotation-thumbnail:hover { border-color: #a9c2ef; background: #f7faff; }.annotation-thumbnail.active { border-color: #6e9bea; box-shadow: 0 0 0 2px rgba(47,111,223,.1); }.annotation-thumbnail.pending { border-left: 3px solid #e6a23c; }.annotation-thumbnail.missing { border-left-color: #e05a68; }.annotation-thumbnail img { width: 56px; height: 48px; object-fit: cover; border-radius: 6px; background: #eef1f5; }.thumbnail-copy { min-width: 0; }.thumbnail-copy strong, .thumbnail-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.thumbnail-copy strong { color: $text-primary; font-size: 12px; }.thumbnail-copy small { margin-top: 4px; color: $text-secondary; font-size: 10px; }.annotation-editor-panel { min-width: 0; padding: 14px; }.active-image-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }.active-image-heading strong, .active-image-heading span { display: block; }.active-image-heading strong { color: $text-primary; }.active-image-heading span { margin-top: 4px; color: $text-secondary; font-size: 11px; }.active-review-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; }.active-review-actions span { color: $text-secondary; font-size: 12px; }
+.box-product-assignments { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid #dce3ee; border-radius: 9px; background: #fff; }.box-product-row { display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: center; gap: 10px; }.box-product-row > span { color: $text-secondary; font-size: 12px; }
 .product-search { margin: 16px 0 8px; }.search-result-count { margin-bottom: 8px; color: $text-secondary; font-size: 12px; }
 .operation-progress-content { padding: 6px 2px 4px; }.operation-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }.operation-progress-heading strong { color: $text-primary; font-size: 15px; }.operation-progress-heading span { color: #2f6fdf; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }.operation-progress-content p { min-height: 22px; margin: 14px 0 7px; color: $text-secondary; line-height: 1.6; }.operation-progress-content code { display: block; overflow: hidden; color: #8a94a3; text-overflow: ellipsis; white-space: nowrap; }.operation-error { margin-top: 16px; }
 .detail-heading { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }.detail-heading span { color: $text-secondary; font-size: 12px; }.detail-heading h3 { margin: 5px 0 0; font-size: 21px; }
