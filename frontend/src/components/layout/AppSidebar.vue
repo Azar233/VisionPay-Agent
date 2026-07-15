@@ -15,19 +15,45 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Camera, Cpu, Clock, DataAnalysis, ShoppingCart } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
+import {
+  ChatDotRound,
+  Camera,
+  Cpu,
+  Clock,
+  DataAnalysis,
+  ShoppingCart,
+  PriceTag,
+} from '@element-plus/icons-vue'
 
 const route = useRoute()
-defineProps({ collapsed: { type: Boolean, default: false } })
+const userStore = useUserStore()
+
+defineProps({
+  collapsed: {
+    type: Boolean,
+    default: false,
+  },
+})
+
 const activeMenu = computed(() => '/' + route.path.split('/')[1])
-const menuItems = [
-  { path: '/detection', title: '检测工作台', icon: Camera },
-  { path: '/chat', title: '智能对话', icon: ChatDotRound },
-  { path: '/training', title: '模型训练', icon: Cpu },
-  { path: '/history', title: '历史记录', icon: Clock },
-  { path: '/dashboard', title: '数据概览', icon: DataAnalysis },
-  { path: '/checkout', title: '顾客结算', icon: ShoppingCart },
-]
+
+const menuItems = computed(() => {
+  const items = [
+    { path: '/detection', title: '检测工作台', icon: Camera },
+    { path: '/chat', title: '智能对话', icon: ChatDotRound },
+    { path: '/training', title: '模型训练', icon: Cpu },
+    { path: '/history', title: '历史记录', icon: Clock },
+    { path: '/dashboard', title: '数据概览', icon: DataAnalysis },
+    { path: '/checkout', title: '顾客结算', icon: ShoppingCart },
+  ]
+
+  if (userStore.isSuperuser) {
+    items.push({ path: '/prices', title: '价目表管理', icon: PriceTag })
+  }
+
+  return items
+})
 </script>
 
 <style lang="scss" scoped>
@@ -42,37 +68,71 @@ const menuItems = [
   border-radius: $border-radius-md;
   box-shadow: 0 12px 40px rgba(0, 0, 0, .04);
   backdrop-filter: blur(24px) saturate(130%);
-  -webkit-backdrop-filter: blur(24px) saturate(130%);
-  transition: width .3s cubic-bezier(.2, .8, .2, 1), padding .3s cubic-bezier(.2, .8, .2, 1);
+  transition: width 0.22s ease, padding 0.22s ease;
 
-  .nav-label { padding: 0 12px 10px; color: $text-placeholder; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
-  .el-menu { height: auto; background: transparent; border-right: 0; }
+  .nav-label {
+    margin: 0 0 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #9ca3af;
+    letter-spacing: 0.05em;
+  }
+
+  .el-menu {
+    border-right: none;
+    height: auto;
+    background: transparent;
+  }
+
   .el-menu-item {
-    position: relative;
-    height: 46px;
+    height: 44px;
+    line-height: 44px;
     margin-bottom: 4px;
+    border-radius: $border-radius-md;
     color: $sidebar-text;
-    font-weight: 500;
-    line-height: 46px;
-    border-radius: 12px;
-    transition: background .2s ease, color .2s ease;
+    font-weight: 600;
+    transition: background 0.2s, color 0.2s, transform 0.2s;
 
     &.is-active {
+      background-color: $primary-soft !important;
       color: $sidebar-active-text !important;
-      background: rgba(0, 113, 227, .1) !important;
-      &::after { content: ''; position: absolute; right: 10px; width: 5px; height: 5px; border-radius: 50%; background: $primary-color; }
     }
-    &:hover { color: $text-primary !important; background: rgba(0, 0, 0, .035) !important; }
+
+    &:hover {
+      background-color: #f5f6fb !important;
+      color: $text-primary !important;
+      transform: translateX(2px);
+    }
   }
 
   &.collapsed {
-    width: 72px;
-    padding: 12px;
-    .el-menu-item { justify-content: center; padding: 0 !important; span { display: none; } &::after { display: none; } }
+    width: 68px;
+    padding: 16px 8px;
+
+    .el-menu-item {
+      justify-content: center;
+      padding: 0 !important;
+
+      span {
+        display: none;
+      }
+    }
   }
 }
 
 @media (max-width: 900px) {
-  .app-sidebar { width: 72px; padding: 12px; .nav-label { display: none; } .el-menu-item { justify-content: center; padding: 0 !important; span { display: none; } &::after { display: none; } } }
+  .app-sidebar {
+    width: 68px;
+    padding: 16px 8px;
+
+    .el-menu-item {
+      justify-content: center;
+      padding: 0 !important;
+
+      span {
+        display: none;
+      }
+    }
+  }
 }
 </style>

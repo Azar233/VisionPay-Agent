@@ -238,6 +238,15 @@ class ProductPriceCreate(ProjectBaseModel):
     currency: str = Field(default="CNY", description="货币")
 
 
+class ProductPriceUpdate(ProjectBaseModel):
+    """部分更新商品价格（所有字段可选）"""
+    sku_name: Optional[str] = Field(None, description="SKU 英文名")
+    name: Optional[str] = Field(None, description="商品中文名")
+    barcode: Optional[str] = Field(None, description="商品条码")
+    unit_price: Optional[float] = Field(None, ge=0, description="单价（元）")
+    currency: Optional[str] = Field(None, description="货币")
+
+
 class ProductPriceResponse(ProjectBaseModel):
     """商品价格响应"""
     id: int

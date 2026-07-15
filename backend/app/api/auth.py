@@ -49,6 +49,13 @@ async def get_current_user(
     return user
 
 
+async def require_admin(current_user=Depends(get_current_user)):
+    """需要管理员权限"""
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return current_user
+
+
 @router.post("/register", response_model=UserResponse, status_code=201)
 async def register(request: UserRegister, db: Session = Depends(get_db)):
     """
@@ -92,6 +99,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
             "username": user.username,
             "email": user.email,
             "avatar": user.avatar,
+            "is_superuser": user.is_superuser,
             "roles": roles,
         },
     }
