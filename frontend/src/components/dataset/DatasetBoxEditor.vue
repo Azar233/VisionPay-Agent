@@ -173,7 +173,7 @@ function clearBoxes() { selectedIndex.value = -1; updateBoxes([]); emit('change'
 .editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .editor-toolbar span { color: $text-secondary; font-size: 12px; line-height: 1.5; }
 .editor-toolbar div { display: flex; flex: 0 0 auto; gap: 6px; }
-.canvas-shell { display: flex; align-items: center; justify-content: center; min-height: 300px; overflow: hidden; border: 1px solid #dce3ee; border-radius: 10px; background: #151922; }
+.canvas-shell { display: flex; align-items: center; justify-content: center; min-height: 300px; overflow: hidden; border: 1px solid $border-color; border-radius: 10px; background: #151922; }
 .annotation-canvas { display: block; width: 100%; max-height: min(56vh, 560px); touch-action: none; user-select: none; }
 .draw-surface { fill: transparent; cursor: crosshair; }
 .annotation-box { fill: rgba(47, 111, 223, 0.12); stroke: #4f8aef; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }

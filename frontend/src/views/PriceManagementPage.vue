@@ -354,15 +354,15 @@ onMounted(fetchDatasetVersions)
   .page-card { border-radius: 12px; }
   .page-header { margin-bottom: 18px; }
   h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
-  .subtitle { margin: 0; color: #6b7280; font-size: 13px; }
+  .subtitle { margin: 0; color: var(--vp-muted); font-size: 13px; }
 }
 
 .dataset-scope-panel {
   padding: 18px;
   margin-bottom: 20px;
-  border: 1px solid #d9e2ef;
+  border: 1px solid var(--vp-border);
   border-radius: 12px;
-  background: linear-gradient(135deg, #f8fbff, #f5f8fc);
+  background: linear-gradient(135deg, var(--vp-surface), var(--vp-primary-soft));
 }
 
 .scope-copy {
@@ -370,16 +370,16 @@ onMounted(fetchDatasetVersions)
   align-items: baseline;
   gap: 12px;
   margin-bottom: 12px;
-  color: #64748b;
+  color: var(--vp-muted);
   font-size: 13px;
 
-  strong { color: #1f2937; font-size: 14px; }
+  strong { color: var(--vp-text); font-size: 14px; }
 }
 
-.required-star { margin-right: 3px; color: #f56c6c; }
+.required-star { margin-right: 3px; color: var(--vp-danger); }
 .dataset-selector { width: min(720px, 100%); }
 .dataset-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.selected-dataset-summary { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: #64748b; font-size: 13px; }
+.selected-dataset-summary { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--vp-muted); font-size: 13px; }
 
 .table-toolbar {
   display: flex;
@@ -390,11 +390,13 @@ onMounted(fetchDatasetVersions)
   flex-wrap: wrap;
 }
 
-.scope-hint { color: #64748b; font-size: 13px; }
+.scope-hint { color: var(--vp-muted); font-size: 13px; }
 .table-actions { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .row-action { margin-left: 0; border-radius: 8px; font-weight: 500; }
-.edit-action { color: #0969da; border-color: #b9d7f8; background: #f2f8ff; }
-.delete-action { color: #cf3f4f; border-color: #f0c4ca; background: #fff6f7; }
+.edit-action { color: var(--vp-primary); border-color: var(--vp-primary); background: var(--vp-primary-soft); }
+.edit-action:hover, .edit-action:focus-visible { color: var(--vp-primary-hover); border-color: var(--vp-primary-hover); background: var(--vp-primary-soft); }
+.delete-action { color: var(--vp-danger); border-color: var(--vp-danger); background: color-mix(in srgb, var(--vp-danger) 10%, transparent); }
+.delete-action:hover, .delete-action:focus-visible { color: var(--vp-danger); border-color: var(--vp-danger); background: color-mix(in srgb, var(--vp-danger) 18%, transparent); }
 
 .pagination-row {
   min-height: 64px;

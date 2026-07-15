@@ -149,6 +149,8 @@
       <el-table
         v-loading="loadingTasks"
         :data="taskList"
+        :row-class-name="taskRowClassName"
+        row-key="id"
         stripe
         class="task-table"
         empty-text="暂无训练任务"
@@ -188,63 +190,71 @@
             {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="420" fixed="right">
+        <el-table-column
+          label="操作"
+          width="440"
+          fixed="right"
+          class-name="task-actions-column"
+          label-class-name="task-actions-column-header"
+        >
           <template #default="{ row }">
-            <el-button size="small" type="primary" text @click="selectTask(row)">
-              监控
-            </el-button>
-            <el-button
-              v-if="row.status === 'running'"
-              size="small"
-              type="danger"
-              text
-              @click="stopTask(row.id)"
-            >
-              停止
-            </el-button>
-            <el-button size="small" text @click="openLogDrawer(row)">
-              Log
-            </el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              size="small"
-              text
-              @click="openEvalDrawer(row)"
-            >
-              评估
-            </el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              size="small"
-              text
-              @click="openExportDialog(row)"
-            >
-              导出
-            </el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              size="small"
-              text
-              @click="downloadWeights(row)"
-            >
-              权重
-            </el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              size="small"
-              text
-              @click="openPredictDialog(row)"
-            >
-              测试
-            </el-button>
-            <el-button
-              v-if="row.status === 'completed'"
-              size="small"
-              text
-              @click="downloadResults(row.task_uuid)"
-            >
-              结果
-            </el-button>
+            <div class="task-row-actions">
+              <el-button
+                class="task-action-button is-primary-action"
+                :class="{ 'is-active-action': selectedTask?.id === row.id }"
+                size="small"
+                :icon="Monitor"
+                @click="selectTask(row)"
+              >监控</el-button>
+              <el-button
+                v-if="row.status === 'running'"
+                class="task-action-button is-danger-action"
+                size="small"
+                :icon="VideoPause"
+                @click="stopTask(row.id)"
+              >停止</el-button>
+              <el-button
+                class="task-action-button"
+                size="small"
+                :icon="Document"
+                @click="openLogDrawer(row)"
+              >日志</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                class="task-action-button is-success-action"
+                size="small"
+                :icon="DataAnalysis"
+                @click="openEvalDrawer(row)"
+              >评估</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                class="task-action-button is-primary-action"
+                size="small"
+                :icon="Upload"
+                @click="openExportDialog(row)"
+              >导出</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                class="task-action-button"
+                size="small"
+                :icon="Download"
+                @click="downloadWeights(row)"
+              >权重</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                class="task-action-button"
+                size="small"
+                :icon="Picture"
+                @click="openPredictDialog(row)"
+              >测试</el-button>
+              <el-button
+                v-if="row.status === 'completed'"
+                class="task-action-button"
+                size="small"
+                :icon="Tickets"
+                @click="downloadResults(row.task_uuid)"
+              >结果</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -684,7 +694,18 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Upload } from '@element-plus/icons-vue'
+import {
+  DataAnalysis,
+  Document,
+  Download,
+  Monitor,
+  Picture,
+  Plus,
+  Refresh,
+  Tickets,
+  Upload,
+  VideoPause,
+} from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
 import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components'
 import { LineChart } from 'echarts/charts'
@@ -777,6 +798,8 @@ const lossChartRef = ref(null)
 const metricChartRef = ref(null)
 let lossChart = null
 let metricChart = null
+let chartMetrics = []
+let themeObserver = null
 let pollTimer = null
 let logPollTimer = null
 
@@ -1103,6 +1126,10 @@ function trainDataset(dataset) {
   showCreateDialog.value = true
 }
 
+function taskRowClassName({ row }) {
+  return selectedTask.value?.id === row.id ? 'selected-task-row' : ''
+}
+
 async function selectTask(task) {
   selectedTask.value = { ...task }
   latestMetric.value = null
@@ -1140,15 +1167,36 @@ function initCharts() {
 }
 
 function updateCharts(metrics) {
+  chartMetrics = metrics
   const epochs = metrics.map((item) => item.epoch)
+  const styles = getComputedStyle(document.documentElement)
+  const textColor = styles.getPropertyValue('--vp-text').trim() || '#1d1d1f'
+  const mutedColor = styles.getPropertyValue('--vp-muted').trim() || '#6e6e73'
+  const borderColor = styles.getPropertyValue('--vp-border-strong').trim() || 'rgba(0, 0, 0, .14)'
+  const surfaceColor = styles.getPropertyValue('--vp-surface').trim() || '#fff'
+  const axis = {
+    axisLabel: { color: mutedColor },
+    nameTextStyle: { color: mutedColor },
+    axisLine: { lineStyle: { color: borderColor } },
+    splitLine: { lineStyle: { color: borderColor } },
+  }
+  const common = {
+    title: { left: 'center', textStyle: { color: textColor, fontSize: 14 } },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: surfaceColor,
+      borderColor,
+      textStyle: { color: textColor },
+    },
+    legend: { bottom: 0, textStyle: { color: mutedColor } },
+  }
   if (lossChart) {
     lossChart.setOption({
-      title: { text: '训练损失曲线', left: 'center', textStyle: { fontSize: 14 } },
-      tooltip: { trigger: 'axis' },
-      legend: { bottom: 0 },
+      ...common,
+      title: { ...common.title, text: '训练损失曲线' },
       grid: { left: 56, right: 24, top: 52, bottom: 52 },
-      xAxis: { type: 'category', name: 'Epoch', data: epochs },
-      yAxis: { type: 'value', name: 'Loss' },
+      xAxis: { ...axis, type: 'category', name: 'Epoch', data: epochs },
+      yAxis: { ...axis, type: 'value', name: 'Loss' },
       series: [
         { name: 'Box Loss', type: 'line', smooth: true, data: metrics.map((m) => m.box_loss) },
         { name: 'Cls Loss', type: 'line', smooth: true, data: metrics.map((m) => m.cls_loss) },
@@ -1159,12 +1207,11 @@ function updateCharts(metrics) {
 
   if (metricChart) {
     metricChart.setOption({
-      title: { text: '评估指标曲线', left: 'center', textStyle: { fontSize: 14 } },
-      tooltip: { trigger: 'axis' },
-      legend: { bottom: 0 },
+      ...common,
+      title: { ...common.title, text: '评估指标曲线' },
       grid: { left: 56, right: 24, top: 52, bottom: 52 },
-      xAxis: { type: 'category', name: 'Epoch', data: epochs },
-      yAxis: { type: 'value', name: 'Score', min: 0, max: 1 },
+      xAxis: { ...axis, type: 'category', name: 'Epoch', data: epochs },
+      yAxis: { ...axis, type: 'value', name: 'Score', min: 0, max: 1 },
       series: [
         { name: 'mAP@50', type: 'line', smooth: true, data: metrics.map((m) => m.map50) },
         { name: 'mAP@50-95', type: 'line', smooth: true, data: metrics.map((m) => m.map50_95) },
@@ -1429,6 +1476,8 @@ onMounted(() => {
   fetchTrainingDatasets()
   fetchModelVersions()
   window.addEventListener('resize', resizeCharts)
+  themeObserver = new MutationObserver(() => updateCharts(chartMetrics))
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 })
 
 onBeforeUnmount(() => {
@@ -1436,6 +1485,7 @@ onBeforeUnmount(() => {
   stopLogPolling()
   clearPredictState()
   window.removeEventListener('resize', resizeCharts)
+  themeObserver?.disconnect()
   lossChart?.dispose()
   metricChart?.dispose()
 })
@@ -1509,7 +1559,7 @@ onBeforeUnmount(() => {
 }
 
 .detection-model-panel {
-  background: linear-gradient(135deg, rgba(47, 111, 223, 0.06), $surface-color 42%);
+  background: linear-gradient(135deg, $primary-soft, $surface-color 42%);
 }
 
 .model-version-selector {
@@ -1525,9 +1575,9 @@ onBeforeUnmount(() => {
 .model-version-detail {
   margin-top: 14px;
   padding: 16px;
-  border: 1px solid #d9e5fb;
+  border: 1px solid $border-color;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  background: $surface-muted;
 }
 
 .model-version-main {
@@ -1595,7 +1645,7 @@ onBeforeUnmount(() => {
   code {
     min-width: 0;
     overflow: hidden;
-    color: #42526e;
+    color: $text-secondary;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1821,12 +1871,69 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.task-row-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.task-action-button {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  margin: 0 !important;
+  padding: 0 8px;
+  border: 1px solid $border-strong;
+  border-radius: 8px;
+  color: $text-regular;
+  background: $surface-color;
+  box-shadow: none !important;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: $text-secondary;
+    color: $text-primary;
+    background: $surface-muted;
+  }
+
+  &.is-primary-action {
+    border-color: $primary-color;
+    color: $primary-color;
+    background: $primary-soft;
+  }
+
+  &.is-primary-action:hover,
+  &.is-primary-action:focus-visible,
+  &.is-active-action {
+    border-color: $primary-hover;
+    color: $primary-hover;
+    background: color-mix(in srgb, $primary-color 22%, $surface-color);
+  }
+
+  &.is-success-action {
+    border-color: $success-color;
+    color: $success-color;
+    background: color-mix(in srgb, $success-color 12%, $surface-color);
+  }
+
+  &.is-danger-action {
+    border-color: $danger-color;
+    color: $danger-color;
+    background: color-mix(in srgb, $danger-color 10%, $surface-color);
+  }
+}
+
 .live-progress-panel {
   margin-bottom: 14px;
   padding: 12px;
-  border: 1px solid #ebeef5;
+  border: 1px solid $border-color;
   border-radius: $border-radius-sm;
-  background: #fafafa;
+  background: $surface-muted;
 }
 
 .live-progress-header,
@@ -1920,7 +2027,26 @@ onBeforeUnmount(() => {
 }
 
 .task-table :deep(.el-table__row:hover > td.el-table__cell) {
-  background: $primary-soft;
+  background: color-mix(in srgb, $primary-color 12%, $surface-color);
+}
+
+.task-table :deep(th.task-actions-column-header),
+.task-table :deep(td.task-actions-column) {
+  z-index: 3;
+  background: $surface-color;
+  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, .55);
+}
+
+.task-table :deep(.el-table__row:hover > td.task-actions-column) {
+  background: color-mix(in srgb, $primary-color 12%, $surface-color);
+}
+
+.task-table :deep(.selected-task-row > td.el-table__cell) {
+  background: color-mix(in srgb, $primary-color 16%, $surface-color) !important;
+}
+
+.task-table :deep(.selected-task-row > td.task-actions-column) {
+  background: color-mix(in srgb, $primary-color 16%, $surface-color) !important;
 }
 
 @media (max-width: 1100px) {
