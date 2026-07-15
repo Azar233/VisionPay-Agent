@@ -212,6 +212,8 @@ def test_price_summary_groups_detections_and_reports_missing_prices(db_session):
     assert summary["items"][0] == {
         "class_id": 0,
         "category_id": 1,
+        "product_id": None,
+        "product_key": None,
         "class_name": "1_puffed_food",
         "sku_name": "cola-330",
         "name": "可口可乐 330ml",

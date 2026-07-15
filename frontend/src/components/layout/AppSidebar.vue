@@ -23,6 +23,7 @@ import {
   DataAnalysis,
   ShoppingCart,
   PriceTag,
+  Files,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -40,6 +41,7 @@ const menuItems = computed(() => [
   { path: '/detection', title: '检测工作台', icon: Camera },
   { path: '/chat', title: '智能对话', icon: ChatDotRound },
   { path: '/training', title: '模型训练', icon: Cpu },
+  { path: '/datasets', title: '数据集版本', icon: Files },
   { path: '/history', title: '历史记录', icon: Clock },
   { path: '/dashboard', title: '数据概览', icon: DataAnalysis },
   { path: '/checkout', title: '顾客结算', icon: ShoppingCart },

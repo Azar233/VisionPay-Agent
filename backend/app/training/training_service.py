@@ -649,8 +649,11 @@ class TrainingService:
             f"model_name={model_name}\n"
             f"data_yaml={data_yaml}\n"
             f"dataset_path={dataset_path}\n"
+            f"dataset_version_id={config.get('dataset_version_id')}\n"
+            f"dataset_content_hash={config.get('dataset_content_hash')}\n"
             f"device={device}",
         )
+        configured_dataset_size = config.get("dataset_size")
         task = TrainingTask(
             user_id=user_id,
             scene_id=scene_id,
@@ -664,9 +667,15 @@ class TrainingService:
             optimizer=str(config.get("optimizer", "SGD")),
             lr0=float(config.get("lr0", 0.01)),
             augment_config=config.get("augment_config"),
+            dataset_version_id=config.get("dataset_version_id"),
             dataset_path=str(dataset_path),
-            dataset_size=_count_dataset_images(dataset_path),
+            dataset_size=(
+                int(configured_dataset_size)
+                if configured_dataset_size is not None
+                else _count_dataset_images(dataset_path)
+            ),
             data_yaml=str(data_yaml),
+            dataset_content_hash=config.get("dataset_content_hash"),
         )
         db.add(task)
         db.commit()
@@ -1322,8 +1331,17 @@ class TrainingService:
         task.optimizer = optimizer
         task.lr0 = lr0
         task.augment_config = augment_config
+        if "dataset_version_id" in config:
+            task.dataset_version_id = config.get("dataset_version_id")
+        if "dataset_content_hash" in config:
+            task.dataset_content_hash = config.get("dataset_content_hash")
         task.dataset_path = str(dataset_path)
-        task.dataset_size = _count_dataset_images(dataset_path) if dataset_path.exists() else None
+        configured_dataset_size = config.get("dataset_size")
+        task.dataset_size = (
+            int(configured_dataset_size)
+            if configured_dataset_size is not None
+            else (_count_dataset_images(dataset_path) if dataset_path.exists() else None)
+        )
         task.data_yaml = str(data_yaml) if data_yaml is not None else None
         task.error_message = None if status == "completed" else f"imported offline run as {status}"
         task.started_at = datetime.fromtimestamp(args_yaml.stat().st_mtime if args_yaml.exists() else run_dir.stat().st_mtime)
@@ -1545,6 +1563,7 @@ class TrainingService:
         model_version = ModelVersion(
             scene_id=task.scene_id,
             training_task_id=task.id,
+            dataset_version_id=task.dataset_version_id,
             version=version_value,
             model_name=f"{task.model_name}_{task.task_uuid}",
             model_type=task.model_name,
@@ -1767,6 +1786,7 @@ class TrainingService:
 
     @staticmethod
     def _serialize_task(task: TrainingTask) -> dict[str, Any]:
+        dataset_version = getattr(task, "dataset_version", None)
         return {
             "id": task.id,
             "task_uuid": task.task_uuid,
@@ -1778,6 +1798,10 @@ class TrainingService:
             "device": task.device,
             "batch_size": task.batch_size,
             "img_size": task.img_size,
+            "dataset_version_id": task.dataset_version_id,
+            "dataset_version": getattr(dataset_version, "version", None),
+            "dataset_name": getattr(dataset_version, "name", None),
+            "dataset_content_hash": task.dataset_content_hash,
             "dataset_size": task.dataset_size,
             "dataset_path": task.dataset_path,
             "data_yaml": task.data_yaml,
@@ -1805,11 +1829,14 @@ class TrainingService:
     @staticmethod
     def _serialize_model_version(model_version: ModelVersion) -> dict[str, Any]:
         scene = getattr(model_version, "scene", None)
+        dataset_version = getattr(model_version, "dataset_version", None)
         return {
             "id": model_version.id,
             "scene_id": model_version.scene_id,
             "scene_name": getattr(scene, "name", None),
             "training_task_id": model_version.training_task_id,
+            "dataset_version_id": model_version.dataset_version_id,
+            "dataset_version": getattr(dataset_version, "version", None),
             "version": model_version.version,
             "model_name": model_version.model_name,
             "model_type": model_version.model_type,

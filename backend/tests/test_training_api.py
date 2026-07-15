@@ -151,3 +151,87 @@ def test_training_start_uses_vision_pay_dataset(client, db_session, monkeypatch)
     assert captured["data_yaml"].endswith("datasets\\vision_pay\\data.yaml") or captured[
         "data_yaml"
     ].endswith("datasets/vision_pay/data.yaml")
+
+
+def test_training_start_uses_registered_dataset_version(
+    client,
+    db_session,
+    monkeypatch,
+    tmp_path,
+):
+    from app.api import training as training_api
+    from app.entity.db_models import DatasetVersion, DetectionScene, User
+
+    headers = _auth_headers(client)
+    user = db_session.query(User).filter_by(username="training_api_user").first()
+    scene = DetectionScene(
+        name="registered_dataset_scene",
+        display_name="Registered Dataset Scene",
+        description="Versioned training scene",
+        category="retail",
+        class_names=["product"],
+        created_by=user.id,
+    )
+    db_session.add(scene)
+    db_session.flush()
+    (tmp_path / "data.yaml").write_text(
+        "path: .\ntrain: images/train\nval: images/val\ntest: images/test\nnc: 1\nnames: [product]\n",
+        encoding="utf-8",
+    )
+    dataset = DatasetVersion(
+        scene_id=scene.id,
+        version="v-cluster-1",
+        name="Cluster Dataset",
+        status="ready",
+        is_current=True,
+        storage_path=str(tmp_path),
+        data_yaml_path="data.yaml",
+        content_hash="sha256:registered",
+        class_count=1,
+        train_image_count=80,
+        val_image_count=10,
+        test_image_count=10,
+        train_annotation_count=80,
+        val_annotation_count=10,
+        test_annotation_count=10,
+        created_by=user.id,
+    )
+    db_session.add(dataset)
+    db_session.commit()
+    db_session.refresh(dataset)
+
+    captured = {}
+
+    def fake_start_training(db, user_id, scene_id, config):
+        captured.update(config)
+        return SimpleNamespace(
+            id=321,
+            task_uuid="registered1",
+            status="pending",
+            model_name=config["model_name"],
+            epochs=config["epochs"],
+            dataset_size=config["dataset_size"],
+            dataset_version_id=config["dataset_version_id"],
+            dataset_version=SimpleNamespace(version=dataset.version),
+        )
+
+    monkeypatch.setattr(training_api.training_service, "start_training", fake_start_training)
+    response = client.post(
+        "/api/training/start",
+        headers=headers,
+        json={
+            "scene_id": scene.id,
+            "dataset_version_id": dataset.id,
+            "model_name": "yolov11s",
+            "epochs": 3,
+            "device": "cpu",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["dataset_version_id"] == dataset.id
+    assert response.json()["dataset_version"] == "v-cluster-1"
+    assert captured["dataset_content_hash"] == "sha256:registered"
+    assert captured["dataset_size"] == 100
+    assert captured["dataset_path"] == str(tmp_path.resolve())
+    assert captured["data_yaml"] == str((tmp_path / "data.yaml").resolve())

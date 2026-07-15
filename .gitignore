@@ -77,6 +77,7 @@ log/
 
 # ── 数据文件 ────────────────────────────────────────
 backend/datasets/
+backend/dataset_versions/
 /instances_train2019.json
 *.csv
 *.xlsx

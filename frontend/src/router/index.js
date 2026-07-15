@@ -38,6 +38,12 @@ const routes = [
         meta: { title: '模型训练', icon: 'Cpu' },
       },
       {
+        path: 'datasets',
+        name: 'Datasets',
+        component: () => import('@/views/DatasetManagementPage.vue'),
+        meta: { title: '数据集版本', icon: 'Files' },
+      },
+      {
         path: 'history',
         name: 'History',
         component: () => import('@/views/HistoryPage.vue'),

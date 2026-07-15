@@ -12,12 +12,13 @@ export function detectCheckoutApi(file, options = {}) {
   })
 }
 
-export function calculateCheckoutApi(items) {
+export function calculateCheckoutApi(items, modelVersionId = null) {
   return request.post('/checkout/calculate', {
     items: items.map((item) => ({
       class_id: item.classId,
       quantity: item.quantity,
     })),
+    model_version_id: modelVersionId,
   })
 }
 

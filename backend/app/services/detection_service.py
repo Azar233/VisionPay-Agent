@@ -22,10 +22,12 @@ from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import SessionLocal
 from app.entity.db_models import (
+    DatasetClassMapping,
     DetectionResult,
     DetectionScene,
     DetectionTask,
     ModelVersion,
+    Product,
     ProductPrice,
     TrainingTask,
 )
@@ -536,7 +538,11 @@ class DetectionService:
         }
 
     @staticmethod
-    def _calculate_total_price(db, detections: list[dict[str, Any]]) -> dict[str, Any]:
+    def _calculate_total_price(
+        db,
+        detections: list[dict[str, Any]],
+        model_version_id: int | None = None,
+    ) -> dict[str, Any]:
         """根据逐个检测框汇总类别数量并计算总价。"""
         counts: dict[int, int] = Counter()
         name_map: dict[int, str] = {}
@@ -545,13 +551,19 @@ class DetectionService:
             counts[class_id] += 1
             name_map[class_id] = detection["class_name"]
 
-        return DetectionService.calculate_price(db, counts, name_map)
+        return DetectionService.calculate_price(
+            db,
+            counts,
+            name_map,
+            model_version_id=model_version_id,
+        )
 
     @staticmethod
     def calculate_price(
         db,
         class_counts: dict[int, int],
         class_names: dict[int, str] | None = None,
+        model_version_id: int | None = None,
     ) -> dict[str, Any]:
         """Use authoritative database prices to calculate a checkout summary."""
         counts = {
@@ -572,17 +584,41 @@ class DetectionService:
                 "unpriced_objects": 0,
             }
 
-        # YOLO uses zero-based class IDs while instances_train2019.json (and
-        # product_prices) uses one-based category IDs: class 0 -> category 1.
+        mappings: dict[int, DatasetClassMapping] = {}
+        if model_version_id is not None:
+            model_version = db.query(ModelVersion).filter(ModelVersion.id == model_version_id).first()
+            if model_version and model_version.dataset_version_id:
+                mappings = {
+                    item.class_index: item
+                    for item in db.query(DatasetClassMapping)
+                    .filter(DatasetClassMapping.dataset_version_id == model_version.dataset_version_id)
+                    .all()
+                }
+
+        product_ids = [
+            mappings[class_id].product_id
+            for class_id in counts
+            if class_id in mappings and mappings[class_id].product_id is not None
+        ]
+        prices_by_product = {
+            price.product_id: price
+            for price in db.query(ProductPrice)
+            .filter(ProductPrice.product_id.in_(product_ids))
+            .all()
+        } if product_ids else {}
+        products = {
+            product.id: product
+            for product in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        } if product_ids else {}
+
         category_ids = [class_id + 1 for class_id in counts]
-        prices = {
+        legacy_prices = {
             price.category_id: price
             for price in db.query(ProductPrice)
             .filter(ProductPrice.category_id.in_(category_ids))
             .all()
         }
-
-        missing = [cid for cid in category_ids if cid not in prices]
+        missing = []
         if missing:
             logger.warning("以下 category_id 未设置价格，暂不计入总价: %s", missing)
 
@@ -591,9 +627,16 @@ class DetectionService:
         priced_objects = 0
         unpriced_objects = 0
         for class_id, count in sorted(counts.items()):
-            category_id = class_id + 1
-            price = prices.get(category_id)
+            mapping = mappings.get(class_id)
+            product_id = mapping.product_id if mapping else None
+            product = products.get(product_id)
+            category_id = mapping.category_id if mapping and mapping.category_id else class_id + 1
+            price = prices_by_product.get(product_id) if product_id is not None else None
+            if price is None and mapping is None:
+                price = legacy_prices.get(category_id)
             has_price = price is not None
+            if not has_price:
+                missing.append(category_id)
             unit_price = Decimal(str(price.unit_price if price else 0)).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
@@ -609,10 +652,12 @@ class DetectionService:
                 {
                     "class_id": class_id,
                     "category_id": category_id,
-                    "class_name": name_map.get(class_id) or (price.sku_name if price else ""),
+                    "product_id": product_id,
+                    "product_key": mapping.product_key if mapping else None,
+                    "class_name": name_map.get(class_id) or (mapping.class_name if mapping else "") or (price.sku_name if price else ""),
                     "sku_name": price.sku_name if price else None,
-                    "name": price.name if price else None,
-                    "barcode": price.barcode if price else None,
+                    "name": (price.name if price and price.name else (product.name if product else None)),
+                    "barcode": (price.barcode if price and price.barcode else (product.barcode if product else None)),
                     "count": count,
                     "unit_price": float(unit_price),
                     "subtotal": float(subtotal),
@@ -626,7 +671,7 @@ class DetectionService:
             "currency": "CNY",
             "items": items,
             "pricing_complete": not missing,
-            "missing_category_ids": sorted(missing),
+            "missing_category_ids": sorted(set(missing)),
             "priced_objects": priced_objects,
             "unpriced_objects": unpriced_objects,
         }
@@ -721,13 +766,18 @@ class DetectionService:
             all_detections = [
                 detection for item in items for detection in item["detections"]
             ]
-            price_summary = self._calculate_total_price(db, all_detections)
+            price_summary = self._calculate_total_price(
+                db,
+                all_detections,
+                model_version_id=model_version_id,
+            )
 
             return {
                 "task_id": task.id,
                 "source": source,
                 "scene": scene.display_name,
                 "model": model_path.name,
+                "model_version_id": model_version_id,
                 "total_images": len(items),
                 "total_objects": total_objects,
                 "total_inference_time_ms": total_inference,

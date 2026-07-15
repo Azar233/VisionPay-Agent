@@ -16,6 +16,7 @@ from app.api.mock_payment import router as mock_payment_router
 from app.api.dashboard import router as dashboard_router
 from app.api.history import router as history_router
 from app.api.user import router as user_router
+from app.api.datasets import router as datasets_router
 
 from app.core.exceptions import register_exception_handlers
 from app.middleware.request_logger import RequestLogMiddleware
@@ -85,6 +86,7 @@ app.include_router(mock_payment_router)
 app.include_router(dashboard_router)
 app.include_router(history_router)
 app.include_router(user_router)
+app.include_router(datasets_router)
 
 
 @app.get("/")

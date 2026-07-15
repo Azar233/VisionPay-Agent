@@ -14,7 +14,8 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, ForeignKey,
-    JSON, Text, Boolean, Enum, Table, BigInteger, Numeric
+    JSON, Text, Boolean, Enum, Table, BigInteger, Numeric,
+    Index, UniqueConstraint, text,
 )
 from sqlalchemy.orm import relationship
 
@@ -45,6 +46,11 @@ class User(Base):
     user_roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
     detection_tasks = relationship("DetectionTask", back_populates="user")
     training_tasks = relationship("TrainingTask", back_populates="user")
+    dataset_versions_created = relationship(
+        "DatasetVersion",
+        back_populates="creator",
+        foreign_keys="DatasetVersion.created_by",
+    )
     chat_sessions = relationship("ChatSession", back_populates="user")
     operation_logs = relationship("OperationLog", back_populates="user")
 
@@ -131,6 +137,7 @@ class DetectionScene(Base):
     detection_tasks = relationship("DetectionTask", back_populates="scene")
     model_versions = relationship("ModelVersion", back_populates="scene")
     training_tasks = relationship("TrainingTask", back_populates="scene")
+    dataset_versions = relationship("DatasetVersion", back_populates="scene")
 
 
 class DetectionTask(Base):
@@ -211,6 +218,13 @@ class TrainingTask(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="操作用户")
     scene_id = Column(Integer, ForeignKey("detection_scenes.id"), nullable=False, index=True, comment="关联场景")
+    dataset_version_id = Column(
+        Integer,
+        ForeignKey("dataset_versions.id"),
+        nullable=True,
+        index=True,
+        comment="训练所使用的不可变数据集版本",
+    )
     task_uuid = Column(String(100), unique=True, nullable=False, index=True, comment="任务唯一标识")
     status = Column(String(20), default="pending", comment="状态：pending/running/completed/failed/cancelled")
 
@@ -232,6 +246,7 @@ class TrainingTask(Base):
     dataset_path = Column(String(500), nullable=True, comment="数据集路径")
     dataset_size = Column(Integer, nullable=True, comment="数据集图像数量")
     data_yaml = Column(String(500), nullable=True, comment="data.yaml 路径")
+    dataset_content_hash = Column(String(128), nullable=True, comment="训练时的数据集内容指纹快照")
 
     # 错误信息
     error_message = Column(Text, nullable=True, comment="失败错误信息")
@@ -244,6 +259,7 @@ class TrainingTask(Base):
     # 关联
     user = relationship("User", back_populates="training_tasks")
     scene = relationship("DetectionScene", back_populates="training_tasks")
+    dataset_version = relationship("DatasetVersion", back_populates="training_tasks")
     metrics = relationship("TrainingMetric", back_populates="task", cascade="all, delete-orphan")
     model_versions = relationship("ModelVersion", back_populates="training_task")
 
@@ -283,6 +299,13 @@ class ModelVersion(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     scene_id = Column(Integer, ForeignKey("detection_scenes.id"), nullable=False, index=True, comment="所属场景")
     training_task_id = Column(Integer, ForeignKey("training_tasks.id"), nullable=True, comment="来源训练任务（可为空，支持手动上传）")
+    dataset_version_id = Column(
+        Integer,
+        ForeignKey("dataset_versions.id"),
+        nullable=True,
+        index=True,
+        comment="模型训练所使用的数据集版本",
+    )
 
     version = Column(String(50), nullable=False, comment="版本号，如 v1.0.0")
     model_name = Column(String(100), nullable=False, comment="模型名称")
@@ -310,7 +333,219 @@ class ModelVersion(Base):
     # 关联
     scene = relationship("DetectionScene", back_populates="model_versions")
     training_task = relationship("TrainingTask", back_populates="model_versions")
+    dataset_version = relationship("DatasetVersion", back_populates="model_versions")
     detection_tasks = relationship("DetectionTask", back_populates="model_version")
+
+
+# ══════════════════════════════════════════════════════════════
+# 四、数据集版本管理
+# ══════════════════════════════════════════════════════════════
+
+class DatasetVersion(Base):
+    """An immutable dataset release after it leaves the draft state."""
+
+    __tablename__ = "dataset_versions"
+    __table_args__ = (
+        UniqueConstraint("scene_id", "version", name="uq_dataset_versions_scene_version"),
+        Index(
+            "uq_dataset_versions_current_scene",
+            "scene_id",
+            unique=True,
+            postgresql_where=text("is_current"),
+            sqlite_where=text("is_current = 1"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    scene_id = Column(
+        Integer,
+        ForeignKey("detection_scenes.id"),
+        nullable=False,
+        index=True,
+        comment="所属检测场景",
+    )
+    parent_id = Column(
+        Integer,
+        ForeignKey("dataset_versions.id"),
+        nullable=True,
+        index=True,
+        comment="派生自哪个数据集版本",
+    )
+    version = Column(String(50), nullable=False, comment="数据集版本号")
+    name = Column(String(150), nullable=False, comment="数据集显示名称")
+    description = Column(Text, nullable=True, comment="版本说明")
+    status = Column(
+        String(20),
+        nullable=False,
+        default="draft",
+        index=True,
+        comment="draft/ready/archived",
+    )
+    is_current = Column(Boolean, nullable=False, default=False, index=True)
+
+    storage_path = Column(String(1000), nullable=False, comment="版本根目录或对象存储 URI")
+    data_yaml_path = Column(String(1000), nullable=False, comment="YOLO data.yaml 路径")
+    manifest_path = Column(String(1000), nullable=True, comment="数据集 manifest 路径")
+    content_hash = Column(String(128), nullable=True, index=True, comment="不可变内容指纹")
+
+    class_count = Column(Integer, nullable=False, default=0)
+    train_image_count = Column(Integer, nullable=False, default=0)
+    val_image_count = Column(Integer, nullable=False, default=0)
+    test_image_count = Column(Integer, nullable=False, default=0)
+    train_annotation_count = Column(Integer, nullable=False, default=0)
+    val_annotation_count = Column(Integer, nullable=False, default=0)
+    test_annotation_count = Column(Integer, nullable=False, default=0)
+
+    extra_metadata = Column(JSON, nullable=True, comment="来源、采集批次等扩展元数据")
+    validation_report = Column(JSON, nullable=True, comment="最近一次逻辑或目录校验报告")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    validated_at = Column(DateTime, nullable=True)
+    frozen_at = Column(DateTime, nullable=True)
+    archived_at = Column(DateTime, nullable=True)
+
+    scene = relationship("DetectionScene", back_populates="dataset_versions")
+    creator = relationship(
+        "User",
+        back_populates="dataset_versions_created",
+        foreign_keys=[created_by],
+    )
+    parent = relationship("DatasetVersion", remote_side=[id], back_populates="children")
+    children = relationship("DatasetVersion", back_populates="parent")
+    classes = relationship(
+        "DatasetClassMapping",
+        back_populates="dataset_version",
+        cascade="all, delete-orphan",
+        order_by="DatasetClassMapping.class_index",
+    )
+    training_tasks = relationship("TrainingTask", back_populates="dataset_version")
+    model_versions = relationship("ModelVersion", back_populates="dataset_version")
+    images = relationship(
+        "DatasetImage",
+        back_populates="dataset_version",
+        cascade="all, delete-orphan",
+    )
+
+
+class Product(Base):
+    """Stable product identity shared by all dataset and model versions."""
+
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    product_key = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    sku_name = Column(String(200), nullable=True)
+    barcode = Column(String(100), nullable=True, unique=True, index=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    extra_metadata = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    dataset_mappings = relationship("DatasetClassMapping", back_populates="product")
+    annotations = relationship("DatasetAnnotation", back_populates="product")
+    prices = relationship("ProductPrice", back_populates="product")
+
+
+class DatasetClassMapping(Base):
+    """Snapshot the meaning of every model class index for one dataset version."""
+
+    __tablename__ = "dataset_class_mappings"
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_version_id",
+            "class_index",
+            name="uq_dataset_class_mappings_version_index",
+        ),
+        UniqueConstraint(
+            "dataset_version_id",
+            "product_key",
+            name="uq_dataset_class_mappings_version_product",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_version_id = Column(
+        Integer,
+        ForeignKey("dataset_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    class_index = Column(Integer, nullable=False, comment="YOLO class_id")
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id"),
+        nullable=True,
+        index=True,
+        comment="跨版本稳定商品 ID",
+    )
+    product_key = Column(
+        String(100),
+        nullable=False,
+        comment="跨版本稳定的商品键，后续可关联商品主表",
+    )
+    category_id = Column(Integer, nullable=True, comment="兼容现有 RPC category_id")
+    class_name = Column(String(200), nullable=False)
+    display_name = Column(String(200), nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
+
+    dataset_version = relationship("DatasetVersion", back_populates="classes")
+    product = relationship("Product", back_populates="dataset_mappings")
+
+
+class DatasetImage(Base):
+    """File-level image index for one dataset version."""
+
+    __tablename__ = "dataset_images"
+    __table_args__ = (
+        UniqueConstraint("dataset_version_id", "relative_path", name="uq_dataset_images_version_path"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_version_id = Column(
+        Integer,
+        ForeignKey("dataset_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    split = Column(String(20), nullable=False, index=True)
+    relative_path = Column(String(1000), nullable=False)
+    label_relative_path = Column(String(1000), nullable=True)
+    checksum = Column(String(64), nullable=True, index=True)
+    file_size = Column(BigInteger, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+
+    dataset_version = relationship("DatasetVersion", back_populates="images")
+    annotations = relationship(
+        "DatasetAnnotation",
+        back_populates="image",
+        cascade="all, delete-orphan",
+    )
+
+
+class DatasetAnnotation(Base):
+    """Normalized YOLO annotation bound to a stable product."""
+
+    __tablename__ = "dataset_annotations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_image_id = Column(
+        Integer,
+        ForeignKey("dataset_images.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    class_index = Column(Integer, nullable=False, index=True)
+    x_center = Column(Float, nullable=False)
+    y_center = Column(Float, nullable=False)
+    width = Column(Float, nullable=False)
+    height = Column(Float, nullable=False)
+    source = Column(String(30), nullable=False, default="imported")
+
+    image = relationship("DatasetImage", back_populates="annotations")
+    product = relationship("Product", back_populates="annotations")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -404,7 +639,9 @@ class ProductPrice(Base):
     """商品价格表 — 每个 category_id 对应一个 SKU 的单价"""
     __tablename__ = "product_prices"
 
+    product = relationship("Product", back_populates="prices")
     id = Column(Integer, primary_key=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True, unique=True, index=True)
     category_id = Column(Integer, unique=True, nullable=False, index=True, comment="检测类别 ID，对应 instances_train2019.json")
     sku_name = Column(String(100), nullable=True, comment="SKU 英文名")
     name = Column(String(100), nullable=True, comment="商品中文名")

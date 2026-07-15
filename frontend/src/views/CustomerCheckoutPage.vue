@@ -106,6 +106,7 @@ const pricing = ref(false)
 const creatingOrder = ref(false)
 const detectionResult = ref(null)
 const checkoutSummary = ref(null)
+const activeModelVersionId = ref(null)
 const detectionError = ref('')
 let detectionSequence = 0
 let pricingSequence = 0
@@ -174,6 +175,7 @@ async function setPreview(file) {
     const result = await detectCheckoutApi(file)
     if (sequence !== detectionSequence) return
     detectionResult.value = result
+    activeModelVersionId.value = result.model_version_id || null
     checkoutSummary.value = result.price_summary
     products.value = productsFromDetection(
       result.items?.flatMap((item) => item.detections || []) || [],
@@ -198,7 +200,7 @@ async function recalculateCart() {
   }
   pricing.value = true
   try {
-    const summary = await calculateCheckoutApi(products.value)
+    const summary = await calculateCheckoutApi(products.value, activeModelVersionId.value)
     if (sequence !== pricingSequence) return
     checkoutSummary.value = summary
     const serverItems = new Map((summary.items || []).map((item) => [item.class_id, item]))
