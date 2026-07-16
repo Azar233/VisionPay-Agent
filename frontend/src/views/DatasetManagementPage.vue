@@ -7,6 +7,7 @@
         <p>登记数据集元数据和类别映射，冻结后形成不可变版本，并记录训练与模型谱系。</p>
       </div>
       <div class="header-actions">
+        <el-button :icon="UploadFilled" @click="openModelImportDialog">导入可用模型</el-button>
         <el-button @click="openBaselineDialog">导入基线 dataset</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建数据集草稿</el-button>
       </div>
@@ -66,6 +67,9 @@
             <div class="version-cell">
               <div class="version-title">
                 <strong>{{ row.version }}</strong>
+                <el-tag v-if="row.extra_metadata?.catalog_only" type="primary" size="small" effect="plain" round>
+                  模型目录
+                </el-tag>
                 <el-tag v-if="row.is_current" class="current-version-tag" type="success" size="small" effect="plain" round>
                   当前版本
                 </el-tag>
@@ -86,7 +90,11 @@
         </el-table-column>
         <el-table-column label="图片" width="170">
           <template #default="{ row }">
-            <div class="split-cell">
+            <div v-if="row.extra_metadata?.catalog_only" class="split-cell">
+              <strong>无需训练集</strong>
+              <span>从 best.pt 读取类别</span>
+            </div>
+            <div v-else class="split-cell">
               <strong>{{ row.total_image_count }}</strong>
               <span>T {{ row.train_image_count }} · V {{ row.val_image_count }} · E {{ row.test_image_count }}</span>
             </div>
@@ -234,6 +242,76 @@
         </el-table>
       </template>
     </el-drawer>
+
+    <el-dialog
+      v-model="modelImportVisible"
+      title="导入可用模型"
+      width="680px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-alert
+        title="适用于已有 best.pt、无需在本系统重新训练的场景"
+        description="系统会读取模型内置的类别名称，自动建立模型目录版本、稳定商品映射和价目表入口。请只导入来源可信的 YOLO 目标检测模型。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <el-form :model="modelImportForm" label-width="118px" class="model-import-form">
+        <el-form-item label="场景 ID" required>
+          <el-input-number v-model="modelImportForm.scene_id" :min="1" controls-position="right" />
+        </el-form-item>
+        <el-form-item label="版本号" required>
+          <el-input v-model.trim="modelImportForm.version" placeholder="例如 checkout-model-v1" />
+        </el-form-item>
+        <el-form-item label="显示名称" required>
+          <el-input v-model.trim="modelImportForm.name" placeholder="例如 收银检测模型 v1" />
+        </el-form-item>
+        <el-form-item label="模型来源" required>
+          <el-radio-group v-model="modelImportForm.source_mode" @change="handleModelSourceModeChange">
+            <el-radio-button value="upload">上传 best.pt</el-radio-button>
+            <el-radio-button value="path">服务器文件路径</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="modelImportForm.source_mode === 'upload'" label="best.pt" required>
+          <el-upload
+            ref="modelImportUploadRef"
+            class="model-import-upload"
+            drag
+            action="#"
+            accept=".pt"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="handleModelFileChange"
+            :on-remove="handleModelFileRemove"
+            :on-exceed="handleModelFileExceed"
+          >
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">拖放 best.pt 到这里，或<em>点击选择</em></div>
+          </el-upload>
+        </el-form-item>
+        <el-form-item v-else label="文件路径" required>
+          <el-input
+            v-model.trim="modelImportForm.source_path"
+            placeholder="例如 D:\\models\\best.pt 或 /opt/models/best.pt"
+          />
+          <p class="form-tip">路径必须能被后端所在机器访问；浏览器所在电脑与后端是同一台机器时可直接填写本机绝对路径。</p>
+        </el-form-item>
+        <el-form-item label="导入后启用">
+          <div class="model-import-switches">
+            <el-checkbox v-model="modelImportForm.set_current">设为当前数据集版本</el-checkbox>
+            <el-checkbox v-model="modelImportForm.set_default">设为当前检测模型</el-checkbox>
+          </div>
+        </el-form-item>
+        <el-form-item label="说明">
+          <el-input v-model="modelImportForm.description" type="textarea" :rows="3" placeholder="可填写模型来源、适用范围等信息" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="modelImportVisible = false">取消</el-button>
+        <el-button type="primary" :loading="modelImportSubmitting" @click="submitModelImport">开始导入</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="baselineVisible" title="导入基线 dataset" width="640px" :close-on-click-modal="false">
       <el-form :model="baselineForm" label-width="120px">
@@ -535,7 +613,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck, Delete, Edit, Lock, Plus, Promotion, Refresh, Search, View } from '@element-plus/icons-vue'
+import { CircleCheck, Delete, Edit, Lock, Plus, Promotion, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
 import {
   annotationReviewSummary,
@@ -555,6 +633,7 @@ import {
   getDatasetOperationStatusApi,
   getDatasetVersionApi,
   getDatasetVersionsApi,
+  importAvailableModelApi,
   importBaselineDatasetApi,
   setCurrentDatasetVersionApi,
   stageDatasetProductImagesApi,
@@ -571,6 +650,10 @@ const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const editingId = ref(null)
 const detail = ref(null)
+const modelImportVisible = ref(false)
+const modelImportSubmitting = ref(false)
+const modelImportFile = ref(null)
+const modelImportUploadRef = ref(null)
 const baselineVisible = ref(false)
 const deriveVisible = ref(false)
 const addProductVisible = ref(false)
@@ -617,6 +700,17 @@ const baselineForm = ref({
   copy_files: true,
   set_current: true,
 })
+const emptyModelImportForm = () => ({
+  scene_id: 1,
+  version: '',
+  name: '',
+  description: '',
+  source_mode: 'upload',
+  source_path: '',
+  set_current: true,
+  set_default: true,
+})
+const modelImportForm = ref(emptyModelImportForm())
 const deriveForm = ref({ version: '', name: '', description: '' })
 const emptyProductForm = () => ({
   mode: 'train_new',
@@ -787,6 +881,68 @@ function openCreateDialog() {
 
 function openBaselineDialog() {
   baselineVisible.value = true
+}
+
+function openModelImportDialog() {
+  modelImportForm.value = emptyModelImportForm()
+  modelImportFile.value = null
+  modelImportVisible.value = true
+}
+
+function handleModelSourceModeChange() {
+  modelImportFile.value = null
+  modelImportForm.value.source_path = ''
+  modelImportUploadRef.value?.clearFiles()
+}
+
+function handleModelFileChange(uploadFile) {
+  modelImportFile.value = uploadFile.raw || null
+}
+
+function handleModelFileRemove() {
+  modelImportFile.value = null
+}
+
+function handleModelFileExceed(files) {
+  modelImportUploadRef.value?.clearFiles()
+  const file = files[0]
+  if (!file) return
+  modelImportUploadRef.value?.handleStart(file)
+}
+
+async function submitModelImport() {
+  const payload = modelImportForm.value
+  if (!payload.scene_id || !payload.version || !payload.name) {
+    ElMessage.warning('请填写场景 ID、版本号和显示名称')
+    return
+  }
+  if (payload.source_mode === 'upload' && !modelImportFile.value) {
+    ElMessage.warning('请选择要导入的 best.pt')
+    return
+  }
+  if (payload.source_mode === 'path' && !payload.source_path) {
+    ElMessage.warning('请输入后端可访问的模型文件路径')
+    return
+  }
+  const formData = new FormData()
+  formData.append('scene_id', String(payload.scene_id))
+  formData.append('version', payload.version)
+  formData.append('name', payload.name)
+  formData.append('description', payload.description || '')
+  formData.append('set_current', String(payload.set_current))
+  formData.append('set_default', String(payload.set_default))
+  if (payload.source_mode === 'upload') formData.append('file', modelImportFile.value)
+  else formData.append('source_path', payload.source_path)
+
+  modelImportSubmitting.value = true
+  try {
+    const result = await importAvailableModelApi(formData)
+    modelImportVisible.value = false
+    ElMessage.success(`模型已导入，共建立 ${result.dataset?.class_count || 0} 个商品类别`)
+    await fetchDatasets()
+  } finally {
+    modelImportSubmitting.value = false
+  }
 }
 
 async function submitBaseline() {
@@ -1215,6 +1371,10 @@ onMounted(fetchDatasets)
 .filters, .toolbar-actions { display: flex; align-items: center; gap: 8px; }
 .filters .el-input-number { width: 130px; }.filters .el-select { width: 135px; }
 .dataset-table { width: 100%; }
+.model-import-form { margin-top: 18px; }
+.model-import-upload { width: 100%; }
+.model-import-upload :deep(.el-upload), .model-import-upload :deep(.el-upload-dragger) { width: 100%; }
+.model-import-switches { display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .version-title { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }.version-title strong { min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }.current-version-tag { flex: 0 0 auto; margin-top: 1px; border-radius: 999px; font-weight: 600; }.version-name { display: block; margin-top: 5px; color: $text-secondary; font-size: 12px; line-height: 1.45; }
 .split-cell strong, .split-cell span { display: block; }.split-cell span { margin-top: 3px; color: $text-secondary; font-size: 11px; }
 code { color: $text-secondary; font-size: 11px; }

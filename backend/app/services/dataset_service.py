@@ -96,13 +96,14 @@ class DatasetService:
             key=lambda item: (item.created_at or datetime.min, item.id or 0),
             reverse=True,
         )
+        model_versions = list(getattr(dataset, "model_versions", []) or [])
         task_statuses = {item.status for item in tasks}
         completed_training_count = sum(item.status == "completed" for item in tasks)
         if "running" in task_statuses:
             training_status = "training"
         elif "pending" in task_statuses:
             training_status = "queued"
-        elif completed_training_count:
+        elif completed_training_count or model_versions:
             training_status = "trained"
         elif tasks:
             training_status = "failed"
@@ -154,7 +155,7 @@ class DatasetService:
             "latest_training_task_id": getattr(latest_task, "id", None),
             "latest_training_task_uuid": getattr(latest_task, "task_uuid", None),
             "latest_training_status": getattr(latest_task, "status", None),
-            "model_version_count": len(getattr(dataset, "model_versions", []) or []),
+            "model_version_count": len(model_versions),
             "classes": [],
         }
         if include_classes:
@@ -316,18 +317,22 @@ class DatasetService:
         if product_ids and len(product_ids) != len(mappings):
             errors.append("product_id 必须为全部类别同时配置，不能部分缺失")
 
-        if dataset.train_image_count <= 0:
-            errors.append("训练集图片数量必须大于 0")
-        if dataset.val_image_count <= 0:
-            errors.append("验证集图片数量必须大于 0")
-        if dataset.test_image_count <= 0:
-            errors.append("测试集图片数量必须大于 0")
-        if dataset.train_annotation_count <= 0:
-            errors.append("训练集标注数量必须大于 0")
-        if dataset.val_annotation_count <= 0:
-            errors.append("验证集标注数量必须大于 0")
-        if dataset.test_annotation_count <= 0:
-            errors.append("测试集标注数量必须大于 0")
+        catalog_only = bool((dataset.extra_metadata or {}).get("catalog_only"))
+        if catalog_only:
+            warnings.append("该版本由可用模型生成，仅包含类别目录，不包含训练图片与标注")
+        else:
+            if dataset.train_image_count <= 0:
+                errors.append("训练集图片数量必须大于 0")
+            if dataset.val_image_count <= 0:
+                errors.append("验证集图片数量必须大于 0")
+            if dataset.test_image_count <= 0:
+                errors.append("测试集图片数量必须大于 0")
+            if dataset.train_annotation_count <= 0:
+                errors.append("训练集标注数量必须大于 0")
+            if dataset.val_annotation_count <= 0:
+                errors.append("验证集标注数量必须大于 0")
+            if dataset.test_annotation_count <= 0:
+                errors.append("测试集标注数量必须大于 0")
         if not dataset.content_hash:
             errors.append("冻结前必须填写 content_hash")
 

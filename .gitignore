@@ -113,6 +113,7 @@ yarn.lock
 dist/
 dev-dist/
 build/
+frontend/.codex-*-build-*/
 
 # 本地一键启停脚本（个人开发环境配置）
 start-dev.*

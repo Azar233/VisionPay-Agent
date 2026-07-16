@@ -16,6 +16,13 @@ export function importBaselineDatasetApi(data) {
   return request.post('/datasets/import-baseline', data, { timeout: 0 })
 }
 
+export function importAvailableModelApi(formData) {
+  return request.post('/datasets/import-available-model', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 0,
+  })
+}
+
 export function deriveDatasetVersionApi(datasetId, data) {
   return request.post(`/datasets/${datasetId}/derive`, data, { timeout: 0 })
 }
