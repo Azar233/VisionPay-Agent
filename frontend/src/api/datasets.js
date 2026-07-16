@@ -79,10 +79,6 @@ export function freezeDatasetVersionApi(datasetId, checkFilesystem = false) {
   })
 }
 
-export function setCurrentDatasetVersionApi(datasetId) {
-  return request.post(`/datasets/${datasetId}/set-current`)
-}
-
 export function archiveDatasetVersionApi(datasetId) {
   return request.post(`/datasets/${datasetId}/archive`)
 }

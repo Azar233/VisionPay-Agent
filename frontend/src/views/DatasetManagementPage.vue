@@ -17,7 +17,7 @@
       <article class="summary-card current-card">
         <span>当前版本</span>
         <strong>{{ currentDataset?.version || '未设置' }}</strong>
-        <small>{{ currentDataset?.name || '冻结版本后可设为当前版本' }}</small>
+        <small>{{ currentDataset?.name || '导入版本时可指定当前版本' }}</small>
       </article>
       <article class="summary-card">
         <span>版本总数</span>
@@ -32,7 +32,7 @@
       <article class="summary-card">
         <span>已冻结</span>
         <strong>{{ statusCount.ready }}</strong>
-        <small>内容不可修改，可设为当前版本</small>
+        <small>内容不可修改，可用于训练或派生</small>
       </article>
     </section>
 
@@ -62,7 +62,7 @@
       </div>
 
       <el-table v-loading="loading" :data="rows" stripe class="dataset-table" empty-text="暂无数据集版本">
-        <el-table-column label="版本" min-width="180">
+        <el-table-column label="版本" min-width="220">
           <template #default="{ row }">
             <div class="version-cell">
               <div class="version-title">
@@ -118,8 +118,12 @@
               <el-button v-if="row.status === 'draft'" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="openDeleteProductDialog(row)">删除商品</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button" size="small" :icon="CircleCheck" @click="validateRow(row)">校验</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Lock" @click="freezeRow(row)">冻结</el-button>
-              <el-button v-if="row.status === 'ready' && !row.is_current" class="row-action-button is-success-action" size="small" :icon="Promotion" @click="setCurrent(row)">设为当前</el-button>
-              <el-button v-if="row.status === 'ready' && !row.is_current" class="row-action-button" size="small" @click="archiveRow(row)">归档</el-button>
+              <el-button
+                v-if="row.status === 'ready' && (!row.is_current || row.extra_metadata?.catalog_only)"
+                class="row-action-button"
+                size="small"
+                @click="archiveRow(row)"
+              >归档</el-button>
               <el-button v-if="['ready', 'archived'].includes(row.status)" class="row-action-button is-primary-action" size="small" @click="openDeriveDialog(row)">派生版本</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="deleteRow(row)">删除草稿</el-button>
             </div>
@@ -630,7 +634,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck, Delete, Edit, Lock, Plus, Promotion, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
+import { CircleCheck, Delete, Edit, Lock, Plus, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
 import {
   annotationReviewSummary,
@@ -653,7 +657,6 @@ import {
   getDatasetVersionsApi,
   importAvailableModelApi,
   importBaselineDatasetApi,
-  setCurrentDatasetVersionApi,
   stageDatasetProductImagesApi,
   updateDatasetVersionApi,
   validateDatasetVersionApi,
@@ -1355,19 +1358,11 @@ async function freezeRow(row) {
   await fetchDatasets()
 }
 
-async function setCurrent(row) {
-  await ElMessageBox.confirm(
-    `确定将 ${row.version} 设为场景当前数据集吗？这一步暂时不会触发训练。`,
-    '切换当前数据集',
-    { type: 'warning' },
-  )
-  await setCurrentDatasetVersionApi(row.id)
-  ElMessage.success('当前数据集已切换')
-  await fetchDatasets()
-}
-
 async function archiveRow(row) {
-  await ElMessageBox.confirm(`确定归档 ${row.version} 吗？`, '归档数据集', { type: 'warning' })
+  const catalogHint = row.extra_metadata?.catalog_only
+    ? '归档后该模型将不再用于检测；若它是当前检测模型，系统会自动切换到其他可用模型。'
+    : ''
+  await ElMessageBox.confirm(`确定归档 ${row.version} 吗？${catalogHint}`, '归档数据集', { type: 'warning' })
   await archiveDatasetVersionApi(row.id)
   ElMessage.success('数据集已归档')
   await fetchDatasets()
@@ -1417,7 +1412,7 @@ onMounted(async () => {
 .model-import-upload { width: 100%; }
 .model-import-upload :deep(.el-upload), .model-import-upload :deep(.el-upload-dragger) { width: 100%; }
 .model-import-switches { display: flex; flex-wrap: wrap; gap: 8px 22px; }
-.version-title { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }.version-title strong { min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }.current-version-tag { flex: 0 0 auto; margin-top: 1px; border-radius: 999px; font-weight: 600; }.version-name { display: block; margin-top: 5px; color: $text-secondary; font-size: 12px; line-height: 1.45; }
+.version-title { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }.version-title strong { flex: 1 0 100%; min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }.current-version-tag { flex: 0 0 auto; margin-top: 1px; border-radius: 999px; font-weight: 600; }.version-name { display: block; margin-top: 5px; color: $text-secondary; font-size: 12px; line-height: 1.45; }
 .split-cell strong, .split-cell span { display: block; }.split-cell span { margin-top: 3px; color: $text-secondary; font-size: 11px; }
 code { color: $text-secondary; font-size: 11px; }
 .row-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; }

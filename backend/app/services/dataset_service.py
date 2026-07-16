@@ -19,6 +19,7 @@ from app.entity.db_models import (
     DatasetImage,
     DatasetVersion,
     DetectionScene,
+    ModelVersion,
 )
 from app.entity.schemas import DatasetVersionCreate, DatasetVersionUpdate
 
@@ -433,11 +434,82 @@ class DatasetService:
     @classmethod
     def archive(cls, db: Session, *, dataset_id: int) -> DatasetVersion:
         dataset = cls.get(db, dataset_id)
-        if dataset.is_current:
+        catalog_only = bool((dataset.extra_metadata or {}).get("catalog_only"))
+        if dataset.is_current and not catalog_only:
             raise DatasetLifecycleError("当前数据集不能归档，请先切换当前版本")
         if dataset.status != "ready":
             raise DatasetLifecycleError("只有已冻结的数据集可以归档")
+
+        if catalog_only:
+            # A model-catalog dataset and its imported best.pt represent one
+            # deployable unit. Archiving only the dataset would leave detection
+            # pointing at a version that the registry presents as unavailable.
+            from app.services.model_version_service import model_version_service
+
+            model_version_service.ensure_builtin(db, scene_id=dataset.scene_id)
+            linked_models = list(dataset.model_versions)
+            linked_ids = [model.id for model in linked_models]
+            archived_default = any(
+                model.status == "active" and model.is_default for model in linked_models
+            )
+            for model in linked_models:
+                if model.status == "active":
+                    model.status = "archived"
+                model.is_default = False
+
+            replacement_model = None
+            if archived_default:
+                replacement_query = db.query(ModelVersion).filter(
+                    ModelVersion.scene_id == dataset.scene_id,
+                    ModelVersion.status == "active",
+                )
+                if linked_ids:
+                    replacement_query = replacement_query.filter(
+                        ModelVersion.id.notin_(linked_ids)
+                    )
+                candidates = replacement_query.order_by(
+                    ModelVersion.is_default.desc(),
+                    ModelVersion.created_at.desc(),
+                ).all()
+                replacement_model = next(
+                    (
+                        model
+                        for model in candidates
+                        if Path(model.model_path).expanduser().is_file()
+                    ),
+                    None,
+                )
+                if replacement_model is not None:
+                    replacement_model.is_default = True
+
+            replacement_dataset = None
+            if (
+                replacement_model is not None
+                and replacement_model.dataset_version_id is not None
+                and replacement_model.dataset_version_id != dataset.id
+            ):
+                candidate_dataset = replacement_model.dataset_version
+                if candidate_dataset is not None and candidate_dataset.status == "ready":
+                    replacement_dataset = candidate_dataset
+            if replacement_dataset is None:
+                replacement_dataset = (
+                    db.query(DatasetVersion)
+                    .filter(
+                        DatasetVersion.scene_id == dataset.scene_id,
+                        DatasetVersion.id != dataset.id,
+                        DatasetVersion.status == "ready",
+                    )
+                    .order_by(DatasetVersion.frozen_at.desc(), DatasetVersion.created_at.desc())
+                    .first()
+                )
+            db.query(DatasetVersion).filter(
+                DatasetVersion.scene_id == dataset.scene_id,
+            ).update({"is_current": False}, synchronize_session=False)
+            if replacement_dataset is not None:
+                replacement_dataset.is_current = True
+
         dataset.status = "archived"
+        dataset.is_current = False
         dataset.archived_at = datetime.now()
         db.commit()
         db.refresh(dataset)

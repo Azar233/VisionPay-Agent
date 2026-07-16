@@ -124,6 +124,38 @@ def test_import_available_model_from_server_path_builds_catalog_and_prices(
     imported = next(item for item in versions.json()["items"] if item["id"] == model["id"])
     assert imported["is_default"] is True
 
+    fallback_weights = tmp_path / "builtin-best.pt"
+    fallback_weights.write_bytes(b"builtin-fallback-weights")
+    from app.services.model_version_service import ModelVersionService
+
+    monkeypatch.setattr(
+        ModelVersionService,
+        "_builtin_path",
+        classmethod(lambda cls: fallback_weights),
+    )
+    archived = client.post(
+        f"/api/datasets/{dataset['id']}/archive",
+        headers=headers,
+    )
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["status"] == "archived"
+    assert archived.json()["is_current"] is False
+
+    db_session.expire_all()
+    archived_model = db_session.query(ModelVersion).filter_by(id=model["id"]).one()
+    assert archived_model.status == "archived"
+    assert archived_model.is_default is False
+    fallback_model = (
+        db_session.query(ModelVersion)
+        .filter(
+            ModelVersion.scene_id == scene.id,
+            ModelVersion.status == "active",
+            ModelVersion.is_default.is_(True),
+        )
+        .one()
+    )
+    assert Path(fallback_model.model_path) == fallback_weights
+
 
 def test_import_available_model_from_upload_copies_weights(
     client,
