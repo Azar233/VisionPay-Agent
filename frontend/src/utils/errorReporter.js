@@ -11,7 +11,9 @@ const REPORT_API = "/api/errors/report";
  */
 function reportError(errorInfo) {
     // 1. 控制台输出 (开发调试用)
-    console.error("[ErrorReporter]", errorInfo);
+    // 字符串化关键字段，确保浏览器自动化、远程日志和 DevTools 都能看到真实堆栈，
+    // 而不是只有无法展开的 "Object"。
+    console.error("[ErrorReporter]", JSON.stringify(errorInfo));
 
     // 2. 存入本地存储 (保留最近 50 条)
     try {

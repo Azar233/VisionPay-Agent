@@ -9,7 +9,41 @@ from app.memory import LongTermMemoryStore
 from app.rag import KnowledgeRetriever
 
 
+PLATFORM_AGENT_CAPABILITIES = {
+    "detection": "Detection Agent：对聊天附件执行单图、批量图片或视频商品检测，返回类别、置信度、检测框和计价结果。",
+    "dataset": "Dataset Agent：查询数据集版本与详情；预览派生、冻结、归档、删除等写操作；收集添加样品所需字段，并交接到数据集页面由用户选图和人工绘框。",
+    "training": "Training Agent：查询训练任务列表、实时状态和训练指标；发起带参数的训练启动、停止任务和切换默认模型。写操作必须先展示影响预览并由确认卡执行；当前不开放训练结果导入、模型发布、暂停/恢复任务，也不直接修改运行中任务的参数。",
+    "catalog": "Catalog Agent：实时查询商品目录、条码、价格和缺价状态；发起改价或清除价格，写操作必须通过影响预览与确认卡。",
+    "knowledge": "Knowledge Agent：解释平台能力和通用概念，检索操作知识与故障案例，并仅在经营者明确要求时保存或召回稳定偏好。",
+}
+
+
+def platform_agent_capabilities_payload(agent_name: str = "all") -> dict:
+    target = (agent_name or "all").strip().lower()
+    if target in PLATFORM_AGENT_CAPABILITIES:
+        return {
+            "agent": target,
+            "answer": PLATFORM_AGENT_CAPABILITIES[target],
+            "source": "platform_runtime_capabilities",
+        }
+    overview = "\n".join(
+        ["系统共有 5 个领域 Agent："]
+        + [f"- {description}" for description in PLATFORM_AGENT_CAPABILITIES.values()]
+        + ["Supervisor 只负责路由与编排，不计入 5 个领域 Agent。"]
+    )
+    return {
+        "agent": "all",
+        "count": 5,
+        "answer": overview,
+        "source": "platform_runtime_capabilities",
+    }
+
+
 def build_knowledge_tools(user_id: int, session_uuid: str | None = None) -> list:
+    def get_platform_agent_capabilities(agent_name: str = "all") -> str:
+        """查询固定的平台 Agent 数量、职责和权限边界；不依赖 Embedding、RAG 或外部知识库。"""
+        return json_text(platform_agent_capabilities_payload(agent_name))
+
     def search_management_knowledge(query: str, domain: str = "") -> str:
         """检索 VisionPay 操作规范和领域知识；domain 可为 dataset/training/detection/catalog。"""
         try:
@@ -48,6 +82,9 @@ def build_knowledge_tools(user_id: int, session_uuid: str | None = None) -> list
             return json_text({"error": f"长期记忆检索失败：{exc}"})
 
     return [
+        StructuredTool.from_function(
+            get_platform_agent_capabilities, name="get_platform_agent_capabilities"
+        ),
         StructuredTool.from_function(
             search_management_knowledge, name="search_management_knowledge"
         ),

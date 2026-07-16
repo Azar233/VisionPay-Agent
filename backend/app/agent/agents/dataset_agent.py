@@ -2,7 +2,7 @@
 
 from app.agent.prompts import DATASET_PROMPT
 from app.agent.scoped_agent import ScopedToolAgent
-from app.agent.tools import build_dataset_tools, build_knowledge_tools
+from app.agent.tools import build_dataset_tools, build_interaction_tools, build_knowledge_tools
 
 
 class DatasetAgent(ScopedToolAgent):
@@ -11,5 +11,6 @@ class DatasetAgent(ScopedToolAgent):
             name="dataset",
             system_prompt=DATASET_PROMPT,
             tools=build_dataset_tools(user_id, session_uuid)
+            + build_interaction_tools("dataset")
             + build_knowledge_tools(user_id, session_uuid),
         )

@@ -35,11 +35,12 @@ class _FakeInputFormExecutor:
     async def astream_events(self, payload, version):
         yield {
             "event": "on_tool_end",
-            "name": "request_dataset_sample_form",
+            "name": "request_user_input_form",
             "data": {
                 "output": (
-                    '{"form_type":"dataset_add_samples","title":"补充样品信息",'
-                    '"defaults":{"dataset_id":6,"mode":"train_new"}}'
+                    '{"form_type":"dynamic_parameters","form_id":"form-1",'
+                    '"agent":"training","title":"补充训练参数",'
+                    '"fields":[{"name":"epochs","label":"训练轮数","type":"integer"}]}'
                 )
             },
         }
@@ -77,14 +78,14 @@ async def test_preview_tool_emits_confirmation_required_event():
 
 
 @pytest.mark.asyncio
-async def test_dataset_form_tool_emits_structured_input_form_event():
+async def test_shared_form_tool_emits_structured_input_form_event():
     agent = ScopedToolAgent.__new__(ScopedToolAgent)
-    agent.name = "dataset"
+    agent.name = "training"
     agent.executor = _FakeInputFormExecutor()
 
-    events = [event async for event in agent.stream("添加新商品")]
+    events = [event async for event in agent.stream("启动训练")]
 
     form_event = next(event for event in events if event["type"] == "input_form")
-    assert form_event["agent"] == "dataset"
-    assert form_event["form"]["form_type"] == "dataset_add_samples"
-    assert form_event["form"]["defaults"]["dataset_id"] == 6
+    assert form_event["agent"] == "training"
+    assert form_event["form"]["form_type"] == "dynamic_parameters"
+    assert form_event["form"]["form_id"] == "form-1"

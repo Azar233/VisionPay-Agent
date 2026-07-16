@@ -2,7 +2,7 @@
 
 from app.agent.prompts import CATALOG_PROMPT
 from app.agent.scoped_agent import ScopedToolAgent
-from app.agent.tools import build_catalog_tools, build_knowledge_tools
+from app.agent.tools import build_catalog_tools, build_interaction_tools, build_knowledge_tools
 
 
 class CatalogAgent(ScopedToolAgent):
@@ -11,5 +11,6 @@ class CatalogAgent(ScopedToolAgent):
             name="catalog",
             system_prompt=CATALOG_PROMPT,
             tools=build_catalog_tools(user_id, session_uuid)
+            + build_interaction_tools("catalog")
             + build_knowledge_tools(user_id, session_uuid),
         )

@@ -159,6 +159,7 @@ import {
 } from '@/api/detection'
 import { getAgentOperationApi, listAgentOperationsApi } from '@/api/agentOperations'
 import { useAgentStore } from '@/stores/agent'
+import { CHAT_ATTACHMENT_MAX_COUNT, chatAttachmentKey, prepareChatAttachmentAdditions } from '@/utils/chatAttachments'
 import { renderMarkdown } from '@/utils/markdown'
 import { streamChat } from '@/utils/stream'
 
@@ -174,6 +175,7 @@ const sessionsCollapsed = ref(false)
 const insightsCollapsed = ref(false)
 const agentStatus = ref({ configured: false, model: 'DeepSeek', agents: [] })
 const pendingOperations = ref([])
+const pendingFormSubmission = ref(null)
 const canSend = computed(() => Boolean(inputText.value.trim() || selectedFiles.value.length))
 const activeAgent = computed(() => [...agentStore.messages].reverse().find((message) => message.role === 'assistant' && message.agent)?.agent || '')
 
@@ -209,6 +211,7 @@ function toolName(name) { return ({
   preview_start_training: '预览训练参数', preview_stop_training: '预览停止训练',
   preview_set_default_model: '比较新旧默认模型', list_product_prices: '读取实时价目表',
   preview_update_product_price: '预览价格变更', preview_clear_product_price: '预览清除价格',
+  request_user_input_form: '生成参数问询表单', get_platform_agent_capabilities: '读取 Agent 能力边界',
   search_knowledge: '检索知识库', search_incidents: '检索故障案例',
 })[name] || name }
 function escapeText(value) { const node = document.createElement('div'); node.textContent = value; return node.innerHTML.replace(/\n/g, '<br>') }
@@ -231,7 +234,7 @@ async function ensureSession() {
   return session.session_uuid
 }
 function createNewChat() {
-  stopStream(); agentStore.currentSessionId = null; agentStore.messages = []; inputText.value = ''; clearFiles()
+  stopStream(); agentStore.currentSessionId = null; agentStore.messages = []; inputText.value = ''; pendingFormSubmission.value = null; clearFiles()
 }
 async function openSession(sessionUuid) {
   if (agentStore.isLoading || sessionUuid === agentStore.currentSessionId && agentStore.messages.length) return
@@ -257,33 +260,32 @@ async function removeSession(session) {
 }
 
 function selectFiles(files) {
-  const allowed = /\.(jpe?g|png|bmp|webp|zip|mp4|avi|mov|mkv)$/i
-  const incoming = [...files].filter((file) => allowed.test(file.name)).slice(0, 30)
-  if (files.length && !incoming.length) ElMessage.warning('仅支持图片、ZIP、MP4、AVI、MOV 或 MKV')
-  clearFiles()
-  selectedFiles.value = incoming.map((file) => ({ id: `${file.name}-${file.lastModified}`, file, preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : '' }))
+  const result = prepareChatAttachmentAdditions(selectedFiles.value, files)
+  selectedFiles.value.push(...result.additions.map((file) => ({
+    id: chatAttachmentKey(file),
+    file,
+    preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+  })))
+
+  if (result.unsupportedCount) ElMessage.warning('仅支持图片、ZIP、MP4、AVI、MOV 或 MKV 文件')
+  if (result.overflowCount) ElMessage.warning(`每次最多上传 ${CHAT_ATTACHMENT_MAX_COUNT} 个附件，超出的文件未添加`)
+  else if (result.duplicateCount && !result.additions.length) ElMessage.info('所选文件已经在附件列表中')
 }
 function handleDrop(event) { if (!agentStore.isLoading) selectFiles(event.dataTransfer.files) }
 function handlePaste(event) { const files = [...(event.clipboardData?.files || [])]; if (files.length) { event.preventDefault(); selectFiles(files) } }
 function removeFile(index) { const [item] = selectedFiles.value.splice(index, 1); if (item?.preview) URL.revokeObjectURL(item.preview) }
 function clearFiles() { selectedFiles.value.forEach((item) => item.preview && URL.revokeObjectURL(item.preview)); selectedFiles.value = [] }
 
-async function submitInputForm(values) {
-  const modeCopy = {
-    train_new: '新建商品训练图',
-    train_existing: '已有商品训练图',
-    scene: 'val/test 结账场景',
-  }
-  const details = [
-    `请继续为草稿数据集 ID ${values.dataset_id} 添加样品。`,
-    `模式：${values.mode}（${modeCopy[values.mode]}）。`,
-  ]
-  if (values.mode === 'train_new') {
-    details.push(`商品名称：${values.name}。类别英文名：${values.class_name}。价格：${values.unit_price} 元。`)
-    if (values.barcode) details.push(`条码：${values.barcode}。`)
-  }
-  if (values.mode === 'train_existing') details.push(`已有商品 ID：${values.existing_product_id}。`)
-  inputText.value = details.join('')
+async function submitInputForm({ form, values }) {
+  const fieldMap = Object.fromEntries((form.fields || []).map((field) => [field.name, field]))
+  const details = Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== '').map(([name, value]) => {
+    const field = fieldMap[name] || { label: name }
+    const selected = field.options?.find((option) => option.value === value)
+    const display = selected?.label || (Array.isArray(value) ? value.join('、') : value)
+    return `${field.label}：${display}`
+  })
+  inputText.value = `已填写“${form.title || '任务参数'}”：\n${details.map((item) => `- ${item}`).join('\n')}`
+  pendingFormSubmission.value = form.form_id ? { form_id: form.form_id, values } : null
   await sendMessage()
 }
 
@@ -295,6 +297,7 @@ async function sendMessage() {
     return
   }
   const files = selectedFiles.value.map((item) => item.file)
+  const formSubmission = pendingFormSubmission.value
   const lastAgent = activeAgent.value
   const text = inputText.value.trim() || (lastAgent === 'dataset' ? '我已选择样品图片，请继续添加样品流程' : '识别附件中的商品并汇总数量')
   let sessionUuid
@@ -308,6 +311,7 @@ async function sendMessage() {
       message: text,
       attachment_paths: upload.files.map((file) => file.path),
       attachment_names: files.map((file) => ({ name: file.name })),
+      form_submission: formSubmission,
       session_uuid: sessionUuid,
     }, {
       onMessage(event) {
@@ -325,6 +329,7 @@ async function sendMessage() {
       onDone() { assistant.loading = false; assistant.tool = ''; agentStore.setLoading(false); agentStore.abortController = null; clearFiles(); loadSessions(); loadPendingOperations(); scrollBottom() },
       onError(error) { assistant.content = error.message; assistant.loading = false; assistant.tool = ''; agentStore.setLoading(false); agentStore.abortController = null; scrollBottom() },
     })
+    pendingFormSubmission.value = null
     agentStore.abortController = stream.stop
   } catch (error) {
     assistant.content = error?.response?.data?.detail || error.message || '请求失败'

@@ -107,25 +107,6 @@ def build_dataset_tools(user_id: int, session_uuid: str) -> list:
         finally:
             db.close()
 
-    def request_dataset_sample_form(
-        dataset_id: int | None = None,
-        dataset_version: str | None = None,
-        mode: Literal["train_new", "train_existing", "scene"] | None = None,
-    ) -> str:
-        """当添加样品所需字段不完整时，展示结构化填写表单；不创建交接，也不写入数据。"""
-        return json_text(
-            {
-                "form_type": "dataset_add_samples",
-                "title": "补充样品信息",
-                "description": "填写完成后将创建人工选图与绘框交接，不会直接写入样品。",
-                "defaults": {
-                    "dataset_id": dataset_id,
-                    "dataset_version": dataset_version,
-                    "mode": mode or "train_new",
-                },
-            }
-        )
-
     def preview_derive_dataset_version(
         dataset_id: int, version: str, name: str, description: str | None = None
     ) -> str:
@@ -180,9 +161,6 @@ def build_dataset_tools(user_id: int, session_uuid: str) -> list:
         ),
         StructuredTool.from_function(
             get_add_samples_handoff_status, name="get_add_samples_handoff_status"
-        ),
-        StructuredTool.from_function(
-            request_dataset_sample_form, name="request_dataset_sample_form"
         ),
         StructuredTool.from_function(
             preview_derive_dataset_version, name="preview_derive_dataset_version"

@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.agent.orchestrator import MultiAgentOrchestrator
 from app.agent.detection_agent import DetectionAgent
+from app.agent.routing import AGENT_NAMES, RouteDecision
+from app.agent.tools.interaction_tools import validate_form_submission
 from app.api.auth import get_current_user
 from app.api.detection import save_upload
 from app.config.settings import settings
@@ -232,6 +234,7 @@ async def chat_stream(
     message = str(body.get("message", "")).strip()
     attachment_paths = body.get("attachment_paths") or []
     attachment_names = body.get("attachment_names") or []
+    raw_form_submission = body.get("form_submission")
     scene_id = body.get("scene_id")
     session_uuid = str(body.get("session_uuid") or "")
     if not message:
@@ -243,6 +246,51 @@ async def chat_stream(
 
     current_user_id = int(current_user.id)
     session = _session_or_404(db, current_user_id, session_uuid)
+    form_submission = None
+    form_definition = None
+    if raw_form_submission is not None:
+        if not isinstance(raw_form_submission, dict):
+            raise HTTPException(status_code=400, detail="表单提交格式无效")
+        form_id = str(raw_form_submission.get("form_id") or "").strip()
+        if not form_id or len(form_id) > 64:
+            raise HTTPException(status_code=400, detail="表单 ID 无效")
+        source_message = next(
+            (
+                item
+                for item in reversed(session.messages)
+                if item.role == "assistant"
+                and isinstance(item.tool_calls, dict)
+                and isinstance(item.tool_calls.get("input_form"), dict)
+                and item.tool_calls["input_form"].get("form_id") == form_id
+            ),
+            None,
+        )
+        if source_message is None:
+            raise HTTPException(status_code=400, detail="表单不存在或不属于当前会话")
+        if any(
+            item.role == "user"
+            and isinstance(item.tool_calls, dict)
+            and isinstance(item.tool_calls.get("form_submission"), dict)
+            and item.tool_calls["form_submission"].get("form_id") == form_id
+            for item in session.messages
+        ):
+            raise HTTPException(status_code=409, detail="该表单已经提交，请勿重复操作")
+        form_definition = source_message.tool_calls["input_form"]
+        form_agent = str(form_definition.get("agent") or source_message.agent_used or "")
+        if form_agent not in AGENT_NAMES:
+            raise HTTPException(status_code=400, detail="表单所属 Agent 无效")
+        try:
+            normalized_values = validate_form_submission(
+                form_definition, raw_form_submission.get("values") or {}
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        form_submission = {
+            "form_id": form_id,
+            "agent": form_agent,
+            "purpose": form_definition.get("purpose"),
+            "values": normalized_values,
+        }
     last_agent = next(
         (
             item.agent_used
@@ -283,6 +331,11 @@ async def chat_stream(
                 content += "\n\n本次附件路径：\n" + "\n".join(
                     f"- {p}" for p in historical_paths
                 )
+            historical_form = item.tool_calls.get("form_submission")
+            if isinstance(historical_form, dict):
+                content += "\n\n结构化表单参数：\n" + json.dumps(
+                    historical_form, ensure_ascii=False
+                )
         history.append({"role": item.role, "content": content})
     history = history[-20:]
     if not settings.DEEPSEEK_API_KEY or settings.DEEPSEEK_API_KEY.startswith("sk-your-"):
@@ -293,19 +346,40 @@ async def chat_stream(
         session_uuid=session_uuid,
         detection_agent_factory=DetectionAgent,
     )
-    decision = orchestrator.route(
-        message,
-        has_attachments=bool(attachment_paths),
-        preferred_agent=last_agent,
-        active_workflow_agent="dataset" if active_dataset_handoff else None,
-    )
+    agent_message = message
+    if form_submission and form_definition:
+        agent_message += "\n\n[系统校验通过的结构化表单提交]\n" + json.dumps(
+            {
+                "purpose": form_submission["purpose"],
+                "known_values": form_definition.get("known_values") or {},
+                "values": form_submission["values"],
+            },
+            ensure_ascii=False,
+        )
+        decision = RouteDecision(
+            form_submission["agent"],
+            "form_submission",
+            1.0,
+            "继续处理当前会话中已校验的结构化表单",
+        )
+    else:
+        decision = orchestrator.route(
+            message,
+            has_attachments=bool(attachment_paths),
+            preferred_agent=last_agent,
+            active_workflow_agent="dataset" if active_dataset_handoff else None,
+        )
     db.add(
         ChatMessage(
             session_id=session.id,
             role="user",
             content=message,
             agent_used=decision.agent,
-            tool_calls={"attachments": attachment_names, "attachment_paths": attachment_paths},
+            tool_calls={
+                "attachments": attachment_names,
+                "attachment_paths": attachment_paths,
+                **({"form_submission": form_submission} if form_submission else {}),
+            },
         )
     )
     db.flush()
@@ -323,7 +397,7 @@ async def chat_stream(
         yield f"data: {json.dumps({'type': 'session', 'session_uuid': session_uuid})}\n\n"
         try:
             async for event in orchestrator.stream(
-                message,
+                agent_message,
                 attachment_paths,
                 history,
                 decision=decision,
@@ -356,7 +430,11 @@ async def chat_stream(
             error_text = f"Agent 处理失败: {exc}"
             yield f"data: {json.dumps({'type': 'error', 'content': error_text}, ensure_ascii=False)}\n\n"
         finally:
-            final_content = assistant_content.strip() or error_text or "本次响应已停止。"
+            final_content = (
+                assistant_content.strip()
+                or error_text
+                or ("请填写上方表单后继续。" if input_form else "本次响应已停止。")
+            )
             try:
                 persist_session = _session_or_404(db, current_user_id, session_uuid)
                 db.add(

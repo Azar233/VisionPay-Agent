@@ -112,7 +112,7 @@ class ScopedToolAgent:
                             "status": handoff.get("status"),
                             "context": handoff.get("context") or {},
                         }
-                if tool_name == "request_dataset_sample_form":
+                if tool_name == "request_user_input_form":
                     try:
                         form = json.loads(content)
                     except (TypeError, json.JSONDecodeError):

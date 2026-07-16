@@ -707,3 +707,83 @@ def test_chat_stream_emits_chunks_and_persists_full_reply(client, monkeypatch):
     detail = client.get(f"/api/chat/sessions/{session_uuid}", headers=headers).json()
     assert detail["messages"][-1]["role"] == "assistant"
     assert detail["messages"][-1]["content"] == "你好"
+
+
+def test_chat_form_submission_is_validated_and_returns_to_source_agent(
+    client, db_session, monkeypatch
+):
+    from app.api import chat as chat_api
+    from app.entity.db_models import ChatMessage, ChatSession
+
+    headers = _auth_headers(client)
+    session_uuid = client.post(
+        "/api/chat/sessions", headers=headers, json={"title": "训练参数"}
+    ).json()["session_uuid"]
+    session = db_session.query(ChatSession).filter(
+        ChatSession.session_uuid == session_uuid
+    ).one()
+    form = {
+        "form_type": "dynamic_parameters",
+        "schema_version": 1,
+        "form_id": "training-form-1",
+        "agent": "training",
+        "title": "补充训练参数",
+        "purpose": "training.start",
+        "known_values": {"dataset_version_id": 2},
+        "fields": [
+            {
+                "name": "epochs",
+                "label": "训练轮数",
+                "type": "integer",
+                "required": True,
+                "minimum": 1,
+            }
+        ],
+    }
+    db_session.add(
+        ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content="请补充训练参数",
+            agent_used="training",
+            tool_calls={"input_form": form},
+        )
+    )
+    db_session.commit()
+
+    captured = {}
+
+    class FakeOrchestrator:
+        def __init__(self, **kwargs):
+            pass
+
+        def route(self, *args, **kwargs):
+            raise AssertionError("结构化表单提交不应重新执行普通路由")
+
+        async def stream(self, message, attachment_paths, history, decision=None):
+            captured["message"] = message
+            captured["decision"] = decision
+            yield decision.event()
+            yield {"type": "text_chunk", "agent": decision.agent, "content": "已接收参数"}
+
+    monkeypatch.setattr(chat_api, "MultiAgentOrchestrator", FakeOrchestrator)
+    monkeypatch.setattr(chat_api.settings, "DEEPSEEK_API_KEY", "test-key")
+    payload = {
+        "message": "已填写训练参数：训练轮数 20",
+        "attachment_paths": [],
+        "attachment_names": [],
+        "session_uuid": session_uuid,
+        "form_submission": {
+            "form_id": "training-form-1",
+            "values": {"epochs": "20"},
+        },
+    }
+
+    response = client.post("/api/chat/stream", headers=headers, json=payload)
+
+    assert response.status_code == 200
+    assert captured["decision"].agent == "training"
+    assert captured["decision"].method == "form_submission"
+    assert '"epochs": 20' in captured["message"]
+    repeated = client.post("/api/chat/stream", headers=headers, json=payload)
+    assert repeated.status_code == 409

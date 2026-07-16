@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP_TOKENS: int = 60
     RAG_TOP_K: int = 5
     ROUTER_MIN_SIMILARITY: float = 0.42
+    # hybrid：强意图与向量候选双轨；embedding_only：仅用于评估向量路由。
+    AGENT_ROUTING_MODE: str = "hybrid"
     LONG_TERM_MEMORY_TOP_K: int = 3
     AGENT_HANDOFF_TTL_SECONDS: int = 86400
     AGENT_CONFIRMATION_TTL_SECONDS: int = 600
