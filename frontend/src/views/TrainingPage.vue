@@ -828,7 +828,9 @@ const trainForm = ref({
 })
 
 const trainableDatasets = computed(() =>
-  datasetList.value.filter((dataset) => dataset.status === 'ready')
+  datasetList.value.filter((dataset) => (
+    dataset.status === 'ready' && !dataset.extra_metadata?.catalog_only
+  ))
 )
 const importableDatasets = computed(() =>
   datasetList.value.filter((dataset) => ['ready', 'archived'].includes(dataset.status))

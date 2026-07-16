@@ -45,11 +45,13 @@ class ModelVersionService:
                     existing.file_size = model_path.stat().st_size
                 continue
 
-            # The first registration preserves the application's historical
-            # behaviour: backend/best.pt remains the selected detection model.
-            db.query(ModelVersion).filter(ModelVersion.scene_id == scene.id).update(
-                {"is_default": False},
-                synchronize_session=False,
+            # Preserve an already selected imported/trained model. The builtin
+            # file becomes the default only when the scene has no default yet.
+            has_default = (
+                db.query(ModelVersion)
+                .filter(ModelVersion.scene_id == scene.id, ModelVersion.is_default.is_(True))
+                .first()
+                is not None
             )
             model = ModelVersion(
                 scene_id=scene.id,
@@ -62,7 +64,7 @@ class ModelVersionService:
                 model_path=str(model_path),
                 description="系统原有正式检测模型，由 backend/best.pt 自动登记。",
                 file_size=model_path.stat().st_size,
-                is_default=True,
+                is_default=not has_default,
             )
             db.add(model)
             created.append(model)

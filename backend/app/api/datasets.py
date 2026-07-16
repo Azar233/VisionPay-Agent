@@ -6,6 +6,8 @@ Training and model deployment are intentionally out of scope for this router.
 from __future__ import annotations
 
 import time
+import uuid
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -32,6 +34,8 @@ from app.entity.schemas import (
 )
 from app.services.dataset_annotation_service import dataset_annotation_service
 from app.services.dataset_workspace_service import dataset_workspace_service
+from app.services.model_import_service import model_import_service
+from app.services.model_version_service import model_version_service
 from app.services.dataset_service import (
     DatasetConflictError,
     DatasetLifecycleError,
@@ -41,6 +45,7 @@ from app.services.dataset_service import (
 from app.storage.dataset_operation_store import dataset_operation_store
 
 router = APIRouter(prefix="/api/datasets", tags=["数据集版本"])
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _raise_service_error(exc: ValueError) -> None:
@@ -334,6 +339,83 @@ def import_baseline_dataset(
     except (DatasetNotFoundError, DatasetConflictError, DatasetLifecycleError) as exc:
         db.rollback()
         _raise_service_error(exc)
+
+
+@router.post(
+    "/import-available-model",
+    status_code=status.HTTP_201_CREATED,
+    summary="导入可直接用于检测的 YOLO 模型及类别目录",
+)
+async def import_available_model(
+    scene_id: int = Form(..., ge=1),
+    version: str = Form(..., min_length=1, max_length=50),
+    name: str = Form(..., min_length=1, max_length=150),
+    description: str | None = Form(None),
+    source_path: str | None = Form(None),
+    set_current: bool = Form(True),
+    set_default: bool = Form(True),
+    file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Accept one best.pt upload or a path visible to the backend host."""
+    uploaded = file is not None and bool(file.filename)
+    path_value = (source_path or "").strip()
+    if uploaded == bool(path_value):
+        raise HTTPException(status_code=422, detail="请上传 best.pt 或填写服务器文件路径，且只能选择一种方式")
+
+    staged_path: Path | None = None
+    source_name = Path(file.filename or "best.pt").name if uploaded else Path(path_value).name
+    try:
+        if uploaded:
+            if Path(source_name).suffix.lower() != ".pt":
+                raise HTTPException(status_code=422, detail="模型文件必须是 .pt 格式")
+            staging_root = Path(settings.DATASET_STAGING_ROOT).expanduser()
+            if not staging_root.is_absolute():
+                staging_root = (BACKEND_ROOT / staging_root).resolve()
+            staging_root = staging_root / "model-imports"
+            staging_root.mkdir(parents=True, exist_ok=True)
+            staged_path = staging_root / f"{uuid.uuid4().hex}.pt"
+            max_bytes = settings.MODEL_IMPORT_MAX_FILE_MB * 1024 * 1024
+            size = 0
+            with staged_path.open("wb") as output:
+                while chunk := await file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"模型文件超过 {settings.MODEL_IMPORT_MAX_FILE_MB} MB 限制",
+                        )
+                    output.write(chunk)
+            import_source = staged_path
+        else:
+            candidate = Path(path_value).expanduser()
+            import_source = candidate if candidate.is_absolute() else (BACKEND_ROOT / candidate).resolve()
+
+        dataset, model_version = model_import_service.import_available_model(
+            db,
+            scene_id=scene_id,
+            source_path=import_source,
+            source_name=source_name,
+            version=version,
+            name=name,
+            description=description,
+            set_current=set_current,
+            set_default=set_default,
+            user_id=current_user.id,
+        )
+        return {
+            "dataset": dataset_service.serialize(dataset),
+            "model_version": model_version_service.serialize(db, model_version),
+        }
+    except (DatasetNotFoundError, DatasetConflictError, DatasetLifecycleError) as exc:
+        db.rollback()
+        _raise_service_error(exc)
+    finally:
+        if staged_path is not None:
+            staged_path.unlink(missing_ok=True)
+        if file is not None:
+            await file.close()
 
 
 @router.get("/{dataset_id}", response_model=DatasetVersionResponse, summary="数据集版本详情")
