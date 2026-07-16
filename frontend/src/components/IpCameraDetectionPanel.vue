@@ -77,7 +77,7 @@ const statusText = ref('等待启动')
 const modelInfo = ref('模型将在连接后加载')
 const runtimeInfo = ref('CPU 低延迟模式')
 const result = ref({})
-const defaultCameraUrl = 'http://10.172.52.70:8080'
+const defaultCameraUrl = 'http://127.0.0.1:18080'
 const cameraUrl = ref(window.localStorage.getItem('visionpay-ip-webcam-url') || defaultCameraUrl)
 let socket = null
 let intentionalClose = false
@@ -161,7 +161,7 @@ function connect() {
     setStatus('正在加载模型')
     socket.send(JSON.stringify({
       type: 'config',
-      mode: 'cpu',
+      mode: 'cuda',
       conf: props.conf,
       iou: props.iou,
       scene_id: props.sceneId || null,
@@ -171,6 +171,7 @@ function connect() {
   socket.onmessage = async (event) => {
     const message = JSON.parse(event.data)
     if (message.type === 'config_ok') {
+      console.log('[camera] config_ok:', message)
       reconnectAttempts = 0
       loading.value = false
       running.value = true

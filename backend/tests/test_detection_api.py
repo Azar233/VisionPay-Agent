@@ -34,9 +34,13 @@ def _image_bytes():
     return stream.getvalue()
 
 
-def test_camera_options_are_cpu_only_and_bounded():
+def test_camera_options_validate_mode_and_bounds(monkeypatch):
+    import torch
+
     from app.api.detection import _camera_options
 
+    # 模拟无 CUDA：默认回退到 cpu，显式请求 cuda/gpu 会报错。
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert _camera_options({"mode": "cpu", "conf": 0.3, "iou": 0.5, "scene_id": 2}) == {
         "mode": "cpu",
         "conf": 0.3,
@@ -44,9 +48,19 @@ def test_camera_options_are_cpu_only_and_bounded():
         "scene_id": 2,
         "camera_url": None,
     }
+    assert _camera_options({"conf": 0.3, "iou": 0.5})["mode"] == "cpu"
     assert _camera_options({"camera_url": "http://10.172.52.70:8080"})["camera_url"] == "http://10.172.52.70:8080/video"
-    with pytest.raises(ValueError, match="仅支持 cpu"):
+    with pytest.raises(ValueError, match="未启用 CUDA"):
         _camera_options({"mode": "gpu"})
+    with pytest.raises(ValueError, match="未启用 CUDA"):
+        _camera_options({"mode": "cuda"})
+
+    # 模拟有 CUDA：默认使用 cuda，允许 gpu/cuda 请求。
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert _camera_options({"mode": "cuda", "conf": 0.3, "iou": 0.5, "scene_id": 2})["mode"] == "cuda"
+    assert _camera_options({"mode": "gpu", "conf": 0.3, "iou": 0.5})["mode"] == "cuda"
+    assert _camera_options({"conf": 0.3, "iou": 0.5})["mode"] == "cuda"
+
     with pytest.raises(ValueError, match="0.05"):
         _camera_options({"conf": 0.01})
     with pytest.raises(ValueError, match="局域网"):

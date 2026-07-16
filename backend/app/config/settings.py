@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     CAMERA_CONFIDENCE: float = 0.30
     CAMERA_IOU: float = 0.45
     CAMERA_IMAGE_SIZE: int = 512
-    CAMERA_TARGET_FPS: float = 3.0
+    CAMERA_TARGET_FPS: float = 25.0
     CAMERA_JPEG_QUALITY: int = 62
     CAMERA_OUTPUT_MAX_WIDTH: int = 960
     CAMERA_READ_TIMEOUT_MS: int = 2000

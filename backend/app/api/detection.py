@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+import torch
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -431,8 +432,13 @@ async def get_video_detection_status(
 
 def _camera_options(payload: dict) -> dict:
     """Validate the initial config message accepted by the camera socket."""
-    mode = str(payload.get("mode", "cpu")).lower()
-    if mode != "cpu":
+    import torch
+
+    cuda_available = torch.cuda.is_available()
+    # 默认优先使用 GPU；如果请求了 gpu/cuda 但 CUDA 不可用则明确报错。
+    requested_mode = str(payload.get("mode", "cuda" if cuda_available else "cpu")).lower()
+    mode = "cuda" if requested_mode in ("cuda", "gpu") else "cpu"
+    if mode == "cuda" and not cuda_available:
         raise ValueError("当前 PyTorch 环境未启用 CUDA，实时检测仅支持 cpu 模式")
     conf = float(payload.get("conf", settings.CAMERA_CONFIDENCE))
     iou = float(payload.get("iou", settings.CAMERA_IOU))
@@ -505,7 +511,8 @@ async def camera_detection_ws(websocket: WebSocket):
         await websocket.send_json(
             {
                 "type": "config_ok",
-                "mode": "cpu",
+                "mode": options["mode"],
+                "device": "cuda" if torch.cuda.is_available() else "cpu",
                 "target_fps": settings.CAMERA_TARGET_FPS,
                 "image_size": settings.CAMERA_IMAGE_SIZE,
                 "model": model_context["model_name"],

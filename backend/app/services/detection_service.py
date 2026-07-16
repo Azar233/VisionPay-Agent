@@ -131,6 +131,18 @@ class DetectionService:
                 _MODEL_CACHE[key] = YOLO(key)
             return _MODEL_CACHE[key]
 
+    @staticmethod
+    def _get_device() -> str:
+        """Return GPU device id if CUDA is available, otherwise CPU."""
+        import torch
+
+        return "0" if torch.cuda.is_available() else "cpu"
+
+    @staticmethod
+    def _use_half(device: str) -> bool:
+        """Enable FP16 on CUDA to leverage T4 Tensor Cores; CPU keeps FP32."""
+        return device != "cpu"
+
     def prepare_realtime_model(
         self,
         *,
@@ -155,13 +167,15 @@ class DetectionService:
             db.close()
 
         dummy_frame = np.zeros((image_size, image_size, 3), dtype=np.uint8)
+        device = self._get_device()
         with _PREDICT_LOCK:
             model.predict(
                 source=dummy_frame,
                 conf=conf,
                 iou=iou,
                 imgsz=image_size,
-                device="cpu",
+                device=device,
+                half=self._use_half(device),
                 save=False,
                 verbose=False,
             )
@@ -183,19 +197,22 @@ class DetectionService:
         output_max_width: int = 960,
         finalize: bool = True,
     ) -> dict[str, Any]:
-        """Run one CPU inference and return a compact WebSocket payload."""
+        """Run one inference and return a compact WebSocket payload."""
         import cv2
 
-        with _PREDICT_LOCK:
-            result = model.predict(
-                source=frame,
-                conf=conf,
-                iou=iou,
-                imgsz=image_size,
-                device="cpu",
-                save=False,
-                verbose=False,
-            )[0]
+        # Real-time camera sessions are guaranteed single by _claim_camera_session,
+        # so the global predict lock is not needed here.
+        device = self._get_device()
+        result = model.predict(
+            source=frame,
+            conf=conf,
+            iou=iou,
+            imgsz=image_size,
+            device=device,
+            half=self._use_half(device),
+            save=False,
+            verbose=False,
+        )[0]
 
         names = result.names
         detections: list[dict[str, Any]] = []
@@ -425,12 +442,15 @@ class DetectionService:
                 if not ok or frame is None:
                     logger.warning("跳过无法读取的视频帧: %s#%d", path.name, frame_index)
                     continue
+                device = self._get_device()
                 with _PREDICT_LOCK:
                     prediction = model.predict(
                         source=frame,
                         conf=conf,
                         iou=iou,
                         imgsz=image_size,
+                        device=device,
+                        half=self._use_half(device),
                         verbose=False,
                     )[0]
                 frame_path = Path(f"{path.name}.frame_{frame_index:06d}.jpg")
@@ -747,12 +767,15 @@ class DetectionService:
             db.refresh(task)
 
             model = self._load_model(model_path)
+            device = self._get_device()
             with _PREDICT_LOCK:
                 raw_results = model.predict(
                     source=[str(path) for path in paths],
                     conf=conf,
                     iou=iou,
                     imgsz=image_size,
+                    device=device,
+                    half=self._use_half(device),
                     verbose=False,
                 )
             items = []
