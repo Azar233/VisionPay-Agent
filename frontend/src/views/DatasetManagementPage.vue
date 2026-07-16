@@ -643,6 +643,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CircleCheck, Delete, Edit, Lock, Plus, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
@@ -653,6 +654,7 @@ import {
 } from '@/utils/datasetAnnotationReview'
 import { collectProductFolderFiles } from '@/utils/datasetProductFiles'
 import { getScenes } from '@/api/history'
+import { getAgentHandoffApi, updateAgentHandoffApi } from '@/api/handoffs'
 import {
   archiveDatasetVersionApi,
   commitDatasetProductTaskApi,
@@ -673,6 +675,7 @@ import {
 } from '@/api/datasets'
 
 const loading = ref(false)
+const route = useRoute()
 const submitting = ref(false)
 const rows = ref([])
 const sceneOptions = ref([])
@@ -704,6 +707,7 @@ const operationTask = ref({
 })
 const deriveParent = ref(null)
 const productDataset = ref(null)
+const activeHandoff = ref(null)
 const deleteProductDataset = ref(null)
 const productSearch = ref('')
 const deletingProductId = ref(null)
@@ -1102,14 +1106,14 @@ async function submitDerive() {
   await openDetail(result.dataset)
 }
 
-async function openAddProductDialog(dataset) {
+async function openAddProductDialog(dataset, prefill = null) {
   workspaceSubmitting.value = true
   try {
     productDataset.value = await getDatasetVersionApi(dataset.id)
   } finally {
     workspaceSubmitting.value = false
   }
-  productForm.value = emptyProductForm()
+  productForm.value = { ...emptyProductForm(), ...(prefill || {}) }
   productFiles.value = { train: [], val: [], test: [] }
   clearLocalAnnotationStage()
   productFolderInfo.value = emptyProductFolderInfos()
@@ -1157,6 +1161,10 @@ async function discardCurrentAnnotationStage() {
 
 async function handleAddProductClosed() {
   await discardCurrentAnnotationStage()
+  if (activeHandoff.value && !['completed', 'cancelled', 'expired'].includes(activeHandoff.value.status)) {
+    await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, { status: 'cancelled' }).catch(() => {})
+  }
+  activeHandoff.value = null
   productFiles.value = { train: [], val: [], test: [] }
   productFolderInfo.value = emptyProductFolderInfos()
 }
@@ -1184,6 +1192,16 @@ async function generateProductAnnotations() {
     staged = await stageDatasetProductImagesApi(productDataset.value.id, formData)
     annotationImages.value = attachFilesToStagedImages(staged, productFiles.value)
     annotationStage.value = staged
+    if (activeHandoff.value) {
+      activeHandoff.value = await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, {
+        status: 'annotating',
+        context_updates: {
+          staging_token: staged.staging_token,
+          total_images: staged.total_images,
+          expires_at: staged.expires_at,
+        },
+      })
+    }
     activeAnnotationIndex.value = Math.max(0, annotationImages.value.findIndex((item) => !item.reviewed))
     ElMessage.info(`已载入 ${staged.total_images} 张图片，请逐张手工绘制检测框`)
   } catch (error) {
@@ -1241,10 +1259,40 @@ async function submitAddProduct() {
     productForm.value,
     annotationImages.value,
   )
+  if (activeHandoff.value) {
+    activeHandoff.value = await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, {
+      status: 'submitting',
+      context_updates: {
+        confirmed_images: annotationSummary.value.total,
+        confirmed_boxes: annotationSummary.value.boxes,
+      },
+    })
+  }
   const result = await runDatasetOperation('添加人工标注样本并更新数据集', () => (
     commitDatasetProductTaskApi(productDataset.value.id, payload)
   ))
-  if (!result?.dataset) return
+  if (!result?.dataset) {
+    if (activeHandoff.value) {
+      activeHandoff.value = await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, {
+        status: 'failed',
+        error_message: '人工标注样品写入失败，请检查操作进度中的错误信息',
+      }).catch(() => activeHandoff.value)
+    }
+    return
+  }
+  if (activeHandoff.value) {
+    await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, {
+      status: 'completed',
+      result: {
+        dataset_id: result.dataset.id,
+        dataset_version: result.dataset.version,
+        product_id: result.product_id,
+        product_key: result.product_key,
+        images_added: result.images_added,
+      },
+    })
+    activeHandoff.value = null
+  }
   clearLocalAnnotationStage()
   addProductVisible.value = false
   detail.value = result.dataset
@@ -1409,6 +1457,32 @@ onBeforeUnmount(() => {
 onMounted(async () => {
   await fetchDatasets()
   await fetchScenes()
+  const handoffId = String(route.query.handoff_id || '')
+  if (!handoffId) return
+  try {
+    const handoff = await getAgentHandoffApi(handoffId)
+    if (handoff.domain !== 'dataset' || handoff.action !== 'add_samples') return
+    if (['completed', 'cancelled', 'expired'].includes(handoff.status)) {
+      ElMessage.info(`该人工交接已${handoff.status === 'completed' ? '完成' : '失效'}`)
+      return
+    }
+    const context = handoff.context || {}
+    activeHandoff.value = handoff
+    await openAddProductDialog({ id: context.dataset_id }, {
+      mode: context.mode,
+      existing_product_id: context.existing_product_id,
+      name: context.name || '',
+      class_name: context.class_name || '',
+      unit_price: context.unit_price,
+      barcode: context.barcode || '',
+    })
+    if (handoff.status === 'ready_for_handoff' || handoff.status === 'failed') {
+      activeHandoff.value = await updateAgentHandoffApi(handoffId, { status: 'selecting_files' })
+    }
+    ElMessage.info('已从 Dataset Agent 恢复添加样品信息，请选择本地文件夹并完成人工绘框')
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || '无法恢复 Dataset Agent 页面交接')
+  }
 })
 </script>
 

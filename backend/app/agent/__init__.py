@@ -1,1 +1,1 @@
-"""VisionPay agent package."""
+"""VisionPay multi-agent package."""

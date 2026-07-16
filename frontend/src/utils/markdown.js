@@ -19,7 +19,17 @@ const md = new MarkdownIt({
  */
 export function renderMarkdown(text) {
   if (!text) return ''
-  return md.render(text)
+  // Agent 的结构化结果以文字和数据为主。清除装饰性 emoji，避免历史消息或模型偶发
+  // 输出破坏后台工作台的专业视觉风格；业务文字、数字与中文均会原样保留。
+  const cleanText = String(text)
+    .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}]/gu, '')
+    .replace(/[\u200D\uFE0E\uFE0F]/g, '')
+
+  // markdown-it 默认没有表格容器。为横向空间不足的会话内容增加滚动容器，
+  // 使较宽的结果表不会挤压聊天列或把单元格拆得难以阅读。
+  return md.render(cleanText)
+    .replace(/<table>/g, '<div class="markdown-table-wrap"><table>')
+    .replace(/<\/table>/g, '</table></div>')
 }
 
 export default md

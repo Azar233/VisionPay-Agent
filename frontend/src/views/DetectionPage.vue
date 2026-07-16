@@ -87,8 +87,8 @@
           <article v-for="(message, index) in agentStore.messages" :key="index" :class="['message-row', message.role]">
             <div class="avatar"><el-icon><User v-if="message.role === 'user'" /><Cpu v-else /></el-icon></div>
             <div class="message-body">
-              <div class="message-label">{{ message.role === 'user' ? '你' : 'VisionPay Agent' }}</div>
-              <div v-if="message.content || message.loading || message.tool || message.files?.length" class="message-bubble">
+              <div class="message-label">{{ message.role === 'user' ? '你' : agentName(message.agent) }}</div>
+              <div v-if="message.content || message.loading || message.tool || message.files?.length || message.confirmation" class="message-bubble">
                 <div v-if="message.content" class="message-content" v-html="message.role === 'assistant' ? renderMarkdown(message.content) : escapeText(message.content)"></div>
                 <span v-if="message.role === 'assistant' && message.loading && message.content" class="stream-cursor"></span>
                 <div v-if="message.files?.length" class="message-files">
@@ -96,6 +96,47 @@
                 </div>
                 <div v-if="message.loading && !message.content" class="thinking" aria-label="Agent 正在思考"><span></span><span></span><span></span></div>
                 <div v-if="message.tool" class="tool-state"><el-icon><Operation /></el-icon>{{ toolName(message.tool) }} 正在处理</div>
+                <el-button
+                  v-if="message.role === 'assistant' && message.handoff?.page_url"
+                  class="handoff-button"
+                  type="primary"
+                  @click="openHandoff(message.handoff.page_url)"
+                >
+                  前往人工添加样品
+                </el-button>
+                <section v-if="message.role === 'assistant' && message.confirmation" class="confirmation-card">
+                  <div class="confirmation-heading">
+                    <div>
+                      <span>{{ message.confirmation.risk_level }} · 待确认操作</span>
+                      <strong>{{ message.confirmation.impact?.title || message.confirmation.action }}</strong>
+                    </div>
+                    <el-tag :type="confirmationTagType(message.confirmation.status)" effect="light">
+                      {{ confirmationStatusText(message.confirmation.status) }}
+                    </el-tag>
+                  </div>
+                  <p>{{ message.confirmation.impact?.summary }}</p>
+                  <dl v-if="message.confirmation.impact?.changes">
+                    <template v-for="(value, key) in message.confirmation.impact.changes" :key="key">
+                      <dt>{{ impactKeyText(key) }}</dt><dd>{{ impactValueText(value) }}</dd>
+                    </template>
+                  </dl>
+                  <ul v-if="message.confirmation.impact?.warnings?.length">
+                    <li v-for="warning in message.confirmation.impact.warnings" :key="warning">{{ warning }}</li>
+                  </ul>
+                  <div v-if="message.confirmation.status === 'pending'" class="confirmation-actions">
+                    <el-button
+                      type="danger"
+                      :loading="message.confirmation.confirming"
+                      @click="confirmPendingOperation(message)"
+                    >确认执行</el-button>
+                    <el-button
+                      :disabled="message.confirmation.confirming"
+                      @click="cancelPendingOperation(message)"
+                    >取消</el-button>
+                  </div>
+                  <pre v-if="message.confirmation.result" class="confirmation-result">{{ impactValueText(message.confirmation.result) }}</pre>
+                  <p v-if="message.confirmation.error_message" class="confirmation-error">{{ message.confirmation.error_message }}</p>
+                </section>
               </div>
               <DetectionResultCard v-if="message.result" :result="message.result" />
             </div>
@@ -186,16 +227,19 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Aim, ChatLineSquare, Close, Cpu, DArrowLeft, DArrowRight, Delete, Document, Files, Folder, FolderOpened, Operation, Paperclip, Picture, Plus, Promotion, QuestionFilled, Refresh, UploadFilled, User, VideoCamera, VideoPause, VideoPlay, View } from '@element-plus/icons-vue'
 import DetectionResultCard from '@/components/DetectionResultCard.vue'
 import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
 import { createDetectionSessionApi, deleteDetectionSessionApi, detectBatchApi, detectSingleApi, detectVideoApi, detectZipApi, getAgentStatusApi, getDetectionSessionApi, getDetectionSessionsApi, getVideoStatusApi, saveDetectionExchangeApi, uploadChatFilesApi } from '@/api/detection'
+import { cancelAgentOperationApi, confirmAgentOperationApi, getAgentOperationApi, rotateAgentOperationTokenApi } from '@/api/agentOperations'
 import { useAgentStore } from '@/stores/agent'
 import { renderMarkdown } from '@/utils/markdown'
 import { streamChat } from '@/utils/stream'
 
 const agentStore = useAgentStore()
+const router = useRouter()
 agentStore.newChat()
 const inputText = ref('')
 const selectedFiles = ref([])
@@ -243,6 +287,59 @@ onMounted(async () => {
 onBeforeUnmount(() => { stopStream(); clearSelectedFiles() })
 function escapeText(value) { const node = document.createElement('div'); node.textContent = value; return node.innerHTML.replace(/\n/g, '<br>') }
 function toolName(name) { return ({ detect_single_product_image: '单图商品识别', detect_product_images: '批量商品识别', detect_product_zip: 'ZIP 商品识别', detect_product_video: '视频关键帧识别' })[name] || name }
+function agentName(name) { return ({ detection: 'Detection Agent', dataset: 'Dataset Agent', training: 'Training Agent', catalog: 'Catalog Agent', knowledge: 'Knowledge Agent' })[name] || 'VisionPay Agent' }
+function openHandoff(pageUrl) { if (pageUrl) router.push(pageUrl) }
+function lastAssistantAgent() { return [...agentStore.messages].reverse().find((message) => message.role === 'assistant' && message.agent)?.agent || '' }
+function confirmationStatusText(status) { return ({ pending: '等待确认', executing: '执行中', completed: '已完成', failed: '执行失败', cancelled: '已取消', expired: '已过期' })[status] || status }
+function confirmationTagType(status) { return ({ pending: 'warning', executing: 'primary', completed: 'success', failed: 'danger', cancelled: 'info', expired: 'info' })[status] || 'info' }
+function impactKeyText(key) { return ({ images: '图片数', annotations: '标注数', classes: '类别数', training_tasks: '训练引用', model_versions: '模型引用', status: '状态变化', old_price: '原价', new_price: '新价', old_model_version: '原模型', new_model_version: '新模型', affected_images: '受影响图片', annotations_deleted: '删除标注', mixed_scene_images_retained: '保留多商品场景', classes_reindexed: '重排类别', epochs: '训练轮数', batch_size: '批次大小', img_size: '图片尺寸', device: '训练设备' })[key] || key }
+function impactValueText(value) {
+  if (value === null || value === undefined) return '无'
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
+}
+function operationIdempotencyKey(operation) {
+  if (!operation.executionKey) operation.executionKey = `confirm-${operation.operation_uuid}-${crypto.randomUUID?.() || Date.now()}`
+  return operation.executionKey
+}
+async function confirmPendingOperation(message) {
+  const operation = message.confirmation
+  if (!operation || operation.status !== 'pending' || operation.confirming) return
+  operation.confirming = true
+  try {
+    if (!operation.confirmation_token) {
+      const refreshed = await rotateAgentOperationTokenApi(operation.operation_uuid)
+      operation.confirmation_token = refreshed.confirmation_token
+      operation.token_expires_at = refreshed.token_expires_at
+    }
+    const result = await confirmAgentOperationApi(
+      operation.operation_uuid,
+      operation.confirmation_token,
+      operationIdempotencyKey(operation),
+    )
+    Object.assign(operation, result, { confirming: false, confirmation_token: undefined })
+    ElMessage.success(result.replayed ? '操作已完成，本次返回幂等结果' : '操作执行成功')
+  } catch (error) {
+    operation.confirming = false
+    operation.error_message = error?.response?.data?.detail || error.message || '操作执行失败'
+    try {
+      const current = await getAgentOperationApi(operation.operation_uuid)
+      Object.assign(operation, current, { confirming: false })
+    } catch { /* 保留首次错误，避免同步失败覆盖原因 */ }
+  }
+}
+async function cancelPendingOperation(message) {
+  const operation = message.confirmation
+  if (!operation || operation.status !== 'pending') return
+  try {
+    const result = await cancelAgentOperationApi(operation.operation_uuid)
+    Object.assign(operation, result, { confirmation_token: undefined })
+    ElMessage.info('已取消待确认操作')
+  } catch (error) {
+    operation.error_message = error?.response?.data?.detail || error.message || '取消失败'
+  }
+}
 async function scrollBottom() { await nextTick(); if (messageListRef.value) messageListRef.value.scrollTop = messageListRef.value.scrollHeight }
 
 async function loadSessions() {
@@ -272,6 +369,12 @@ async function openSession(sessionUuid) {
     const data = await getDetectionSessionApi(sessionUuid)
     agentStore.currentSessionId = sessionUuid
     agentStore.messages = data.messages.map((message) => ({ ...message, loading: false }))
+    await Promise.allSettled(agentStore.messages
+      .filter((message) => message.confirmation?.operation_uuid)
+      .map(async (message) => {
+        const current = await getAgentOperationApi(message.confirmation.operation_uuid)
+        Object.assign(message.confirmation, current)
+      }))
     latestResult.value = [...agentStore.messages].reverse().find((message) => message.result)?.result || null
     await scrollBottom()
   } finally { sessionLoading.value = false }
@@ -425,18 +528,29 @@ async function pollVideoResult(taskId, assistant) {
 
 async function sendToAgent() {
   if (!canSend.value || busy.value) return
+  if (!localStorage.getItem('vp_agent_token')) {
+    ElMessage.error('登录已过期，请重新登录')
+    router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
+    return
+  }
   const sessionUuid = await ensureSession()
-  const text = inputText.value.trim() || '识别附件中的商品并汇总数量'
+  const text = inputText.value.trim() || (lastAssistantAgent() === 'dataset'
+    ? '我已选择样品图片，请继续添加样品流程'
+    : '识别附件中的商品并汇总数量')
   const files = selectedFiles.value.map((item) => item.file)
   agentStore.addMessage({ role: 'user', content: text, files: files.map((file) => ({ name: file.name })) })
-  const assistant = agentStore.addMessage({ role: 'assistant', content: '', loading: true, tool: '', result: null })
+  const assistant = agentStore.addMessage({ role: 'assistant', content: '', loading: true, tool: '', result: null, agent: '' })
   inputText.value = ''; agentStore.setLoading(true); scrollBottom()
   try {
     const upload = files.length ? await uploadChatFilesApi(files) : { files: [] }
     const stream = streamChat('/api/chat/stream', { message: text, attachment_paths: upload.files.map((file) => file.path), attachment_names: files.map((file) => ({ name: file.name })), scene_id: sceneId.value, session_uuid: sessionUuid }, {
       onMessage(event) {
+        if (event.type === 'routing') assistant.agent = event.agent
         if (event.type === 'text_chunk') assistant.content += event.content
         if (event.type === 'tool_call') assistant.tool = event.tool
+        if (event.type === 'tool_result') assistant.tool = ''
+        if (event.type === 'handoff_required') { assistant.handoff = event; assistant.tool = '' }
+        if (event.type === 'confirmation_required') { assistant.confirmation = event.operation; assistant.tool = '' }
         if (event.type === 'detection_result') { assistant.result = event.result; latestResult.value = event.result; assistant.tool = '' }
         if (event.type === 'error') assistant.content += `\n\n${event.content}`
         scrollBottom()
@@ -460,6 +574,9 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .message-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; margin-bottom: 24px; }.avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: $primary-color; }.message-row.user .avatar { color: $text-primary; background: $surface-muted; }.message-label { margin-bottom: 6px; font-size: 11px; font-weight: 800; color: $text-secondary; }.message-content { color: $text-primary; line-height: 1.7; font-size: 14px; word-break: break-word; }.message-content :deep(p) { margin: 0 0 8px; }.message-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }.message-files span { display: flex; align-items: center; gap: 5px; max-width: 240px; padding: 6px 9px; border: 1px solid $border-color; border-radius: $border-radius-sm; color: $text-secondary; background: $surface-muted; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.thinking { display: flex; gap: 5px; padding: 8px 0; }.thinking span { width: 7px; height: 7px; border-radius: 50%; background: $text-secondary; animation: pulse 1.1s infinite; }.thinking span:nth-child(2) { animation-delay: .15s; }.thinking span:nth-child(3) { animation-delay: .3s; }.tool-state { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: $border-radius-sm; color: $warning-color; background: color-mix(in srgb, $warning-color 12%, $surface-color); font-size: 11px; font-weight: 700; }.stream-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -2px; background: $primary-color; animation: cursor-blink .8s steps(1) infinite; }
 .composer { padding: 14px max(22px, calc((100% - 840px) / 2)) 18px; border-top: 1px solid $border-color; background: $surface-color; }.composer-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; align-items: end; gap: 9px; padding: 8px; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: 0 10px 24px rgba(15, 23, 42, .06); }.composer-row:focus-within { border-color: $primary-color; box-shadow: $ring-primary; }.composer-row :deep(.el-textarea__inner) { min-height: 34px !important; padding: 7px 4px; border: 0; box-shadow: none; }.file-input { display: none; }.selected-files { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 8px; }.selected-files > span { min-width: 0; max-width: 220px; height: 38px; display: grid; grid-template-columns: 28px minmax(0, 1fr) 22px; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-muted; }.selected-files img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; }.selected-files b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.selected-files button { border: 0; background: transparent; cursor: pointer; color: $text-secondary; }.send-button { align-self: end; }
 .control-rail { overflow-y: auto; border-left: 1px solid $border-color; background: $surface-muted; }.rail-section { padding: 18px; border-bottom: 1px solid $border-color; }.section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; font-size: 12px; font-weight: 800; color: $text-primary; }.section-title em { font-style: normal; font-size: 11px; color: $text-secondary; }.drop-zone { width: 100%; height: 112px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1px dashed $border-strong; border-radius: $border-radius-md; background: $surface-color; color: $text-secondary; cursor: pointer; transition: border-color .2s, background .2s, box-shadow .2s; }.drop-zone .el-icon { color: $primary-color; font-size: 26px; }.drop-zone strong { font-size: 12px; color: $text-primary; }.drop-zone span { font-size: 10px; color: $text-secondary; }.drop-zone:hover { border-color: $primary-color; background: $primary-soft; box-shadow: $ring-primary; }.input-modes { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.input-modes button { height: 32px; border: 0; border-right: 1px solid $border-color; background: $surface-color; color: $text-secondary; font-size: 10px; cursor: pointer; font-weight: 700; }.input-modes button:last-child { border-right: 0; }.input-modes button:hover { color: $primary-color; background: $primary-soft; }.input-modes button.active { color: $primary-color; background: $primary-soft; font-weight: 800; }.parameters label { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 2px; color: $text-secondary; font-size: 11px; }.parameters label strong { color: $text-primary; }.parameters :deep(.el-input-number) { width: 100%; }.action-section { text-align: center; }.action-section .el-button { width: 100%; }.action-section > span { display: block; margin-top: 7px; color: $text-placeholder; font-size: 10px; }.summary-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: $border-color; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.summary-metrics div { padding: 12px; display: flex; flex-direction: column; background: $surface-color; }.summary-metrics strong { font-size: 21px; }.summary-metrics span { font-size: 10px; color: $text-secondary; }.summary-price { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 3px 8px; margin-top: 10px; padding: 10px; border-radius: $border-radius-sm; background: $surface-color; }.summary-price span { color: $text-secondary; font-size: 10px; }.summary-price strong { font-size: 17px; }.summary-price small { grid-column: 1 / -1; color: $warning-color; font-size: 9px; }.summary-section ul { list-style: none; padding: 0; margin: 10px 0 0; }.summary-section li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid $border-color; font-size: 11px; }
+.handoff-button { display: flex; margin-top: 12px; }
+.confirmation-card { margin-top: 14px; padding: 14px; border: 1px solid color-mix(in srgb, $warning-color 40%, $border-color); border-radius: $border-radius-md; background: color-mix(in srgb, $warning-color 5%, $surface-color); }
+.confirmation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.confirmation-heading > div { display: flex; flex-direction: column; gap: 3px; }.confirmation-heading span { color: $warning-color; font-size: 10px; font-weight: 800; }.confirmation-heading strong { font-size: 14px; }.confirmation-card > p { margin: 10px 0; color: $text-secondary; font-size: 12px; line-height: 1.6; }.confirmation-card dl { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr); margin: 10px 0; border: 1px solid $border-color; border-radius: $border-radius-sm; overflow: hidden; }.confirmation-card dt, .confirmation-card dd { margin: 0; padding: 7px 9px; border-bottom: 1px solid $border-color; font-size: 11px; }.confirmation-card dt { color: $text-secondary; background: $surface-muted; }.confirmation-card dd { overflow-wrap: anywhere; white-space: pre-wrap; }.confirmation-card dt:nth-last-of-type(1), .confirmation-card dd:nth-last-of-type(1) { border-bottom: 0; }.confirmation-card ul { margin: 9px 0; padding-left: 18px; color: $danger-color; font-size: 11px; line-height: 1.7; }.confirmation-actions { display: flex; gap: 8px; margin-top: 12px; }.confirmation-result { max-height: 180px; margin: 10px 0 0; padding: 9px; overflow: auto; border-radius: $border-radius-sm; background: $surface-muted; color: $text-secondary; font-size: 10px; white-space: pre-wrap; }.confirmation-card .confirmation-error { color: $danger-color; }
 @keyframes pulse { 0%, 70%, 100% { opacity: .3; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-2px); } }
 @keyframes cursor-blink { 0%, 45% { opacity: 1; } 46%, 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .new-chat-enter-active { transition: none; } }

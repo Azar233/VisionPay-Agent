@@ -76,6 +76,22 @@ class Settings(BaseSettings):
     DEEPSEEK_MODEL: str = "deepseek-chat"
     DEEPSEEK_TEMPERATURE: float = 0.1
 
+    # ── DashScope Embedding / Chroma RAG 配置 ─────────
+    DASHSCOPE_API_KEY: str = ""
+    DASHSCOPE_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    EMBEDDING_MODEL: str = "text-embedding-v4"
+    EMBEDDING_DIMENSIONS: int = 1024
+    EMBEDDING_BATCH_SIZE: int = 10
+    CHROMA_PERSIST_DIR: str = "../.runtime/chroma"
+    CHROMA_DISTANCE: str = "cosine"
+    RAG_CHUNK_TOKENS: int = 400
+    RAG_CHUNK_OVERLAP_TOKENS: int = 60
+    RAG_TOP_K: int = 5
+    ROUTER_MIN_SIMILARITY: float = 0.42
+    LONG_TERM_MEMORY_TOP_K: int = 3
+    AGENT_HANDOFF_TTL_SECONDS: int = 86400
+    AGENT_CONFIRMATION_TTL_SECONDS: int = 600
+
     # ── Redis 配置 ────────────────────────────────────
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379

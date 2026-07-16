@@ -776,6 +776,47 @@ class ChatHistoryResponse(ProjectBaseModel):
     messages: list[ChatMessageResponse] = []
 
 
+class DatasetAddSamplesHandoffCreate(ProjectBaseModel):
+    dataset_id: int = Field(..., ge=1)
+    session_uuid: str = Field(..., min_length=1, max_length=100)
+    mode: Literal["train_new", "train_existing", "scene"]
+    existing_product_id: Optional[int] = Field(None, ge=1)
+    name: Optional[str] = Field(None, min_length=1, max_length=150)
+    class_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    unit_price: Optional[float] = Field(None, ge=0)
+    barcode: Optional[str] = Field(None, max_length=100)
+
+
+class AgentHandoffUpdate(ProjectBaseModel):
+    status: Literal[
+        "selecting_files",
+        "annotating",
+        "submitting",
+        "completed",
+        "cancelled",
+        "failed",
+    ]
+    context_updates: Optional[dict] = None
+    result: Optional[dict] = None
+    error_message: Optional[str] = Field(None, max_length=2000)
+
+
+class AgentHandoffResponse(ProjectBaseModel):
+    handoff_uuid: str
+    user_id: int
+    session_uuid: str
+    domain: str
+    action: str
+    status: str
+    context: dict
+    result: Optional[dict] = None
+    error_message: Optional[str] = None
+    page_url: str
+    expires_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
 # ══════════════════════════════════════════════════════════════
 # 五、系统运维
 # ══════════════════════════════════════════════════════════════

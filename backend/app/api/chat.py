@@ -10,13 +10,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.agent.detection_agent import AgentConfigurationError, DetectionAgent
+from app.agent.orchestrator import MultiAgentOrchestrator
+from app.agent.detection_agent import DetectionAgent
 from app.api.auth import get_current_user
 from app.api.detection import save_upload
 from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import get_db
-from app.entity.db_models import ChatMessage, ChatSession
+from app.entity.db_models import AgentHandoff, ChatMessage, ChatSession
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["检测对话"])
@@ -71,7 +72,20 @@ async def agent_status(current_user=Depends(get_current_user)):
         settings.DEEPSEEK_API_KEY
         and not settings.DEEPSEEK_API_KEY.startswith("sk-your-")
     )
-    return {"configured": configured, "provider": "DeepSeek", "model": settings.DEEPSEEK_MODEL}
+    return {
+        "configured": configured,
+        "provider": "DeepSeek",
+        "model": settings.DEEPSEEK_MODEL,
+        "multi_agent": True,
+        "agents": ["detection", "dataset", "training", "catalog", "knowledge"],
+        "embedding": {
+            "configured": bool(settings.DASHSCOPE_API_KEY),
+            "provider": "DashScope",
+            "model": settings.EMBEDDING_MODEL,
+            "dimensions": settings.EMBEDDING_DIMENSIONS,
+            "vector_store": "Chroma",
+        },
+    }
 
 
 @router.post("/sessions", summary="创建检测对话")
@@ -119,7 +133,8 @@ async def get_session(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    session = _session_or_404(db, current_user.id, session_uuid)
+    current_user_id = int(current_user.id)
+    session = _session_or_404(db, current_user_id, session_uuid)
     messages = []
     for message in session.messages:
         metadata = message.tool_calls if isinstance(message.tool_calls, dict) else {}
@@ -128,8 +143,12 @@ async def get_session(
                 "id": message.id,
                 "role": message.role,
                 "content": message.content,
+                "agent": message.agent_used,
                 "files": metadata.get("attachments", []),
                 "tool": metadata.get("tool"),
+                "handoff": metadata.get("handoff"),
+                "input_form": metadata.get("input_form"),
+                "confirmation": metadata.get("confirmation"),
                 "result": _parse_json(message.tool_result),
                 "created_at": message.created_at,
             }
@@ -222,7 +241,36 @@ async def chat_stream(
     ):
         raise HTTPException(status_code=400, detail="附件路径格式无效")
 
-    session = _session_or_404(db, current_user.id, session_uuid)
+    current_user_id = int(current_user.id)
+    session = _session_or_404(db, current_user_id, session_uuid)
+    last_agent = next(
+        (
+            item.agent_used
+            for item in reversed(session.messages)
+            if item.role == "assistant" and item.agent_used
+        ),
+        None,
+    )
+    active_dataset_handoff = (
+        db.query(AgentHandoff)
+        .filter(
+            AgentHandoff.user_id == current_user_id,
+            AgentHandoff.session_uuid == session_uuid,
+            AgentHandoff.domain == "dataset",
+            AgentHandoff.status.in_(
+                [
+                    "ready_for_handoff",
+                    "selecting_files",
+                    "annotating",
+                    "submitting",
+                    "failed",
+                ]
+            ),
+            AgentHandoff.expires_at > datetime.now(),
+        )
+        .order_by(AgentHandoff.created_at.desc())
+        .first()
+    )
     history = []
     for item in session.messages:
         if item.role not in {"user", "assistant"}:
@@ -237,12 +285,26 @@ async def chat_stream(
                 )
         history.append({"role": item.role, "content": content})
     history = history[-20:]
+    if not settings.DEEPSEEK_API_KEY or settings.DEEPSEEK_API_KEY.startswith("sk-your-"):
+        raise HTTPException(status_code=503, detail="DeepSeek 尚未配置")
+    orchestrator = MultiAgentOrchestrator(
+        user_id=current_user_id,
+        scene_id=scene_id,
+        session_uuid=session_uuid,
+        detection_agent_factory=DetectionAgent,
+    )
+    decision = orchestrator.route(
+        message,
+        has_attachments=bool(attachment_paths),
+        preferred_agent=last_agent,
+        active_workflow_agent="dataset" if active_dataset_handoff else None,
+    )
     db.add(
         ChatMessage(
             session_id=session.id,
             role="user",
             content=message,
-            agent_used="detection",
+            agent_used=decision.agent,
             tool_calls={"attachments": attachment_names, "attachment_paths": attachment_paths},
         )
     )
@@ -250,25 +312,44 @@ async def chat_stream(
     _touch_session(db, session, message)
     db.commit()
 
-    try:
-        agent = DetectionAgent(user_id=current_user.id, scene_id=scene_id)
-    except AgentConfigurationError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
     async def events():
         assistant_content = ""
         result = None
         tool_name = None
+        handoff = None
+        input_form = None
+        confirmation = None
         error_text = None
         yield f"data: {json.dumps({'type': 'session', 'session_uuid': session_uuid})}\n\n"
         try:
-            async for event in agent.stream(message, attachment_paths, history):
+            async for event in orchestrator.stream(
+                message,
+                attachment_paths,
+                history,
+                decision=decision,
+            ):
                 if event.get("type") == "text_chunk":
                     assistant_content += event.get("content", "")
                 elif event.get("type") == "detection_result":
                     result = event.get("result")
                 elif event.get("type") == "tool_call":
                     tool_name = event.get("tool")
+                elif event.get("type") == "handoff_required":
+                    handoff = {
+                        "handoff_id": event.get("handoff_id"),
+                        "page_url": event.get("page_url"),
+                        "status": event.get("status"),
+                        "context": event.get("context") or {},
+                    }
+                elif event.get("type") == "input_form":
+                    input_form = event.get("form") or None
+                elif event.get("type") == "confirmation_required":
+                    raw_operation = event.get("operation") or {}
+                    confirmation = {
+                        key: value
+                        for key, value in raw_operation.items()
+                        if key != "confirmation_token"
+                    }
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.error("DeepSeek Agent 流式请求失败: %s", exc, exc_info=True)
@@ -277,14 +358,22 @@ async def chat_stream(
         finally:
             final_content = assistant_content.strip() or error_text or "本次响应已停止。"
             try:
-                persist_session = _session_or_404(db, current_user.id, session_uuid)
+                persist_session = _session_or_404(db, current_user_id, session_uuid)
                 db.add(
                     ChatMessage(
                         session_id=persist_session.id,
                         role="assistant",
                         content=final_content,
-                        agent_used="detection",
-                        tool_calls={"tool": tool_name} if tool_name else None,
+                        agent_used=decision.agent,
+                        tool_calls=(
+                            {
+                                **({"tool": tool_name} if tool_name else {}),
+                                **({"handoff": handoff} if handoff else {}),
+                                **({"input_form": input_form} if input_form else {}),
+                                **({"confirmation": confirmation} if confirmation else {}),
+                            }
+                            or None
+                        ),
                         tool_result=(
                             json.dumps(result, ensure_ascii=False) if result else None
                         ),

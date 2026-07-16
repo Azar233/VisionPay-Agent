@@ -316,7 +316,9 @@ def test_detection_and_chat_routes_require_auth(client):
 def test_agent_status_does_not_expose_api_key(client):
     response = client.get("/api/chat/status", headers=_auth_headers(client))
     assert response.status_code == 200
-    assert set(response.json()) == {"configured", "provider", "model"}
+    assert set(response.json()) == {
+        "configured", "provider", "model", "multi_agent", "agents", "embedding"
+    }
 
 
 def test_single_detection_passes_user_and_parameters(client, monkeypatch):
@@ -686,11 +688,12 @@ def test_chat_stream_emits_chunks_and_persists_full_reply(client, monkeypatch):
             yield {"type": "text_chunk", "content": "好"}
 
     monkeypatch.setattr(chat_api, "DetectionAgent", FakeAgent)
+    monkeypatch.setattr(chat_api.settings, "DEEPSEEK_API_KEY", "test-key")
     response = client.post(
         "/api/chat/stream",
         headers=headers,
         json={
-            "message": "测试流式输出",
+            "message": "检测测试流式输出",
             "attachment_paths": [],
             "attachment_names": [],
             "session_uuid": session_uuid,

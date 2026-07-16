@@ -1,3 +1,14 @@
+import router from '@/router'
+
+function expireLogin() {
+  localStorage.removeItem('vp_agent_token')
+  localStorage.removeItem('vp_agent_user')
+  const currentPath = router.currentRoute.value.fullPath
+  if (router.currentRoute.value.path !== '/login') {
+    router.replace({ path: '/login', query: { redirect: currentPath } })
+  }
+}
+
 /** Parse a POST-based SSE stream without losing frames split across network chunks. */
 export function streamChat(url, body, callbacks = {}) {
   const { onMessage, onDone, onError } = callbacks
@@ -13,6 +24,10 @@ export function streamChat(url, body, callbacks = {}) {
     body: JSON.stringify(body),
     signal: controller.signal,
   }).then(async (response) => {
+    if (response.status === 401) {
+      expireLogin()
+      throw new Error('登录已过期，请重新登录')
+    }
     if (!response.ok) {
       let detail = `请求失败 (${response.status})`
       try {

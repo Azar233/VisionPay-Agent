@@ -167,6 +167,8 @@ $RECYCLE.BIN/
 dmypy.json
 docs/
 .LiuCheng/
+# 本地架构规划（评审定稿前不提交）
+初期项目规划.md
 logs/
 log/
 *.log

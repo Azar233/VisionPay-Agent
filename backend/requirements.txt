@@ -28,6 +28,8 @@ Pillow==10.0.0   # Pillow图像处理库
 sqlalchemy==2.0.0  # SQLAlchemy ORM框架
 psycopg2-binary==2.9.9  # PostgreSQL数据库驱动
 pgvector==0.3.0   #PostgreSQL 向量存储扩展（RAG 用）
+chromadb>=0.5.5,<2.0.0  # 本地持久化向量库（Cosine）
+tiktoken>=0.7.0,<1.0.0  # 400 Token + 60 Token overlap 精确切片
 
 alembic==1.13.0  # Alembic 数据库迁移框架
 

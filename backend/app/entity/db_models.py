@@ -596,6 +596,62 @@ class ChatMessage(Base):
     session = relationship("ChatSession", back_populates="messages")
 
 
+class AgentHandoff(Base):
+    """Human-in-the-loop handoff from an Agent to a management page."""
+
+    __tablename__ = "agent_handoffs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    handoff_uuid = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_uuid = Column(String(100), nullable=False, index=True)
+    domain = Column(String(50), nullable=False, index=True)
+    action = Column(String(100), nullable=False, index=True)
+    status = Column(String(30), nullable=False, default="ready_for_handoff", index=True)
+    context = Column(JSON, nullable=False, default=dict)
+    result = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+
+class AgentPendingOperation(Base):
+    """Persisted, user-confirmed Agent write operation."""
+
+    __tablename__ = "agent_pending_operations"
+    __table_args__ = (
+        UniqueConstraint("operation_uuid", name="uq_agent_pending_operations_uuid"),
+        UniqueConstraint(
+            "user_id",
+            "preview_idempotency_key",
+            name="uq_agent_pending_operations_user_preview_key",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    operation_uuid = Column(String(64), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_uuid = Column(String(100), nullable=False, index=True)
+    domain = Column(String(50), nullable=False, index=True)
+    action = Column(String(100), nullable=False, index=True)
+    risk_level = Column(String(10), nullable=False)
+    status = Column(String(30), nullable=False, default="pending", index=True)
+    parameters = Column(JSON, nullable=False, default=dict)
+    impact = Column(JSON, nullable=False, default=dict)
+    request_fingerprint = Column(String(64), nullable=False, index=True)
+    preview_idempotency_key = Column(String(100), nullable=True)
+    execution_idempotency_key = Column(String(100), nullable=True, index=True)
+    confirmation_token_hash = Column(String(64), nullable=False)
+    token_expires_at = Column(DateTime, nullable=False, index=True)
+    token_consumed_at = Column(DateTime, nullable=True)
+    result = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+    executed_at = Column(DateTime, nullable=True)
+
+
 # ══════════════════════════════════════════════════════════════
 # 五、系统运维
 # ══════════════════════════════════════════════════════════════

@@ -16,7 +16,7 @@ const routes = [
   {
     path: '/',
     component: () => import('@/components/layout/MainLayout.vue'),
-    redirect: '/detection',
+    redirect: '/chat',
     meta: { requiresAuth: true },
     children: [
       {
