@@ -145,7 +145,8 @@ class AgentRouter:
             return RouteDecision("catalog", "explicit_intent", 0.99, "明确的价目表操作")
 
         if "训练" in lowered and any(
-            action in lowered for action in ("启动", "开始", "停止", "取消", "进度", "指标", "日志")
+            action in lowered
+            for action in ("启动", "开始", "停止", "取消", "查看", "查询", "进度", "指标", "日志")
         ):
             return RouteDecision("training", "explicit_intent", 0.99, "明确的训练操作")
         if any(term in lowered for term in ("默认模型", "切换模型", "发布模型")):
@@ -187,6 +188,60 @@ class AgentRouter:
         # Agent 也不能把该领域意图污染成 Training 会话。
         return RouteDecision("dataset", "explicit_intent", 0.99, "明确的数据集样品编辑操作")
 
+    @staticmethod
+    def _general_knowledge_intent(message: str) -> RouteDecision | None:
+        """Keep conceptual questions out of a stale domain-Agent conversation."""
+        normalized = message.strip().lower()
+        if not normalized:
+            return None
+
+        identity_cues = (
+            "你是做什么",
+            "你是什么工作",
+            "你是做什么工作",
+            "你是干什么",
+            "你负责什么",
+            "你的职责",
+            "你能做什么",
+            "平台能做什么",
+            "系统能做什么",
+        )
+        if any(cue in normalized for cue in identity_cues):
+            return RouteDecision(
+                "knowledge", "general_knowledge", 0.98, "通用的平台或 Agent 能力说明"
+            )
+
+        explanation_cues = (
+            "什么是",
+            "什么叫",
+            "是什么意思",
+            "解释一下",
+            "解释",
+            "讲讲",
+            "定义",
+            "原理",
+        )
+        runtime_cues = (
+            "当前",
+            "这次",
+            "本次",
+            "最近",
+            "具体任务",
+            "训练任务",
+            "日志",
+            "进度",
+            "曲线",
+            "数值",
+            "指标",
+        )
+        if any(cue in normalized for cue in explanation_cues) and not any(
+            cue in normalized for cue in runtime_cues
+        ):
+            return RouteDecision(
+                "knowledge", "general_knowledge", 0.97, "通用概念解释"
+            )
+        return None
+
     def route(
         self,
         message: str,
@@ -203,6 +258,7 @@ class AgentRouter:
         semantic = self._embedding_route(message)
         explicit_management = self._explicit_management_intent(message)
         dataset_edit = self._dataset_edit_intent(message, preferred)
+        general_knowledge = self._general_knowledge_intent(message)
 
         if has_attachments:
             if explicit_detection:
@@ -249,6 +305,9 @@ class AgentRouter:
 
         if dataset_edit:
             return self._strong_intent_decision(dataset_edit, semantic)
+
+        if general_knowledge:
+            return self._strong_intent_decision(general_knowledge, semantic)
 
         if active:
             return self._strong_intent_decision(

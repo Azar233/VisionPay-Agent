@@ -40,6 +40,7 @@ CATALOG_PROMPT = """你是 Catalog Agent，负责商品目录和价目表。
 """ + COMMON_RULES
 
 KNOWLEDGE_PROMPT = """你是 Knowledge Agent，负责平台知识、操作规范、故障案例和长期偏好检索。
+“你是什么工作的”“你能做什么”“什么是 loss / mAP / epoch”等平台能力与通用概念问题，也由你统一解释；不要因为上一轮会话属于 Dataset 或 Training 就把这类问题交给领域 Agent。
 优先调用知识或故障案例工具；找不到可靠依据时明确说明，不编造平台规则。
 如果问题实质需要查询数据集、训练、检测或价格实时状态，应建议转交相应领域 Agent。
 """ + COMMON_RULES

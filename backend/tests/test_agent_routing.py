@@ -152,6 +152,41 @@ def test_embedding_is_primary_when_no_strong_intent(monkeypatch):
     assert AgentRouter().route("帮我梳理一下最近的经营资料") == semantic
 
 
+@pytest.mark.parametrize("message", ["你是什么工作的？", "什么是 loss？"])
+def test_general_explanations_override_stale_domain_context(message):
+    decision = AgentRouter().route(
+        message,
+        preferred_agent="training",
+        active_workflow_agent="dataset",
+    )
+
+    assert decision.agent == "knowledge"
+    assert decision.method == "general_knowledge"
+
+
+def test_general_explanation_still_consults_embedding(monkeypatch):
+    observed = []
+    monkeypatch.setattr(
+        AgentRouter,
+        "_embedding_route",
+        lambda self, message: observed.append(message)
+        or RouteDecision("training", "embedding", 0.9, "test semantic candidate"),
+    )
+
+    decision = AgentRouter().route("什么是 loss？", preferred_agent="training")
+
+    assert observed == ["什么是 loss？"]
+    assert decision.agent == "knowledge"
+    assert decision.method == "general_knowledge"
+
+
+def test_actual_training_status_stays_with_training_agent():
+    decision = AgentRouter().route("查看这次训练任务的 loss 曲线")
+
+    assert decision.agent == "training"
+    assert decision.method == "explicit_intent"
+
+
 def test_ambiguous_message_uses_embedding_route(monkeypatch):
     expected = RouteDecision("dataset", "embedding", 0.83, "test")
     monkeypatch.setattr(AgentRouter, "_embedding_route", lambda self, message: expected)
