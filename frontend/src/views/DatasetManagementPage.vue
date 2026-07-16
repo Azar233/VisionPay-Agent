@@ -17,7 +17,7 @@
       <article class="summary-card current-card">
         <span>当前版本</span>
         <strong>{{ currentDataset?.version || '未设置' }}</strong>
-        <small>{{ currentDataset?.name || '冻结版本后可设为当前版本' }}</small>
+        <small>{{ currentDataset?.name || '导入版本时可指定当前版本' }}</small>
       </article>
       <article class="summary-card">
         <span>版本总数</span>
@@ -32,7 +32,7 @@
       <article class="summary-card">
         <span>已冻结</span>
         <strong>{{ statusCount.ready }}</strong>
-        <small>内容不可修改，可设为当前版本</small>
+        <small>内容不可修改，可用于训练或派生</small>
       </article>
     </section>
 
@@ -118,7 +118,6 @@
               <el-button v-if="row.status === 'draft'" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="openDeleteProductDialog(row)">删除商品</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button" size="small" :icon="CircleCheck" @click="validateRow(row)">校验</el-button>
               <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Lock" @click="freezeRow(row)">冻结</el-button>
-              <el-button v-if="row.status === 'ready' && !row.is_current" class="row-action-button is-success-action" size="small" :icon="Promotion" @click="setCurrent(row)">设为当前</el-button>
               <el-button
                 v-if="row.status === 'ready' && (!row.is_current || row.extra_metadata?.catalog_only)"
                 class="row-action-button"
@@ -635,7 +634,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck, Delete, Edit, Lock, Plus, Promotion, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
+import { CircleCheck, Delete, Edit, Lock, Plus, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
 import {
   annotationReviewSummary,
@@ -658,7 +657,6 @@ import {
   getDatasetVersionsApi,
   importAvailableModelApi,
   importBaselineDatasetApi,
-  setCurrentDatasetVersionApi,
   stageDatasetProductImagesApi,
   updateDatasetVersionApi,
   validateDatasetVersionApi,
@@ -1357,17 +1355,6 @@ async function freezeRow(row) {
   )
   await freezeDatasetVersionApi(row.id, checkFilesystem.value)
   ElMessage.success('数据集版本已冻结')
-  await fetchDatasets()
-}
-
-async function setCurrent(row) {
-  await ElMessageBox.confirm(
-    `确定将 ${row.version} 设为场景当前数据集吗？这一步暂时不会触发训练。`,
-    '切换当前数据集',
-    { type: 'warning' },
-  )
-  await setCurrentDatasetVersionApi(row.id)
-  ElMessage.success('当前数据集已切换')
   await fetchDatasets()
 }
 

@@ -16,7 +16,6 @@ import {
   freezeDatasetVersionApi,
   getDatasetVersionApi,
   getDatasetVersionsApi,
-  setCurrentDatasetVersionApi,
   updateDatasetVersionApi,
   validateDatasetVersionApi,
 } from '@/api/datasets'
@@ -50,10 +49,5 @@ describe('dataset API', () => {
     expect(request.post).toHaveBeenNthCalledWith(2, '/datasets/3/freeze', {
       check_filesystem: false,
     })
-  })
-
-  it('sets a ready version as current', () => {
-    setCurrentDatasetVersionApi(9)
-    expect(request.post).toHaveBeenCalledWith('/datasets/9/set-current')
   })
 })
