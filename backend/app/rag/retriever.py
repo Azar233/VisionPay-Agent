@@ -57,16 +57,40 @@ class KnowledgeRetriever:
                     {
                         "source": relative,
                         "domain": domain,
+                        "kind": "knowledge_document",
                         "chunk_index": index,
                         "token_start": chunk.token_start,
                         "token_end": chunk.token_end,
                     }
                 )
         vectors = self.embedding.embed_documents(documents) if documents else []
+        existing_ids = {
+            item["id"]
+            for item in self.store.list_items()
+            if item["metadata"].get("kind") == "knowledge_document"
+            or (
+                self.store.collection.name == self.KNOWLEDGE_COLLECTION
+                and item["metadata"].get("source")
+                and not item["metadata"].get("kind")
+            )
+        }
+        current_ids = set(ids)
+
+        # Write the complete new snapshot first. If Embedding or upsert fails, the
+        # previous searchable snapshot remains intact. Content-addressed ids make
+        # unchanged chunks idempotent and changed chunks distinct.
         self.store.upsert(
             ids=ids,
             documents=documents,
             embeddings=vectors,
             metadatas=metadatas,
         )
-        return {"files": len(files), "chunks": len(documents), "total": self.store.count}
+        stale_ids = sorted(existing_ids - current_ids)
+        if stale_ids:
+            self.store.delete(ids=stale_ids)
+        return {
+            "files": len(files),
+            "chunks": len(documents),
+            "deleted_chunks": len(stale_ids),
+            "total": self.store.count,
+        }

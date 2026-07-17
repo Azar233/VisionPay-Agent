@@ -49,6 +49,8 @@ ACTION_META = {
     "catalog.clear_price": ("catalog", "R3", "清除商品价格"),
 }
 
+FROZEN_DATASET_STATUSES = {"pending_train", "training", "published"}
+
 
 class AgentConfirmationError(ValueError):
     def __init__(self, message: str, *, code: str = "invalid_operation") -> None:
@@ -214,7 +216,7 @@ class AgentConfirmationService:
         if action == "dataset.derive":
             request = DatasetDeriveRequest(**raw)
             parameters = {"dataset_id": dataset_id, **request.model_dump()}
-            if dataset.status != "ready":
+            if dataset.status not in FROZEN_DATASET_STATUSES | {"archived"}:
                 raise AgentConfirmationError("只有已冻结数据集可以派生")
             duplicate = db.query(DatasetVersion).filter(
                 DatasetVersion.scene_id == dataset.scene_id,
@@ -248,24 +250,24 @@ class AgentConfirmationService:
                 "title": "冻结数据集版本",
                 "summary": f"冻结后 {dataset.version} 将变为只读，可用于训练",
                 "target": target,
-                "changes": {**counts, "status": "draft → ready"},
+                "changes": {**counts, "status": "draft → pending_train"},
                 "validation": report,
                 "warnings": ["冻结后不能直接增删样品，需要派生新草稿"],
             }
             return parameters, impact
 
         if action == "dataset.archive":
-            if dataset.status != "ready":
+            if dataset.status not in FROZEN_DATASET_STATUSES:
                 raise AgentConfirmationError("只有已冻结数据集可以归档")
-            if dataset.is_current and not bool((dataset.extra_metadata or {}).get("catalog_only")):
-                raise AgentConfirmationError("当前数据集不能归档，请先切换当前版本")
+            if dataset.is_current:
+                warnings.append("归档当前版本时系统会为同一场景选择替代当前数据集")
             if counts["training_tasks"] or counts["model_versions"]:
-                warnings.append("历史训练或模型仍引用此版本，审计记录会保留")
+                warnings.append("关联活动模型会被归档，历史训练和审计记录会保留")
             impact = {
                 "title": "归档数据集版本",
                 "summary": f"归档后 {dataset.version} 不再作为可用训练版本展示",
                 "target": target,
-                "changes": {**counts, "status": "ready → archived"},
+                "changes": {**counts, "status": f"{dataset.status} → archived"},
                 "warnings": warnings,
             }
             return parameters, impact

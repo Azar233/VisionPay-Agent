@@ -166,7 +166,104 @@ ModelVersion.dataset_version_id
 
 未绑定数据集版本的兼容模型（例如“正式版v1.0”）无法恢复历史映射，因此使用旧规则 `category_id = class_id + 1` 查价。
 
-### 2.3 技术栈
+### 2.3 知识库、故障案例与长期记忆架构
+
+知识能力仅服务于已登录的后台经营者，不进入顾客结算端 `/checkout`。系统使用阿里云百炼 `text-embedding-v4` 生成 1024 维向量，使用本地 Chroma 和 Cosine 距离保存四类彼此隔离的数据。DeepSeek 负责理解、工具选择和回答生成；Embedding 只负责把文本转换成检索或路由所需的向量，不直接生成答案。
+
+```mermaid
+flowchart TB
+    subgraph Sources["可维护的数据源"]
+        KnowledgeDocs["backend/knowledge_base\n业务规则与操作文档"]
+        FaultDocs["backend/fault_case_base\n可重复构建的故障案例"]
+        ConfirmedFault["POST /api/knowledge/fault-cases\n动态确认案例"]
+        RouteSamples["5 个 Agent 的语义路由样例"]
+        ExplicitMemory["经营者明确要求记住的稳定偏好"]
+    end
+
+    KnowledgeDocs --> Chunker["TokenChunker\n400 Token / 重叠 60 Token"]
+    FaultDocs --> Chunker
+    Chunker --> Embedding["DashScope text-embedding-v4\n1024 维"]
+    ConfirmedFault --> Embedding
+    RouteSamples --> Embedding
+    ExplicitMemory --> Embedding
+
+    Embedding --> KnowledgeCollection[("visionpay_knowledge")]
+    Embedding --> FaultCollection[("visionpay_fault_cases")]
+    Embedding --> RouteCollection[("visionpay_agent_routes")]
+    Embedding --> MemoryCollection[("visionpay_long_term_memory")]
+
+    Supervisor["Multi-Agent Supervisor"] --> RouteCollection
+    Supervisor --> KnowledgeAgent["Knowledge Agent"]
+    KnowledgeAgent --> KnowledgeCollection
+    KnowledgeAgent --> FaultCollection
+    KnowledgeAgent --> MemoryCollection
+    KnowledgeAgent --> FixedFacts["代码内固定能力事实"]
+
+    DomainAgents["Detection / Dataset / Training / Catalog Agent"] --> DomainTools["领域工具与 PostgreSQL\n实时业务事实"]
+```
+
+#### 数据源与目录
+
+```text
+backend/
+├── knowledge_base/
+│   ├── catalog/       # 价目、商品身份、币种精度与缺价处理（6 份）
+│   ├── dataset/       # 数据集生命周期、版本操作、标注与校验（7 份）
+│   ├── detection/     # 检测输入、参数、结果解释与误检漏检（7 份）
+│   ├── general/       # 平台通用流程、安全确认、审计与操作边界（6 份）
+│   └── training/      # 训练状态、参数、指标、远程训练与发布（7 份）
+└── fault_case_base/   # 已确认且可重复构建的故障案例（8 份）
+```
+
+上述数量是当前版本的初始基准，不是代码限制。两个目录均递归扫描 `.md` 和 `.txt`；文档相对于根目录的一级目录名会写入 Chunk 的 `domain` 元数据，可用于领域过滤。原始文档随 Git 管理，生成后的 Chroma 数据位于项目根目录 `.runtime/chroma`，属于可重建运行时数据并被 Git 忽略。
+
+#### Chroma 集合职责
+
+| 集合 | 当前初始基准 | 写入来源 | 用途 |
+| --- | ---: | --- | --- |
+| `visionpay_knowledge` | 35 Chunk / 33 份文档 | `backend/knowledge_base/` | 稳定业务规则、操作流程、字段解释和排障方法的 RAG 检索 |
+| `visionpay_fault_cases` | 8 Chunk / 8 份文档 | `backend/fault_case_base/`；确认案例 API | 检索与当前症状相似的历史故障和解决方案 |
+| `visionpay_agent_routes` | 20 条样例 | 5 个 Agent 各 4 条语义样例 | 为 Supervisor 提供每条输入的 Embedding 路由候选 |
+| `visionpay_long_term_memory` | 初始为 0 | Knowledge Agent 显式保存 | 按 `user_id` 隔离的经营者稳定偏好 |
+
+集合计数会随文档、故障案例和用户记忆变化。长期记忆初始为 0 是正常状态；它不会在普通聊天中自动记录所有内容。
+
+#### 索引构建与同步
+
+`backend/tools/build_knowledge_index.py` 会构建业务知识、故障案例两个文档索引，并初始化语义路由集合。每次文档构建执行以下流程：
+
+1. 递归扫描 `.md`、`.txt`，按配置执行 400 Token 切片和 60 Token 重叠。
+2. 使用“相对路径 + Chunk 序号 + Chunk 内容”的 SHA-256 生成内容寻址 ID。
+3. 批量调用 DashScope 生成向量，先 upsert 完整的新快照。
+4. 新快照写入成功后，比较新旧 ID 并删除被修改或已删除文档遗留的陈旧 Chunk。
+5. 只清理带有文档索引标记的记录，因此通过 `/api/knowledge/fault-cases` 动态写入的确认案例不会在重建时被误删。
+
+内容寻址 ID 使未变化文档的重复构建保持幂等。先写后删也保证 Embedding 或写入失败时旧快照仍可检索，不会因一次失败重建而先清空线上索引。
+
+#### Knowledge Agent 工具链
+
+| 工具 | 数据来源 | 说明 |
+| --- | --- | --- |
+| `get_platform_agent_capabilities` | 代码内固定事实 | 回答 Agent 数量、职责和权限边界；不依赖 RAG，知识文档不能覆盖这些事实 |
+| `search_management_knowledge` | `visionpay_knowledge` | 检索管理规则、操作流程和字段解释，可按 `domain` 过滤 |
+| `search_fault_cases` | `visionpay_fault_cases` | 根据故障现象召回相似案例 |
+| `remember_management_preference` | `visionpay_long_term_memory` | 仅在用户明确要求记住时保存稳定偏好，并绑定当前 `user_id` |
+| `recall_management_memory` | `visionpay_long_term_memory` | 仅召回当前经营者自己的相关记忆 |
+
+#### 数据边界与事实优先级
+
+| 信息类型 | 正确来源 | 是否进入业务知识 RAG |
+| --- | --- | --- |
+| 稳定规则、操作步骤、字段含义、排障手册 | `knowledge_base` | 是 |
+| 已确认故障现象与解决方案 | `fault_case_base` 或确认案例 API | 进入独立故障案例集合 |
+| 当前数据集版本、训练状态、实时指标、默认模型、检测结果、商品价格 | 领域 Agent 工具与 PostgreSQL | 否，必须实时查询 |
+| Agent 数量、职责和权限 | 代码内固定能力事实 | 否，避免文档过期覆盖运行时事实 |
+| 用户明确要求保存的稳定偏好 | 按 `user_id` 隔离的长期记忆 | 进入独立记忆集合 |
+| 密码、Token、实时价格、临时任务状态 | 不保存 | 否 |
+
+当检索结果与领域工具冲突时，以领域工具的实时返回为准。RAG 不直接执行派生、冻结、归档、删除、启动训练、切换模型或改价等写操作；这些操作仍必须经过参数表单、影响范围预览、一次性确认令牌、幂等保护和操作审计。
+
+### 2.4 技术栈
 
 | 层级 | 技术 |
 | --- | --- |
@@ -195,6 +292,8 @@ agent-platform/
 │   │   └── training/             # YOLO 训练、转换和拆分工具
 │   ├── dataset_versions/         # 托管数据集版本，默认被 Git 忽略
 │   ├── datasets/                 # 本地原始/测试数据集，默认被 Git 忽略
+│   ├── knowledge_base/           # 可版本管理的业务知识源文档
+│   ├── fault_case_base/          # 可版本管理的已确认故障案例
 │   ├── runs/                     # 训练、检测和评估产物，默认被 Git 忽略
 │   ├── tests/                    # Pytest 测试
 │   ├── tools/                    # 场景、价格和数据集辅助脚本
@@ -234,7 +333,9 @@ agent-platform/
 数据集版本状态：
 
 - `draft`：可修改，只允许派生草稿执行商品增删。
-- `ready`：已校验并冻结，可训练或作为派生源。
+- `pending_train`：已校验并冻结，等待训练，可设为当前或作为派生源。
+- `training`：已有训练任务正在运行，数据集内容仍保持冻结。
+- `published`：已经产生可用的活动模型，可用于检测、计价或继续派生。
 - `archived`：历史冻结版本，不能设为当前，但可追溯或导入离线训练结果。
 
 训练状态包括 `pending`、`running`、`completed`、`failed`、`cancelled`。数据集列表会汇总为未训练、排队中、训练中、已训练或失败。
@@ -346,7 +447,19 @@ cd backend
 python tools/build_knowledge_index.py
 ```
 
-待检索的操作文档放在 `backend/knowledge_base/` 下（支持 `.md`、`.txt`，子目录名会成为领域标签）；新增或更新文档后再次执行上述脚本即可写入或更新索引。Chroma 数据保存在项目根目录 `.runtime/chroma`，不会提交到 Git。Embedding 不可用时，路由会自动降级为强意图、关键词、未完成工作流和会话上下文；知识库与长期记忆则返回不可用提示，不会阻塞检测、数据集、训练、价目表或结算业务。训练可以在其他机器或集群执行；管理端的 Training Agent 通过数据库任务、日志和指标进行监控，不要求当前后端机器具备 CUDA 训练环境。
+待检索的操作文档放在 `backend/knowledge_base/`，可重复构建的已确认故障案例放在 `backend/fault_case_base/`（均支持 `.md`、`.txt`，一级子目录会成为领域标签）。新增、修改或删除文档后再次执行上述脚本；同步算法、集合职责和数据边界见 [2.3 知识库、故障案例与长期记忆架构](#23-知识库故障案例与长期记忆架构)。Chroma 数据保存在项目根目录 `.runtime/chroma`，不会提交到 Git。Embedding 不可用时，路由会自动降级为强意图、关键词、未完成工作流和会话上下文；知识库与长期记忆则返回不可用提示，不会阻塞检测、数据集、训练、价目表或结算业务。训练可以在其他机器或集群执行；管理端的 Training Agent 通过数据库任务、日志和指标进行监控，不要求当前后端机器具备 CUDA 训练环境。
+
+除命令行脚本外，登录后还可以通过以下管理 API 构建、检查和检索知识能力：
+
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| `GET` | `/api/knowledge/status` | 查看 Embedding 配置、切片参数及四个 Chroma 集合的计数 |
+| `POST` | `/api/knowledge/build` | 同步构建业务知识与可重复构建的故障案例索引 |
+| `POST` | `/api/knowledge/search` | 检索业务知识，可指定 `domain` 和 `top_k` |
+| `POST` | `/api/knowledge/fault-cases` | 写入人工确认的动态故障案例 |
+| `POST` | `/api/knowledge/memory/search` | 按当前登录用户检索长期记忆 |
+
+这些接口均要求登录认证。长期记忆的写入由对话内 Knowledge Agent 的 `remember_management_preference` 工具完成，当前没有开放通用的记忆写入 HTTP 接口。
 
 如需单独评估向量路由，可在 `backend/.env` 临时设置 `AGENT_ROUTING_MODE=embedding_only` 后重启后端。该模式跳过强意图、关键词、附件、未完成工作流和会话上下文保护，最终 Agent 仅由 embedding 相似度决定；Embedding 不可用或低于阈值时安全返回 Knowledge Agent。测试结束必须改回 `AGENT_ROUTING_MODE=hybrid`。
 
@@ -418,7 +531,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - Swagger：`http://127.0.0.1:8000/docs`
 - ReDoc：`http://127.0.0.1:8000/redoc`
 
-登录后可在 Swagger 中授权并调用 `GET /api/knowledge/status` 验证向量能力：`embedding_configured` 应为 `true`，模型应为 `text-embedding-v4`；完成首次索引后，返回的 `visionpay_knowledge` 与 `visionpay_agent_routes` 集合计数应大于 0。
+登录后可在 Swagger 中授权并调用 `GET /api/knowledge/status` 验证向量能力：`embedding_configured` 应为 `true`，模型应为 `text-embedding-v4`，维度应为 `1024`，距离类型应为 `cosine`。完成首次索引后，`visionpay_knowledge`、`visionpay_fault_cases` 和 `visionpay_agent_routes` 的集合计数应大于 0；`visionpay_long_term_memory` 在尚未保存任何用户偏好时可以为 0。若接口返回 `error`，应先检查 `backend/.env`、DashScope 网络连通性和 `.runtime/chroma` 的写入权限。
 
 ### 6.9 安装并启动前端
 
@@ -540,7 +653,7 @@ class_index x_center y_center width height
 
 1. “校验”检查类别数量、连续 `class_index`、稳定商品映射、分区计数和内容指纹。
 2. 本地或共享挂载目录可启用文件系统检查，确认目录、`data.yaml` 和 `manifest.json` 存在。
-3. “冻结”将 `draft` 变为 `ready`，冻结后不能继续增删商品。
+3. “冻结”将 `draft` 变为 `pending_train`，冻结后不能继续增删商品。
 4. 当前版本在导入基线或导入可用模型时指定；数据集列表不提供手动“设为当前”操作。
 5. 不再使用的冻结版本可以归档；当前模型目录归档时会自动切换可用的检测模型和数据集版本。
 
@@ -568,7 +681,7 @@ class_index x_center y_center width height
 - 设备：`cpu`、`0`、`0,1` 或 `0-7`。
 - 优化器、初始学习率和数据增强参数。
 
-未显式选择数据集时，后端优先使用该场景的当前 `ready` 数据集；仍没有注册版本时才兼容查找 `backend/datasets/vision_pay`、场景目录或请求中指定的 `data.yaml`。
+未显式选择数据集时，后端优先使用该场景当前且已冻结的数据集（`pending_train`、`training` 或 `published`）；仍没有注册版本时才兼容查找 `backend/datasets/vision_pay`、场景目录或请求中指定的 `data.yaml`。
 
 训练在后端进程的后台线程运行，输出目录为：
 
@@ -629,7 +742,7 @@ run-dir/
    - 将权重复制到 `DATASET_VERSION_ROOT/scene_<scene_id>/<version>/best.pt`，原始文件之后可以移动或删除。
    - 生成只包含类别目录的 `data.yaml` 与 `manifest.json`。
    - 为每个 `class_index` 创建或复用稳定 `Product`、`product_id` 和 `product_key`。
-   - 创建状态为 `ready` 的“模型目录”数据集版本，并登记与它一一关联的 `ModelVersion`。
+   - 创建状态为 `published` 的“模型目录”数据集版本，并登记与它一一关联的 `ModelVersion`。
 5. 进入“价目表管理”，选择刚导入的模型目录版本，为类别补充商品名称、条码和价格。
 6. 在“模型训练”页面确认该模型已出现在检测版本列表；图片、视频、实时检测和结算会使用当前检测模型。
 

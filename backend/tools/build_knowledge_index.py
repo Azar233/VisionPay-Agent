@@ -19,11 +19,19 @@ def main() -> int:
         return 2
     root = BACKEND_ROOT / "knowledge_base"
     result = KnowledgeRetriever().index_directory(root)
+    fault_result = KnowledgeRetriever(
+        KnowledgeRetriever.FAULT_COLLECTION
+    ).index_directory(BACKEND_ROOT / "fault_case_base")
     # A deliberately ambiguous message warms and seeds the vector route collection.
     decision = AgentRouter().route("请帮我处理一批新的经营资料")
     print(
         f"知识库构建完成: files={result['files']}, chunks={result['chunks']}, "
-        f"total={result['total']}"
+        f"deleted={result['deleted_chunks']}, total={result['total']}"
+    )
+    print(
+        f"故障案例库构建完成: files={fault_result['files']}, "
+        f"chunks={fault_result['chunks']}, deleted={fault_result['deleted_chunks']}, "
+        f"total={fault_result['total']}"
     )
     print(
         f"向量路由已初始化: agent={decision.agent}, method={decision.method}, "

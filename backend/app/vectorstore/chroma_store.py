@@ -103,6 +103,21 @@ class ChromaStore:
             )
         return items
 
+    def list_items(self, *, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Return stored ids/documents/metadata without loading embeddings."""
+        kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        if where:
+            kwargs["where"] = where
+        result = self.collection.get(**kwargs)
+        return [
+            {"id": item_id, "content": document or "", "metadata": metadata or {}}
+            for item_id, document, metadata in zip(
+                result.get("ids") or [],
+                result.get("documents") or [],
+                result.get("metadatas") or [],
+            )
+        ]
+
     def delete(self, *, ids: list[str] | None = None, where: dict | None = None) -> None:
         if ids or where:
             self.collection.delete(ids=ids, where=where)

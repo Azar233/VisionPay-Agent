@@ -44,7 +44,7 @@ def _records(client, db_session):
         scene_id=scene.id,
         version="confirm-v1",
         name="确认版本",
-        status="ready",
+        status="pending_train",
         storage_path="dataset_versions/confirm-v1",
         data_yaml_path="data.yaml",
         class_count=1,
@@ -225,3 +225,37 @@ def test_expired_confirmation_token_is_rejected(client, db_session):
     )
 
     assert response.status_code == 410
+
+
+def test_frozen_dataset_can_preview_derive_and_current_archive(client, db_session):
+    headers, _, dataset, _ = _records(client, db_session)
+    dataset.is_current = True
+    db_session.commit()
+
+    derive = client.post(
+        "/api/agent/operations/preview",
+        headers=headers,
+        json={
+            "session_uuid": "confirmation-session",
+            "action": "dataset.derive",
+            "parameters": {
+                "dataset_id": dataset.id,
+                "version": "confirm-v2",
+                "name": "确认派生版本",
+            },
+        },
+    )
+    archive = client.post(
+        "/api/agent/operations/preview",
+        headers=headers,
+        json={
+            "session_uuid": "confirmation-session",
+            "action": "dataset.archive",
+            "parameters": {"dataset_id": dataset.id},
+        },
+    )
+
+    assert derive.status_code == 200, derive.text
+    assert archive.status_code == 200, archive.text
+    assert archive.json()["impact"]["changes"]["status"] == "pending_train → archived"
+    assert any("替代当前数据集" in item for item in archive.json()["impact"]["warnings"])

@@ -17,6 +17,7 @@ from app.vectorstore import ChromaStore
 router = APIRouter(prefix="/api/knowledge", tags=["管理知识库"])
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 KNOWLEDGE_ROOT = BACKEND_ROOT / "knowledge_base"
+FAULT_CASE_ROOT = BACKEND_ROOT / "fault_case_base"
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -69,7 +70,12 @@ def knowledge_status(current_user=Depends(get_current_user)):
 def build_knowledge(current_user=Depends(get_current_user)):
     del current_user
     try:
-        return KnowledgeRetriever().index_directory(KNOWLEDGE_ROOT)
+        return {
+            "knowledge": KnowledgeRetriever().index_directory(KNOWLEDGE_ROOT),
+            "fault_cases": KnowledgeRetriever(
+                KnowledgeRetriever.FAULT_COLLECTION
+            ).index_directory(FAULT_CASE_ROOT),
+        }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"知识库构建失败：{exc}") from exc
 

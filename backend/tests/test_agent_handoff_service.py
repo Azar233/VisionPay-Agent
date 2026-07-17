@@ -80,7 +80,7 @@ def test_handoff_requires_explicit_new_product_fields(db_session):
 
 
 def test_handoff_rejects_non_draft_dataset(db_session):
-    user, dataset, session = _records(db_session, status="ready")
+    user, dataset, session = _records(db_session, status="pending_train")
 
     with pytest.raises(DatasetLifecycleError, match="草稿"):
         agent_handoff_service.create_dataset_add_samples(

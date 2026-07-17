@@ -32,9 +32,11 @@ def build_dataset_tools(user_id: int, session_uuid: str) -> list:
 
     def list_dataset_versions(
         scene_id: int | None = None,
-        status: Literal["draft", "ready", "archived"] | None = None,
+        status: Literal[
+            "draft", "pending_train", "training", "published", "archived"
+        ] | None = None,
     ) -> str:
-        """列出全部数据集版本；可按 scene_id 和 draft/ready/archived 状态筛选。"""
+        """列出全部数据集版本；可按 scene_id 和当前生命周期状态筛选。"""
         db = SessionLocal()
         try:
             result = dataset_service.list(
