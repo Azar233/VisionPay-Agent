@@ -19,7 +19,23 @@
     <Transition name="pet-bubble">
       <div v-if="petStore.message" class="pet-message">
         <span class="pet-status-dot" aria-hidden="true" />
-        <span>{{ petStore.message }}</span>
+        <div class="pet-message-content">
+          <div class="pet-message-heading">
+            <span>{{ petStore.message }}</span>
+            <strong v-if="petProgress !== null">{{ petProgress }}%</strong>
+          </div>
+          <div
+            v-if="petProgress !== null"
+            class="pet-progress"
+            role="progressbar"
+            aria-label="任务进度"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            :aria-valuenow="petProgress"
+          >
+            <span :style="{ width: `${petProgress}%` }" />
+          </div>
+        </div>
       </div>
     </Transition>
 
@@ -70,6 +86,14 @@ const petPositionStyle = computed(() => ({
   transform: `translate3d(${position.value.x}px, ${position.value.y}px, 0)`,
 }))
 
+// Only dataset background operations provide a numeric progress value.
+// Treat missing legacy/HMR state as no progress so normal chat only shows text.
+const petProgress = computed(() => (
+  petStore.showProgress && Number.isFinite(petStore.progress)
+    ? Math.max(0, Math.min(100, Math.round(petStore.progress)))
+    : null
+))
+
 const spriteStyle = computed(() => {
   const isWorking = petStore.state === 'working'
   return {
@@ -87,7 +111,7 @@ const stateLabels = {
 
 const ariaLabel = computed(() => (
   petStore.message
-    ? `VisionPay 桌宠：${petStore.message}`
+    ? `VisionPay 桌宠：${petStore.message}${petProgress.value !== null ? `，进度 ${petProgress.value}%` : ''}`
     : `VisionPay 桌宠，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`
 ))
 
@@ -317,9 +341,14 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
-  white-space: nowrap;
   pointer-events: none;
 }
+
+.pet-message-content { min-width: 172px; }
+.pet-message-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; white-space: nowrap; }
+.pet-message-heading strong { color: $primary-color; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pet-progress { width: 100%; height: 4px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vp-primary) 13%, transparent); }
+.pet-progress span { display: block; height: 100%; border-radius: inherit; background: $primary-color; transition: width .24s ease; }
 
 .pet-status-dot {
   width: 7px;

@@ -55,6 +55,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { CircleCheckFilled, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { beginVisionPetTask } from '@/utils/visionPet'
 import {
   cancelAgentOperationApi,
   confirmAgentOperationApi,
@@ -65,6 +66,31 @@ import {
 const props = defineProps({ operation: { type: Object, required: true } })
 const emit = defineEmits(['changed'])
 const working = ref(false)
+const PROGRESS_ACTIONS = new Set(['dataset.derive', 'dataset.delete_draft', 'dataset.delete_product'])
+const waitForProgressPoll = (duration = 120) => new Promise((resolve) => window.setTimeout(resolve, duration))
+
+function compactProgressHistory(history, maxItems = 5) {
+  if (history.length <= maxItems) return history
+  return Array.from({ length: maxItems }, (_, index) => (
+    history[Math.round(index * (history.length - 1) / (maxItems - 1))]
+  ))
+}
+
+async function replayProgressHistory(petTask, taskProgress, lastDisplayedProgress) {
+  const unseen = (taskProgress?.history || []).filter((item) => (
+    Number.isFinite(Number(item.progress)) && Number(item.progress) > lastDisplayedProgress
+  ))
+  let latest = lastDisplayedProgress
+  for (const item of compactProgressHistory(unseen)) {
+    latest = Number(item.progress)
+    petTask.update({
+      message: `${props.operation.impact?.title || '数据集操作'}：${item.message || '正在处理'}`,
+      progress: latest,
+    })
+    await waitForProgressPoll(90)
+  }
+  return latest
+}
 
 const changeEntries = computed(() => Object.entries(props.operation.impact?.changes || {}))
 const targetEntries = computed(() => Object.entries(props.operation.impact?.target || {}))
@@ -116,6 +142,15 @@ async function syncOperation() {
 async function confirmOperation() {
   if (working.value || props.operation.status !== 'pending') return
   working.value = true
+  const tracksProgress = PROGRESS_ACTIONS.has(props.operation.action)
+  const petTask = tracksProgress
+    ? beginVisionPetTask({
+        id: `agent-operation-${props.operation.operation_uuid}`,
+        message: `${props.operation.impact?.title || '数据集操作'}：正在确认执行`,
+        progress: 0,
+        showProgress: true,
+      })
+    : null
   try {
     let token = props.operation.confirmation_token
     if (!token) {
@@ -123,16 +158,52 @@ async function confirmOperation() {
       token = refreshed.confirmation_token
       Object.assign(props.operation, refreshed)
     }
-    const result = await confirmAgentOperationApi(
-      props.operation.operation_uuid,
-      token,
-      executionKey(),
-    )
+    let result
+    let confirmationError
+    let confirmationSettled = false
+    let lastDisplayedProgress = 0
+    confirmAgentOperationApi(props.operation.operation_uuid, token, executionKey())
+      .then((value) => { result = value })
+      .catch((error) => { confirmationError = error })
+      .finally(() => { confirmationSettled = true })
+
+    while (tracksProgress && !confirmationSettled) {
+      await waitForProgressPoll()
+      if (confirmationSettled) break
+      const current = await getAgentOperationApi(props.operation.operation_uuid).catch(() => null)
+      const progress = current?.task_progress
+      if (!progress) continue
+      Object.assign(props.operation, current)
+      petTask.update({
+        message: `${props.operation.impact?.title || '数据集操作'}：${progress.message || '正在处理'}`,
+        progress: progress.progress,
+      })
+      lastDisplayedProgress = Math.max(lastDisplayedProgress, Number(progress.progress || 0))
+    }
+    if (confirmationError) throw confirmationError
+    if (!result) throw new Error('操作执行未返回结果')
     Object.assign(props.operation, result, { confirmation_token: undefined })
+    if (petTask && result.task_progress) {
+      lastDisplayedProgress = await replayProgressHistory(
+        petTask,
+        result.task_progress,
+        lastDisplayedProgress,
+      )
+    }
+    petTask?.finish({
+      message: `${props.operation.impact?.title || '数据集操作'}已完成`,
+      progress: 100,
+      duration: 4200,
+    })
     ElMessage.success(result.replayed ? '已返回首次执行结果，没有重复操作' : '操作执行成功')
     emit('changed', result)
   } catch (error) {
     props.operation.error_message = error?.response?.data?.detail || error.message || '操作执行失败'
+    petTask?.finish({
+      status: 'failed',
+      message: `${props.operation.impact?.title || '数据集操作'}失败：${props.operation.error_message}`,
+      duration: 5200,
+    })
     await syncOperation()
   } finally {
     working.value = false

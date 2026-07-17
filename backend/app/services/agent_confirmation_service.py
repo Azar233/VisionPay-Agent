@@ -8,7 +8,7 @@ import json
 import secrets
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from sqlalchemy import func
@@ -719,7 +719,12 @@ class AgentConfirmationService:
         }
 
     @classmethod
-    def _execute(cls, db: Session, operation: AgentPendingOperation) -> dict:
+    def _execute(
+        cls,
+        db: Session,
+        operation: AgentPendingOperation,
+        progress_callback: Callable[[int, str], None] | None = None,
+    ) -> dict:
         action = operation.action
         p = operation.parameters or {}
         if action == "dataset.derive":
@@ -730,6 +735,7 @@ class AgentConfirmationService:
                 name=p["name"],
                 description=p.get("description"),
                 user_id=operation.user_id,
+                progress_callback=progress_callback,
             )
             return dataset_service.serialize(result)
         if action == "dataset.freeze":
@@ -745,7 +751,11 @@ class AgentConfirmationService:
             )
         if action == "dataset.delete_draft":
             dataset_id = int(p["dataset_id"])
-            dataset_service.delete_draft(db, dataset_id=dataset_id)
+            dataset_service.delete_draft(
+                db,
+                dataset_id=dataset_id,
+                progress_callback=progress_callback,
+            )
             return {"dataset_id": dataset_id, "deleted": True}
         if action == "dataset.delete_product":
             dataset, images, annotations, reindexed = dataset_workspace_service.delete_product(
@@ -753,6 +763,7 @@ class AgentConfirmationService:
                 dataset_id=int(p["dataset_id"]),
                 product_id=int(p["product_id"]),
                 deactivate_product=bool(p.get("deactivate_product", True)),
+                progress_callback=progress_callback,
             )
             return {
                 "dataset": dataset_service.serialize(dataset),
@@ -811,6 +822,7 @@ class AgentConfirmationService:
         username: str | None,
         confirmation_token: str,
         idempotency_key: str,
+        progress_callback: Callable[[int, str], None] | None = None,
     ) -> dict:
         operation = db.query(AgentPendingOperation).filter(
             AgentPendingOperation.operation_uuid == operation_uuid,
@@ -850,7 +862,7 @@ class AgentConfirmationService:
         db.commit()
 
         try:
-            result = _json_safe(cls._execute(db, operation))
+            result = _json_safe(cls._execute(db, operation, progress_callback=progress_callback))
             operation.status = "completed"
             operation.result = result
             operation.error_message = None

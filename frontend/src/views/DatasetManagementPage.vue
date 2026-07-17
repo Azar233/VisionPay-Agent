@@ -658,6 +658,7 @@ import {
 } from '@/utils/datasetAnnotationReview'
 import { collectProductFolderFiles } from '@/utils/datasetProductFiles'
 import { canArchiveDataset, canDeriveDataset, isDatasetDraft } from '@/utils/datasetLifecycle'
+import { beginVisionPetTask } from '@/utils/visionPet'
 import { getScenes } from '@/api/history'
 import { getAgentHandoffApi, updateAgentHandoffApi } from '@/api/handoffs'
 import {
@@ -1035,7 +1036,7 @@ async function submitBaseline() {
   }
 }
 
-const waitForOperationPoll = () => new Promise((resolve) => window.setTimeout(resolve, 500))
+const waitForOperationPoll = () => new Promise((resolve) => window.setTimeout(resolve, 180))
 
 async function runDatasetOperation(title, startTask) {
   const runToken = operationRunToken.value + 1
@@ -1051,25 +1052,49 @@ async function runDatasetOperation(title, startTask) {
     result: null,
   }
   operationProgressVisible.value = true
+  const petTask = beginVisionPetTask({
+    message: `${title}：正在创建后台任务`,
+    progress: 0,
+    showProgress: true,
+  })
   let taskCreated = false
+  let petTaskFinished = false
+  const finishPetTask = (options) => {
+    if (petTaskFinished) return
+    petTaskFinished = true
+    petTask.finish(options)
+  }
   try {
     let task = await startTask()
     taskCreated = true
     operationTask.value = { title, ...task, progress: Number(task.progress || 0) }
+    petTask.update({ message: `${title}：${task.message || '等待处理'}`, progress: task.progress })
     while (!['completed', 'failed'].includes(task.status)) {
       await waitForOperationPoll()
-      if (operationRunToken.value !== runToken) return null
+      if (operationRunToken.value !== runToken) {
+        finishPetTask()
+        return null
+      }
       task = await getDatasetOperationStatusApi(task.task_id)
       operationTask.value = { title, ...task, progress: Number(task.progress || 0) }
+      petTask.update({ message: `${title}：${task.message || '正在处理'}`, progress: task.progress })
     }
     if (task.status === 'failed') {
+      finishPetTask({
+        status: 'failed',
+        message: `${title}失败：${task.message || '请检查任务详情'}`,
+        duration: 5200,
+      })
       ElMessage.error(task.message || '数据集操作失败')
       return null
     }
+    finishPetTask({ message: `${title}已完成`, progress: 100, duration: 4200 })
     await new Promise((resolve) => window.setTimeout(resolve, 450))
     operationProgressVisible.value = false
     return task.result
   } catch (error) {
+    const errorMessage = error.response?.data?.detail || '无法获取后台任务进度，请检查服务器状态'
+    finishPetTask({ status: 'failed', message: `${title}失败：${errorMessage}`, duration: 5200 })
     if (!taskCreated) {
       operationProgressVisible.value = false
       throw error
@@ -1077,11 +1102,12 @@ async function runDatasetOperation(title, startTask) {
     operationTask.value = {
       ...operationTask.value,
       status: 'failed',
-      message: error.response?.data?.detail || '无法获取后台任务进度，请检查服务器状态',
+      message: errorMessage,
     }
     ElMessage.error(operationTask.value.message)
     return null
   } finally {
+    finishPetTask()
     if (operationRunToken.value === runToken) workspaceSubmitting.value = false
   }
 }
