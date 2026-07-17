@@ -17,7 +17,7 @@ class DashScopeEmbeddingClient:
     def __init__(self) -> None:
         if not settings.DASHSCOPE_API_KEY:
             raise EmbeddingConfigurationError(
-                "DASHSCOPE_API_KEY 未配置；setx 后请重新打开终端或重启后端"
+                "DASHSCOPE_API_KEY 未配置；请填写 backend/.env 后重启后端"
             )
         from openai import OpenAI
 

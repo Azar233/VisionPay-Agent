@@ -1,4 +1,9 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+
+BACKEND_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -130,7 +135,8 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
 
     class Config:
-        env_file = ".env"
+        # 始终读取项目的 backend/.env，不依赖启动命令的当前工作目录。
+        env_file = str(BACKEND_ENV_FILE)
         env_file_encoding = "utf-8"
         extra = "ignore"  # 忽略 .env 中未在 Settings 定义的字段
 

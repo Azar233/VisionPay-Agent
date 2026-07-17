@@ -315,7 +315,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
-`DETECTION_MODEL_PATH` 没有兼容模型时应保持为空，避免指向不存在的占位路径。`DEEPSEEK_API_KEY` 只影响智能对话，普通检测、数据集、训练和结算功能不依赖它。当前配置类使用 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` 组装数据库连接，不读取 `.env.example` 中遗留的 `DATABASE_URL`。
+`DETECTION_MODEL_PATH` 没有兼容模型时应保持为空，避免指向不存在的占位路径。`DEEPSEEK_API_KEY` 只影响智能对话，普通检测、数据集、训练和结算功能不依赖它。数据库连接统一由 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` 组装。
 
 多 Agent 路由的全量语义候选、知识库、故障案例和长期记忆使用阿里云百炼 `text-embedding-v4` 与本地 Chroma。强业务意图仍由确定性规则覆盖，避免语义相似度改变高风险管理操作的归属：
 
@@ -334,15 +334,11 @@ ROUTER_MIN_SIMILARITY=0.42
 # hybrid 为生产默认；embedding_only 会跳过强意图、关键词、附件和会话上下文保护，仅用于测试。
 AGENT_ROUTING_MODE=hybrid
 LONG_TERM_MEMORY_TOP_K=3
+AGENT_HANDOFF_TTL_SECONDS=86400
+AGENT_CONFIRMATION_TTL_SECONDS=600
 ```
 
-推荐在 Windows 通过系统环境变量配置 Key，避免把密钥写入 `.env`：
-
-```powershell
-setx DASHSCOPE_API_KEY "你的百炼API-Key"
-```
-
-执行 `setx` 后必须关闭并重新打开 PowerShell，再激活同一个 Python 环境。也可仅在本机开发时把 `DASHSCOPE_API_KEY` 写入 `backend/.env`；两种方式任选其一，切勿提交真实 Key。首次构建知识库时，脚本会同时写入知识库索引并预热向量路由示例：
+DashScope、Embedding、Chroma、RAG、路由和记忆参数统一从 `backend/.env` 读取；不要再通过 `setx` 单独维护同名配置。`backend/.env` 已被 Git 忽略，提交时只维护不含真实密钥的 `.env.example`。修改 `.env` 后需要重启后端。首次构建知识库时，脚本会同时写入知识库索引并预热向量路由示例：
 
 ```powershell
 conda activate agentenv
