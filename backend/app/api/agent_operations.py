@@ -12,6 +12,7 @@ from app.services.agent_confirmation_service import (
     AgentConfirmationError,
     agent_confirmation_service,
 )
+from app.services.conversation_context_service import conversation_context_service
 from app.storage.dataset_operation_store import dataset_operation_store
 
 router = APIRouter(prefix="/api/agent/operations", tags=["Agent 操作确认"])
@@ -89,7 +90,7 @@ def create_preview(
     db: Session = Depends(get_db),
 ):
     try:
-        return agent_confirmation_service.create_preview(
+        result = agent_confirmation_service.create_preview(
             db,
             user_id=int(current_user.id),
             username=current_user.username,
@@ -98,6 +99,12 @@ def create_preview(
             parameters=request.parameters,
             idempotency_key=request.idempotency_key,
         )
+        conversation_context_service.refresh_session(
+            db,
+            user_id=int(current_user.id),
+            session_uuid=request.session_uuid,
+        )
+        return result
     except AgentConfirmationError as exc:
         db.rollback()
         _raise(exc)
@@ -211,6 +218,11 @@ def confirm_operation(
                 user_id=int(current_user.id),
             )
             result = _serialize_operation(operation, replayed=bool(result.get("replayed")))
+        conversation_context_service.refresh_session(
+            db,
+            user_id=int(current_user.id),
+            session_uuid=operation.session_uuid,
+        )
         return result
     except AgentConfirmationError as exc:
         db.rollback()
@@ -232,12 +244,21 @@ def cancel_operation(
     db: Session = Depends(get_db),
 ):
     try:
-        return agent_confirmation_service.cancel(
+        operation = agent_confirmation_service.get(
+            db, operation_uuid=operation_uuid, user_id=int(current_user.id)
+        )
+        result = agent_confirmation_service.cancel(
             db,
             operation_uuid=operation_uuid,
             user_id=int(current_user.id),
             username=current_user.username,
         )
+        conversation_context_service.refresh_session(
+            db,
+            user_id=int(current_user.id),
+            session_uuid=operation.session_uuid,
+        )
+        return result
     except AgentConfirmationError as exc:
         db.rollback()
         _raise(exc)

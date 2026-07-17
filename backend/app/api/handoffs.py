@@ -12,6 +12,7 @@ from app.entity.schemas import (
 )
 from app.services.agent_handoff_service import AgentHandoffError, agent_handoff_service
 from app.services.dataset_service import DatasetLifecycleError, DatasetNotFoundError
+from app.services.conversation_context_service import conversation_context_service
 
 router = APIRouter(prefix="/api/agent/handoffs", tags=["Agent 页面交接"])
 
@@ -36,6 +37,11 @@ def create_dataset_add_samples_handoff(
             db,
             user_id=current_user.id,
             **payload.model_dump(),
+        )
+        conversation_context_service.refresh_session(
+            db,
+            user_id=int(current_user.id),
+            session_uuid=handoff.session_uuid,
         )
         return agent_handoff_service.serialize(handoff)
     except (AgentHandoffError, DatasetLifecycleError, DatasetNotFoundError) as exc:
@@ -79,6 +85,11 @@ def update_handoff(
             handoff_uuid=handoff_uuid,
             user_id=current_user.id,
             **payload.model_dump(),
+        )
+        conversation_context_service.refresh_session(
+            db,
+            user_id=int(current_user.id),
+            session_uuid=handoff.session_uuid,
         )
         return agent_handoff_service.serialize(handoff)
     except AgentHandoffError as exc:

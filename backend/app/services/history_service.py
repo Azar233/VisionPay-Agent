@@ -333,6 +333,8 @@ class HistoryService:
             "has_detection_result": bool(message.tool_result),
             "status": "failed" if failed else "completed",
             "tokens_used": message.tokens_used,
+            "model_usage": assistant_meta.get("model_usage") or None,
+            "context_tokens": assistant_meta.get("context_tokens"),
             "latency_ms": message.latency_ms,
             "created_at": message.created_at.isoformat() if message.created_at else None,
         }

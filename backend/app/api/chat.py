@@ -20,7 +20,8 @@ from app.api.detection import save_upload
 from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import get_db
-from app.entity.db_models import AgentHandoff, ChatMessage, ChatSession
+from app.entity.db_models import ChatMessage, ChatSession
+from app.services.conversation_context_service import conversation_context_service
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["检测对话"])
@@ -47,6 +48,9 @@ def _serialize_session(session: ChatSession) -> dict:
         "message_count": session.message_count or 0,
         "last_message_at": session.last_message_at,
         "created_at": session.created_at,
+        "context_state": conversation_context_service.normalize_state(
+            session.context_state
+        ),
     }
 
 
@@ -206,6 +210,17 @@ async def save_exchange(
         )
     )
     db.flush()
+    conversation_context_service.apply_turn(
+        session,
+        agent="detection",
+        tool_events=[
+            {
+                "tool": "yolo_direct",
+                "input": {"attachment_names": attachments},
+                "result": result,
+            }
+        ],
+    )
     _touch_session(db, session, user_content)
     db.commit()
     return _serialize_session(session)
@@ -300,51 +315,23 @@ async def chat_stream(
         ),
         None,
     )
-    active_dataset_handoff = (
-        db.query(AgentHandoff)
-        .filter(
-            AgentHandoff.user_id == current_user_id,
-            AgentHandoff.session_uuid == session_uuid,
-            AgentHandoff.domain == "dataset",
-            AgentHandoff.status.in_(
-                [
-                    "ready_for_handoff",
-                    "selecting_files",
-                    "annotating",
-                    "submitting",
-                    "failed",
-                ]
-            ),
-            AgentHandoff.expires_at > datetime.now(),
-        )
-        .order_by(AgentHandoff.created_at.desc())
-        .first()
+    context_state = conversation_context_service.reconcile(
+        db, session, user_id=current_user_id
     )
-    history = []
-    for item in session.messages:
-        if item.role not in {"user", "assistant"}:
-            continue
-        content = item.content
-        # 把历史附件路径也拼进上下文，否则 LLM 在多轮对话中看不到之前的附件
-        if item.role == "user" and item.tool_calls:
-            historical_paths = item.tool_calls.get("attachment_paths") or []
-            if historical_paths:
-                content += "\n\n本次附件路径：\n" + "\n".join(
-                    f"- {p}" for p in historical_paths
-                )
-            historical_form = item.tool_calls.get("form_submission")
-            if isinstance(historical_form, dict):
-                content += "\n\n结构化表单参数：\n" + json.dumps(
-                    historical_form, ensure_ascii=False
-                )
-        history.append({"role": item.role, "content": content})
-    history = history[-20:]
+    if form_submission:
+        context_state = conversation_context_service.apply_turn(
+            session,
+            agent=form_submission["agent"],
+            form_submission=form_submission,
+        )
+    history, context_tokens = conversation_context_service.prepare_history(session)
     if not settings.DEEPSEEK_API_KEY or settings.DEEPSEEK_API_KEY.startswith("sk-your-"):
         raise HTTPException(status_code=503, detail="DeepSeek 尚未配置")
     orchestrator = MultiAgentOrchestrator(
         user_id=current_user_id,
         scene_id=scene_id,
         session_uuid=session_uuid,
+        context_state=context_state,
         detection_agent_factory=DetectionAgent,
     )
     agent_message = message
@@ -367,8 +354,10 @@ async def chat_stream(
         decision = orchestrator.route(
             message,
             has_attachments=bool(attachment_paths),
-            preferred_agent=last_agent,
-            active_workflow_agent="dataset" if active_dataset_handoff else None,
+            preferred_agent=context_state.get("active_agent") or last_agent,
+            active_workflow_agent=conversation_context_service.active_workflow_agent(
+                context_state
+            ),
         )
     db.add(
         ChatMessage(
@@ -393,10 +382,12 @@ async def chat_stream(
         result = None
         tool_name = None
         tools_used: list[str] = []
+        tool_events: list[dict] = []
         handoff = None
         input_form = None
         confirmation = None
         error_text = None
+        model_usage_by_run: dict[str, dict] = {}
         started_at = time.perf_counter()
         yield f"data: {json.dumps({'type': 'session', 'session_uuid': session_uuid})}\n\n"
         try:
@@ -414,6 +405,28 @@ async def chat_stream(
                     tool_name = event.get("tool")
                     if tool_name and tool_name not in tools_used:
                         tools_used.append(tool_name)
+                    tool_events.append(
+                        {
+                            "tool": tool_name,
+                            "input": event.get("input") or {},
+                            "result": None,
+                        }
+                    )
+                elif event.get("type") == "tool_result":
+                    result_tool = event.get("tool")
+                    for tool_event in reversed(tool_events):
+                        if tool_event.get("tool") == result_tool and tool_event.get("result") is None:
+                            tool_event["result"] = event.get("content")
+                            break
+                elif event.get("type") == "model_usage":
+                    usage = event.get("usage") or {}
+                    run_id = str(event.get("run_id") or f"run-{len(model_usage_by_run)}")
+                    model_usage_by_run[run_id] = {
+                        key: int(value)
+                        for key, value in usage.items()
+                        if key in {"input_tokens", "output_tokens", "total_tokens"}
+                        and isinstance(value, int)
+                    }
                 elif event.get("type") == "handoff_required":
                     handoff = {
                         "handoff_id": event.get("handoff_id"),
@@ -443,6 +456,21 @@ async def chat_stream(
             )
             try:
                 persist_session = _session_or_404(db, current_user_id, session_uuid)
+                model_usage = {
+                    key: sum(item.get(key, 0) for item in model_usage_by_run.values())
+                    for key in ("input_tokens", "output_tokens", "total_tokens")
+                }
+                model_usage = {key: value for key, value in model_usage.items() if value > 0}
+                model_tokens_used = model_usage.get("total_tokens")
+                conversation_context_service.apply_turn(
+                    persist_session,
+                    agent=decision.agent,
+                    form_submission=form_submission,
+                    input_form=input_form,
+                    handoff=handoff,
+                    confirmation=confirmation,
+                    tool_events=tool_events,
+                )
                 db.add(
                     ChatMessage(
                         session_id=persist_session.id,
@@ -454,6 +482,8 @@ async def chat_stream(
                                 **({"tool": tool_name} if tool_name else {}),
                                 **({"tools": tools_used} if tools_used else {}),
                                 "routing": decision.event(),
+                                "context_tokens": context_tokens,
+                                **({"model_usage": model_usage} if model_usage else {}),
                                 **({"handoff": handoff} if handoff else {}),
                                 **({"input_form": input_form} if input_form else {}),
                                 **({"confirmation": confirmation} if confirmation else {}),
@@ -464,6 +494,7 @@ async def chat_stream(
                             json.dumps(result, ensure_ascii=False) if result else None
                         ),
                         latency_ms=int((time.perf_counter() - started_at) * 1000),
+                        tokens_used=model_tokens_used,
                     )
                 )
                 db.flush()

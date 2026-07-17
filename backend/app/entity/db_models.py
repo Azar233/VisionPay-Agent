@@ -563,6 +563,9 @@ class ChatSession(Base):
     status = Column(String(20), default="active", comment="状态：active/archived")
     message_count = Column(Integer, default=0, comment="消息数量")
     last_message_at = Column(DateTime, nullable=True, comment="最后消息时间")
+    context_state = Column(JSON, nullable=False, default=dict, comment="结构化会话任务状态")
+    context_summary = Column(Text, nullable=True, comment="较早对话的增量摘要")
+    summarized_message_id = Column(Integer, nullable=True, comment="摘要覆盖到的最后消息 ID")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

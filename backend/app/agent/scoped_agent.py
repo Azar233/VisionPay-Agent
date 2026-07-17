@@ -6,6 +6,7 @@ import json
 from typing import Any, AsyncGenerator
 
 from app.agent.detection_agent import AgentConfigurationError
+from app.agent.usage import usage_metadata
 from app.config.settings import settings
 
 
@@ -39,6 +40,7 @@ class ScopedToolAgent:
             base_url=settings.DEEPSEEK_BASE_URL,
             temperature=settings.DEEPSEEK_TEMPERATURE,
             streaming=True,
+            stream_usage=True,
         )
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -63,7 +65,7 @@ class ScopedToolAgent:
         history: list[dict[str, str]] | None = None,
         runtime_context: str = "无",
     ) -> AsyncGenerator[dict, None]:
-        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
         chat_history = []
         for item in history or []:
@@ -71,6 +73,8 @@ class ScopedToolAgent:
                 chat_history.append(HumanMessage(content=item.get("content", "")))
             elif item.get("role") == "assistant":
                 chat_history.append(AIMessage(content=item.get("content", "")))
+            elif item.get("role") == "system":
+                chat_history.append(SystemMessage(content=item.get("content", "")))
 
         async for event in self.executor.astream_events(
             {
@@ -136,6 +140,14 @@ class ScopedToolAgent:
                         }
             elif kind == "on_chat_model_stream":
                 chunk = event.get("data", {}).get("chunk")
+                usage = usage_metadata(chunk)
+                if usage:
+                    yield {
+                        "type": "model_usage",
+                        "agent": self.name,
+                        "run_id": str(event.get("run_id") or ""),
+                        "usage": usage,
+                    }
                 content = _content_text(getattr(chunk, "content", ""))
                 if content:
                     yield {"type": "text_chunk", "agent": self.name, "content": content}

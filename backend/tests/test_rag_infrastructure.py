@@ -5,6 +5,7 @@ from app.config.settings import settings
 from app.embeddings.dashscope import DashScopeEmbeddingClient
 from app.rag.chunker import TokenChunker
 from app.rag.retriever import KnowledgeRetriever
+from app.rag.query_rewriter import retrieval_query_rewriter
 from app.vectorstore import ChromaStore
 
 
@@ -107,3 +108,152 @@ def test_knowledge_reindex_removes_changed_and_deleted_source_chunks(tmp_path, m
         ("confirmed_fault_case", "人工确认的动态故障案例"),
         ("dataset/rules.md", "新的数据集规则"),
     ]
+
+
+def test_rag_filters_low_similarity_and_deduplicates_adjacent_chunks(monkeypatch):
+    candidates = [
+        {
+            "id": "a0",
+            "content": "冻结数据集版本前必须完成校验",
+            "similarity": 0.91,
+            "metadata": {"source": "dataset/freeze.md", "chunk_index": 0},
+        },
+        {
+            "id": "a1",
+            "content": "冻结数据集版本后版本将变成只读",
+            "similarity": 0.89,
+            "metadata": {"source": "dataset/freeze.md", "chunk_index": 1},
+        },
+        {
+            "id": "duplicate",
+            "content": "冻结数据集版本前必须完成校验",
+            "similarity": 0.88,
+            "metadata": {"source": "general/copy.md", "chunk_index": 4},
+        },
+        {
+            "id": "impact",
+            "content": "冻结会阻止继续修改样品和标注",
+            "similarity": 0.82,
+            "metadata": {"source": "dataset/impact.md", "chunk_index": 0},
+        },
+        {
+            "id": "low",
+            "content": "无关内容",
+            "similarity": 0.20,
+            "metadata": {"source": "general/other.md", "chunk_index": 0},
+        },
+    ]
+
+    class FakeStore:
+        count = len(candidates)
+
+        def query(self, **kwargs):
+            assert kwargs["top_k"] == 8
+            return candidates
+
+    class FakeEmbedding:
+        @staticmethod
+        def embed_query(query):
+            return [1.0, 0.0]
+
+    retriever = object.__new__(KnowledgeRetriever)
+    retriever.store = FakeStore()
+    retriever.embedding = FakeEmbedding()
+    monkeypatch.setattr(settings, "RAG_CANDIDATE_MULTIPLIER", 4)
+    monkeypatch.setattr(settings, "RAG_MIN_SIMILARITY", 0.45)
+    monkeypatch.setattr(settings, "RAG_DEDUP_SIMILARITY", 0.88)
+    monkeypatch.setattr(settings, "RAG_MAX_CHUNKS_PER_SOURCE", 2)
+
+    results = retriever.search("如何冻结", top_k=2)
+
+    assert [item["id"] for item in results] == ["a0", "impact"]
+    assert [item["rank"] for item in results] == [1, 2]
+
+
+def test_retrieval_query_rewriter_uses_structured_task_state():
+    result = retrieval_query_rewriter.rewrite(
+        "这个版本怎么冻结？",
+        context_state={
+            "active_agent": "dataset",
+            "active_workflow": {
+                "agent": "dataset",
+                "purpose": "dataset.add_samples",
+                "status": "active",
+            },
+            "entities": {"dataset_id": 21, "version": "draft-v21"},
+        },
+    )
+
+    assert result.domain == "dataset"
+    assert result.purpose == "dataset.freeze"
+    assert result.context_used is True
+    assert "冻结条件、影响范围和操作流程" in result.rewritten_query
+    assert "数据集 ID 21" in result.rewritten_query
+    assert "draft-v21" in result.rewritten_query
+
+    new_topic = retrieval_query_rewriter.rewrite(
+        "如何训练模型？",
+        context_state={
+            "active_agent": "dataset",
+            "active_workflow": {"purpose": "dataset.add_samples"},
+            "entities": {"dataset_id": 21},
+        },
+    )
+    assert new_topic.domain == "training"
+    assert new_topic.purpose is None
+    assert new_topic.rewritten_query == "如何训练模型？"
+
+
+def test_knowledge_search_api_passes_owned_session_state(client, db_session, monkeypatch):
+    from app.api import knowledge as knowledge_api
+    from app.entity.db_models import ChatSession
+
+    client.post(
+        "/api/auth/register",
+        json={"username": "rag_owner", "email": "rag_owner@example.com", "password": "123456"},
+    )
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "rag_owner", "password": "123456"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    session_uuid = client.post(
+        "/api/chat/sessions", headers=headers, json={"title": "rag context"}
+    ).json()["session_uuid"]
+    session = db_session.query(ChatSession).filter_by(session_uuid=session_uuid).one()
+    session.context_state = {
+        "active_agent": "dataset",
+        "active_workflow": {"agent": "dataset", "purpose": "dataset.freeze", "status": "active"},
+        "entities": {"dataset_id": 31},
+    }
+    db_session.commit()
+    captured = {}
+
+    class FakeRetriever:
+        def retrieve(self, query, **kwargs):
+            captured.update({"query": query, **kwargs})
+            return {
+                "original_query": query,
+                "rewritten_query": "rewritten",
+                "domain": "dataset",
+                "purpose": "dataset.freeze",
+                "context_used": True,
+                "items": [],
+            }
+
+    monkeypatch.setattr(knowledge_api, "KnowledgeRetriever", FakeRetriever)
+    response = client.post(
+        "/api/knowledge/search",
+        headers=headers,
+        json={
+            "query": "这个版本有什么影响？",
+            "session_uuid": session_uuid,
+            "top_k": 4,
+            "min_similarity": 0.6,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["context_state"]["entities"]["dataset_id"] == 31
+    assert captured["top_k"] == 4
+    assert captured["min_similarity"] == 0.6

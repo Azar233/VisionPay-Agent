@@ -5,6 +5,8 @@ from __future__ import annotations
 from langchain_core.tools import StructuredTool
 
 from app.agent.tools.common import json_text
+from app.database.session import SessionLocal
+from app.entity.db_models import ChatSession
 from app.memory import LongTermMemoryStore
 from app.rag import KnowledgeRetriever
 
@@ -40,6 +42,23 @@ def platform_agent_capabilities_payload(agent_name: str = "all") -> dict:
 
 
 def build_knowledge_tools(user_id: int, session_uuid: str | None = None) -> list:
+    def current_context_state() -> dict:
+        if not session_uuid:
+            return {}
+        db = SessionLocal()
+        try:
+            session = (
+                db.query(ChatSession)
+                .filter(
+                    ChatSession.user_id == user_id,
+                    ChatSession.session_uuid == session_uuid,
+                )
+                .first()
+            )
+            return session.context_state if session and isinstance(session.context_state, dict) else {}
+        finally:
+            db.close()
+
     def get_platform_agent_capabilities(agent_name: str = "all") -> str:
         """查询固定的平台 Agent 数量、职责和权限边界；不依赖 Embedding、RAG 或外部知识库。"""
         return json_text(platform_agent_capabilities_payload(agent_name))
@@ -47,8 +66,12 @@ def build_knowledge_tools(user_id: int, session_uuid: str | None = None) -> list
     def search_management_knowledge(query: str, domain: str = "") -> str:
         """检索 VisionPay 操作规范和领域知识；domain 可为 dataset/training/detection/catalog。"""
         try:
-            results = KnowledgeRetriever().search(query, domain=domain or None)
-            return json_text({"query": query, "results": results})
+            result = KnowledgeRetriever().retrieve(
+                query,
+                context_state=current_context_state(),
+                domain=domain or None,
+            )
+            return json_text(result)
         except Exception as exc:  # noqa: BLE001 - tool returns diagnosable error
             return json_text({"error": f"知识库当前不可用：{exc}"})
 
@@ -56,7 +79,11 @@ def build_knowledge_tools(user_id: int, session_uuid: str | None = None) -> list
         """根据现象或错误信息检索历史故障案例和解决方案。"""
         try:
             retriever = KnowledgeRetriever(KnowledgeRetriever.FAULT_COLLECTION)
-            return json_text({"query": query, "results": retriever.search(query)})
+            result = retriever.retrieve(
+                query,
+                context_state=current_context_state(),
+            )
+            return json_text(result)
         except Exception as exc:  # noqa: BLE001
             return json_text({"error": f"故障案例库当前不可用：{exc}"})
 
@@ -73,11 +100,15 @@ def build_knowledge_tools(user_id: int, session_uuid: str | None = None) -> list
         except Exception as exc:  # noqa: BLE001
             return json_text({"error": f"长期记忆保存失败：{exc}"})
 
-    def recall_management_memory(query: str) -> str:
+    def recall_management_memory(query: str, category: str = "") -> str:
         """检索当前经营者过去明确保存的偏好和稳定事实。"""
         try:
-            items = LongTermMemoryStore().recall(user_id=user_id, query=query)
-            return json_text({"query": query, "results": items})
+            items = LongTermMemoryStore().recall(
+                user_id=user_id,
+                query=query,
+                category=category or None,
+            )
+            return json_text({"query": query, "category": category or None, "results": items})
         except Exception as exc:  # noqa: BLE001
             return json_text({"error": f"长期记忆检索失败：{exc}"})
 
