@@ -813,7 +813,14 @@ def archive_dataset_version(
     current_user=Depends(get_current_user),
 ):
     try:
-        return dataset_service.serialize(dataset_service.archive(db, dataset_id=dataset_id))
+        return dataset_service.serialize(
+            dataset_service.archive(
+                db,
+                dataset_id=dataset_id,
+                actor_user_id=current_user.id,
+                actor_username=current_user.username,
+            )
+        )
     except (DatasetNotFoundError, DatasetLifecycleError) as exc:
         db.rollback()
         _raise_service_error(exc)

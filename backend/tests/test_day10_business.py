@@ -5,7 +5,15 @@ from datetime import datetime, timedelta
 
 from PIL import Image
 
-from app.entity.db_models import DetectionResult, DetectionScene, DetectionTask, User
+from app.entity.db_models import (
+    ChatMessage,
+    ChatSession,
+    DetectionResult,
+    DetectionScene,
+    DetectionTask,
+    ModelVersion,
+    User,
+)
 
 
 def auth_headers(client, username="day10_user"):
@@ -126,6 +134,99 @@ def test_history_filters_details_deletes_and_isolates(client, db_session):
     assert client.delete(f"/api/history/tasks/{completed.id}", headers=other_headers).status_code == 404
     assert client.delete(f"/api/history/tasks/{completed.id}", headers=headers).status_code == 200
     assert db_session.query(DetectionResult).filter_by(task_id=completed.id).count() == 0
+
+
+def test_unified_history_lists_agent_calls_and_model_lifecycle(client, db_session):
+    headers = auth_headers(client, "history_center_user")
+    owner = db_session.query(User).filter_by(username="history_center_user").one()
+    scene = seed_scene(db_session, owner, name="history_center_scene")
+    session = ChatSession(
+        user_id=owner.id,
+        session_uuid="history-center-session",
+        title="检查数据集",
+        message_count=2,
+        last_message_at=datetime.now(),
+    )
+    db_session.add(session)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ChatMessage(
+                session_id=session.id,
+                role="user",
+                content="查看全部数据集版本",
+                agent_used="dataset",
+                tool_calls={"attachments": [{"name": "note.png"}]},
+            ),
+            ChatMessage(
+                session_id=session.id,
+                role="assistant",
+                content="当前共有两个数据集版本。",
+                agent_used="dataset",
+                tool_calls={"tool": "list_dataset_versions"},
+                latency_ms=125,
+            ),
+        ]
+    )
+    model = ModelVersion(
+        scene_id=scene.id,
+        version="history-model-v1",
+        model_name="History model",
+        model_type="yolov11n",
+        status="active",
+        model_path="missing-history-model.pt",
+        is_default=False,
+        description="历史中心测试模型",
+    )
+    db_session.add(model)
+    db_session.commit()
+    db_session.refresh(model)
+
+    agent_listing = client.get(
+        "/api/history/agent-calls?agent=dataset&keyword=数据集",
+        headers=headers,
+    )
+    assert agent_listing.status_code == 200, agent_listing.text
+    assert agent_listing.json()["total"] == 1
+    activity = agent_listing.json()["items"][0]
+    assert activity["agent_label"] == "Dataset Agent"
+    assert activity["action_label"] == "查询数据集版本"
+    assert activity["user_request"] == "查看全部数据集版本"
+    assert activity["attachment_count"] == 1
+    assert client.get(
+        f"/api/history/agent-calls/{activity['id']}", headers=headers
+    ).status_code == 200
+
+    other_headers = auth_headers(client, "history_center_other")
+    assert client.get(
+        f"/api/history/agent-calls/{activity['id']}", headers=other_headers
+    ).status_code == 404
+
+    model_listing = client.get(
+        "/api/history/models?status=active&keyword=history-model-v1",
+        headers=headers,
+    )
+    assert model_listing.status_code == 200, model_listing.text
+    assert model_listing.json()["total"] == 1
+    assert model_listing.json()["items"][0]["origin"] == "imported"
+
+    archive = client.post(
+        f"/api/training/model-versions/{model.id}/archive",
+        headers=headers,
+    )
+    assert archive.status_code == 200, archive.text
+    timeline = client.get(f"/api/history/models/{model.id}", headers=headers)
+    assert timeline.status_code == 200, timeline.text
+    assert [event["action"] for event in timeline.json()["events"]] == [
+        "archive",
+        "created",
+    ]
+    assert timeline.json()["events"][0]["actor"] == "history_center_user"
+
+    overview = client.get("/api/history/overview", headers=headers)
+    assert overview.status_code == 200
+    assert overview.json()["agent_calls"] == 1
+    assert overview.json()["models"] == 1
 
 
 def test_profile_and_password_settings(client):

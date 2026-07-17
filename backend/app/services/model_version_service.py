@@ -2,18 +2,60 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.entity.db_models import DatasetVersion, DetectionScene, ModelVersion, TrainingMetric, TrainingTask
+from app.entity.db_models import (
+    DatasetVersion,
+    DetectionScene,
+    ModelVersion,
+    OperationLog,
+    TrainingMetric,
+    TrainingTask,
+    User,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BUILTIN_VERSION = "正式版v1.0"
 
 
 class ModelVersionService:
+    @staticmethod
+    def record_event(
+        db: Session,
+        model: ModelVersion,
+        *,
+        action: str,
+        user_id: int | None = None,
+        username: str | None = None,
+        detail: str,
+    ) -> None:
+        """Append a model-scoped audit event in the existing operation log."""
+        if username is None and user_id is not None:
+            username = db.query(User.username).filter(User.id == user_id).scalar()
+        db.add(
+            OperationLog(
+                user_id=user_id,
+                username=username,
+                module="model",
+                action=action,
+                target_type="model_version",
+                target_id=str(model.id),
+                description=json.dumps(
+                    {
+                        "model_id": model.id,
+                        "version": model.version,
+                        "detail": detail,
+                    },
+                    ensure_ascii=False,
+                )[:500],
+                status="success",
+            )
+        )
+
     @staticmethod
     def _builtin_path() -> Path:
         return (BACKEND_ROOT / "best.pt").resolve()
@@ -144,17 +186,50 @@ class ModelVersionService:
         return [cls.serialize(db, model) for model in models]
 
     @classmethod
-    def set_default(cls, db: Session, *, model_version_id: int) -> ModelVersion:
+    def set_default(
+        cls,
+        db: Session,
+        *,
+        model_version_id: int,
+        user_id: int | None = None,
+        username: str | None = None,
+    ) -> ModelVersion:
         model = db.query(ModelVersion).filter(ModelVersion.id == model_version_id).first()
         if model is None or model.status != "active":
             raise ValueError("模型版本不存在或已停用")
         if not Path(model.model_path).is_file():
             raise ValueError(f"模型文件不存在: {model.model_path}")
+        previous_defaults = (
+            db.query(ModelVersion)
+            .filter(
+                ModelVersion.scene_id == model.scene_id,
+                ModelVersion.is_default.is_(True),
+                ModelVersion.id != model.id,
+            )
+            .all()
+        )
         db.query(ModelVersion).filter(ModelVersion.scene_id == model.scene_id).update(
             {"is_default": False},
             synchronize_session=False,
         )
         model.is_default = True
+        for previous in previous_defaults:
+            cls.record_event(
+                db,
+                previous,
+                action="unset_default",
+                user_id=user_id,
+                username=username,
+                detail=f"默认模型切换为 {model.version}。",
+            )
+        cls.record_event(
+            db,
+            model,
+            action="set_default",
+            user_id=user_id,
+            username=username,
+            detail="设为场景当前默认检测模型。",
+        )
         db.commit()
         db.refresh(model)
         from app.services.dataset_service import DatasetService
@@ -163,13 +238,28 @@ class ModelVersionService:
         return model
 
     @classmethod
-    def archive_model(cls, db: Session, *, model_version_id: int) -> ModelVersion:
+    def archive_model(
+        cls,
+        db: Session,
+        *,
+        model_version_id: int,
+        user_id: int | None = None,
+        username: str | None = None,
+    ) -> ModelVersion:
         model = db.query(ModelVersion).filter(ModelVersion.id == model_version_id).first()
         if model is None or model.status != "active":
             raise ValueError("模型版本不存在或已停用")
         was_default = bool(model.is_default)
         model.status = "archived"
         model.is_default = False
+        cls.record_event(
+            db,
+            model,
+            action="archive",
+            user_id=user_id,
+            username=username,
+            detail="模型版本已归档。",
+        )
 
         if was_default:
             replacement = (
@@ -188,6 +278,14 @@ class ModelVersionService:
             )
             if replacement_model is not None:
                 replacement_model.is_default = True
+                cls.record_event(
+                    db,
+                    replacement_model,
+                    action="auto_set_default",
+                    user_id=user_id,
+                    username=username,
+                    detail=f"归档默认模型 {model.version} 后自动接替。",
+                )
 
         db.commit()
         db.refresh(model)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from uuid import uuid4
 
@@ -378,6 +379,7 @@ async def chat_stream(
             tool_calls={
                 "attachments": attachment_names,
                 "attachment_paths": attachment_paths,
+                "routing": decision.event(),
                 **({"form_submission": form_submission} if form_submission else {}),
             },
         )
@@ -390,10 +392,12 @@ async def chat_stream(
         assistant_content = ""
         result = None
         tool_name = None
+        tools_used: list[str] = []
         handoff = None
         input_form = None
         confirmation = None
         error_text = None
+        started_at = time.perf_counter()
         yield f"data: {json.dumps({'type': 'session', 'session_uuid': session_uuid})}\n\n"
         try:
             async for event in orchestrator.stream(
@@ -408,6 +412,8 @@ async def chat_stream(
                     result = event.get("result")
                 elif event.get("type") == "tool_call":
                     tool_name = event.get("tool")
+                    if tool_name and tool_name not in tools_used:
+                        tools_used.append(tool_name)
                 elif event.get("type") == "handoff_required":
                     handoff = {
                         "handoff_id": event.get("handoff_id"),
@@ -446,6 +452,8 @@ async def chat_stream(
                         tool_calls=(
                             {
                                 **({"tool": tool_name} if tool_name else {}),
+                                **({"tools": tools_used} if tools_used else {}),
+                                "routing": decision.event(),
                                 **({"handoff": handoff} if handoff else {}),
                                 **({"input_form": input_form} if input_form else {}),
                                 **({"confirmation": confirmation} if confirmation else {}),
@@ -455,6 +463,7 @@ async def chat_stream(
                         tool_result=(
                             json.dumps(result, ensure_ascii=False) if result else None
                         ),
+                        latency_ms=int((time.perf_counter() - started_at) * 1000),
                     )
                 )
                 db.flush()

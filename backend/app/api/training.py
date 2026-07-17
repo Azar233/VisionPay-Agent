@@ -13,7 +13,7 @@ from app.api.auth import get_current_user
 from app.config.settings import settings
 from app.core.logger import get_logger
 from app.database.session import get_db
-from app.entity.db_models import DatasetVersion, DetectionScene, TrainingTask
+from app.entity.db_models import DatasetVersion, DetectionScene, ModelVersion, TrainingTask
 from app.entity.schemas import (
     ModelExportRequest,
     ModelValidateRequest,
@@ -45,9 +45,13 @@ def set_default_detection_model(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    del current_user
     try:
-        model = model_version_service.set_default(db, model_version_id=model_version_id)
+        model = model_version_service.set_default(
+            db,
+            model_version_id=model_version_id,
+            user_id=current_user.id,
+            username=current_user.username,
+        )
         return model_version_service.serialize(db, model)
     except ValueError as exc:
         db.rollback()
@@ -60,9 +64,13 @@ def archive_detection_model(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    del current_user
     try:
-        model = model_version_service.archive_model(db, model_version_id=model_version_id)
+        model = model_version_service.archive_model(
+            db,
+            model_version_id=model_version_id,
+            user_id=current_user.id,
+            username=current_user.username,
+        )
         return model_version_service.serialize(db, model)
     except ValueError as exc:
         db.rollback()
@@ -400,7 +408,7 @@ async def validate_training_task(
     _get_owned_task(db, task_id, current_user.id)
     request = request or ModelValidateRequest()
     try:
-        return training_service.validate_model(
+        result = training_service.validate_model(
             db=db,
             task_id=task_id,
             split=request.split,
@@ -409,6 +417,20 @@ async def validate_training_task(
             conf=request.conf,
             iou=request.iou,
         )
+        model = db.query(ModelVersion).filter(
+            ModelVersion.training_task_id == task_id
+        ).order_by(ModelVersion.id).first()
+        if model is not None:
+            model_version_service.record_event(
+                db,
+                model,
+                action="validate",
+                user_id=current_user.id,
+                username=current_user.username,
+                detail=f"在 {request.split} 数据分区执行模型评估。",
+            )
+            db.commit()
+        return result
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -430,13 +452,27 @@ async def export_training_model(
     _get_owned_task(db, task_id, current_user.id)
     request = request or ModelExportRequest()
     try:
-        return training_service.export_model(
+        result = training_service.export_model(
             db=db,
             task_id=task_id,
             version=request.version,
             description=request.description,
             set_default=request.set_default,
         )
+        model_id = (result.get("model_version") or {}).get("id")
+        model = db.query(ModelVersion).filter(ModelVersion.id == model_id).first()
+        if model is not None:
+            model_version_service.record_event(
+                db,
+                model,
+                action="export",
+                user_id=current_user.id,
+                username=current_user.username,
+                detail="导出模型权重与评估产物。"
+                + (" 同时设为默认检测模型。" if request.set_default else ""),
+            )
+            db.commit()
+        return result
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -461,6 +497,20 @@ async def download_training_model(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    model = db.query(ModelVersion).filter(
+        ModelVersion.training_task_id == task_id
+    ).order_by(ModelVersion.id).first()
+    if model is not None:
+        model_version_service.record_event(
+            db,
+            model,
+            action="download",
+            user_id=current_user.id,
+            username=current_user.username,
+            detail="下载模型 best.pt 权重文件。",
+        )
+        db.commit()
 
     return FileResponse(
         path=str(download["path"]),

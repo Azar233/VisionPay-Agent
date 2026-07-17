@@ -510,7 +510,14 @@ class DatasetService:
         ).first()
 
     @classmethod
-    def archive(cls, db: Session, *, dataset_id: int) -> DatasetVersion:
+    def archive(
+        cls,
+        db: Session,
+        *,
+        dataset_id: int,
+        actor_user_id: int | None = None,
+        actor_username: str | None = None,
+    ) -> DatasetVersion:
         dataset = cls.get(db, dataset_id)
         if dataset.status not in {"pending_train", "training", "published"}:
             raise DatasetLifecycleError("只有已冻结的数据集可以归档")
@@ -527,6 +534,14 @@ class DatasetService:
         for model in linked_models:
             model.status = "archived"
             model.is_default = False
+            model_version_service.record_event(
+                db,
+                model,
+                action="archive",
+                user_id=actor_user_id,
+                username=actor_username,
+                detail=f"归档数据集版本 {dataset.version} 时联动归档模型。",
+            )
 
         replacement_model = None
         if archived_default:
@@ -537,6 +552,14 @@ class DatasetService:
             )
             if replacement_model is not None:
                 replacement_model.is_default = True
+                model_version_service.record_event(
+                    db,
+                    replacement_model,
+                    action="auto_set_default",
+                    user_id=actor_user_id,
+                    username=actor_username,
+                    detail=f"数据集 {dataset.version} 归档后自动接替默认模型。",
+                )
 
         preferred_dataset_id = None
         if (

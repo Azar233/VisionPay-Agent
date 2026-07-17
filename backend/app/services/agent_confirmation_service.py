@@ -747,7 +747,11 @@ class AgentConfirmationService:
             return dataset_service.serialize(result)
         if action == "dataset.archive":
             return dataset_service.serialize(
-                dataset_service.archive(db, dataset_id=int(p["dataset_id"]))
+                dataset_service.archive(
+                    db,
+                    dataset_id=int(p["dataset_id"]),
+                    actor_user_id=operation.user_id,
+                )
             )
         if action == "dataset.delete_draft":
             dataset_id = int(p["dataset_id"])
@@ -807,7 +811,9 @@ class AgentConfirmationService:
             return result
         if action == "training.set_default_model":
             model = model_version_service.set_default(
-                db, model_version_id=int(p["model_version_id"])
+                db,
+                model_version_id=int(p["model_version_id"]),
+                user_id=operation.user_id,
             )
             return model_version_service.serialize(db, model)
         return cls._execute_catalog(db, action, p)
