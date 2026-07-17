@@ -65,10 +65,3 @@ export function downloadTrainingModelApi(taskId) {
     timeout: 0,
   })
 }
-
-export function predictTrainingImageApi(formData) {
-  return request.post('/training/predict', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 0,
-  })
-}

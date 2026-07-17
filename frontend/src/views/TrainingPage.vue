@@ -200,7 +200,7 @@
         </el-table-column>
         <el-table-column
           label="操作"
-          width="440"
+          width="260"
           fixed="right"
           class-name="task-actions-column"
           label-class-name="task-actions-column-header"
@@ -248,13 +248,6 @@
                 :icon="Download"
                 @click="downloadWeights(row)"
               >权重</el-button>
-              <el-button
-                v-if="row.status === 'completed'"
-                class="task-action-button"
-                size="small"
-                :icon="Picture"
-                @click="openPredictDialog(row)"
-              >测试</el-button>
               <el-button
                 v-if="row.status === 'completed'"
                 class="task-action-button"
@@ -624,78 +617,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="showPredictDialog"
-      title="测试图验证"
-      width="860px"
-      :close-on-click-modal="false"
-      @closed="clearPredictState"
-    >
-      <div class="predict-layout">
-        <section class="predict-panel">
-          <div class="predict-controls">
-            <input class="file-input" type="file" accept="image/*" @change="onPredictFileChange" />
-            <el-form label-width="80px" class="predict-form">
-              <el-form-item label="置信度">
-                <el-input-number
-                  v-model="predictForm.conf"
-                  :min="0"
-                  :max="1"
-                  :step="0.05"
-                  :precision="2"
-                />
-              </el-form-item>
-              <el-form-item label="IoU">
-                <el-input-number
-                  v-model="predictForm.iou"
-                  :min="0"
-                  :max="1"
-                  :step="0.05"
-                  :precision="2"
-                />
-              </el-form-item>
-              <el-form-item label="设备">
-                <el-input v-model="predictForm.device" />
-              </el-form-item>
-            </el-form>
-            <el-button
-              type="primary"
-              :loading="predicting"
-              :disabled="!predictFile"
-              @click="runPredict"
-            >
-              开始检测
-            </el-button>
-          </div>
-          <img v-if="predictPreview" class="preview-image" :src="predictPreview" alt="preview" />
-        </section>
-
-        <section class="predict-panel">
-          <template v-if="predictResult">
-            <div class="predict-summary">
-              <span>目标数：{{ predictResult.total_objects }}</span>
-              <span>耗时：{{ formatMs(predictResult.inference_time) }}</span>
-            </div>
-            <img
-              v-if="predictResult.annotated_image"
-              class="result-image"
-              :src="predictResult.annotated_image"
-              alt="prediction"
-            />
-            <el-table :data="predictResult.detections || []" size="small" height="220">
-              <el-table-column prop="class_name" label="类别" min-width="130" />
-              <el-table-column label="置信度" width="100">
-                <template #default="{ row }">{{ formatPercent(row.confidence) }}</template>
-              </el-table-column>
-              <el-table-column label="BBox" min-width="180">
-                <template #default="{ row }">{{ formatBox(row.bbox) }}</template>
-              </el-table-column>
-            </el-table>
-          </template>
-          <el-empty v-else description="上传图片后运行检测" />
-        </section>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -708,7 +629,6 @@ import {
   Document,
   Download,
   Monitor,
-  Picture,
   Plus,
   Refresh,
   Tickets,
@@ -730,7 +650,6 @@ import {
   getTrainingStatusApi,
   getTrainingTasksApi,
   importTrainingRunApi,
-  predictTrainingImageApi,
   setDefaultDetectionModelApi,
   startTrainingApi,
   stopTrainingApi,
@@ -793,17 +712,6 @@ const exportForm = ref({
 })
 const exporting = ref(false)
 
-const showPredictDialog = ref(false)
-const predictTask = ref(null)
-const predictFile = ref(null)
-const predictPreview = ref('')
-const predictResult = ref(null)
-const predicting = ref(false)
-const predictForm = ref({
-  conf: 0.25,
-  iou: 0.45,
-  device: 'cpu',
-})
 const lossChartRef = ref(null)
 const metricChartRef = ref(null)
 let lossChart = null
@@ -1009,14 +917,6 @@ function formatTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
-}
-
-function formatMs(value) {
-  return value == null ? '-' : `${(Number(value) * 1000).toFixed(1)} ms`
-}
-
-function formatBox(value) {
-  return Array.isArray(value) ? value.map((item) => Number(item).toFixed(1)).join(', ') : '-'
 }
 
 function singleDevice(device) {
@@ -1399,50 +1299,6 @@ async function submitExport() {
   }
 }
 
-function openPredictDialog(task) {
-  predictTask.value = { ...task }
-  predictForm.value.device = singleDevice(task.device)
-  predictResult.value = null
-  showPredictDialog.value = true
-}
-
-function onPredictFileChange(event) {
-  const file = event.target.files?.[0]
-  if (predictPreview.value) {
-    window.URL.revokeObjectURL(predictPreview.value)
-  }
-  predictFile.value = file || null
-  predictResult.value = null
-  predictPreview.value = file ? window.URL.createObjectURL(file) : ''
-}
-
-async function runPredict() {
-  if (!predictTask.value || !predictFile.value) return
-  const formData = new FormData()
-  formData.append('task_id', predictTask.value.id)
-  formData.append('conf', predictForm.value.conf)
-  formData.append('iou', predictForm.value.iou)
-  formData.append('device', predictForm.value.device || 'cpu')
-  formData.append('file', predictFile.value)
-
-  predicting.value = true
-  try {
-    predictResult.value = await predictTrainingImageApi(formData)
-    ElMessage.success(`检测完成：${predictResult.value.total_objects} 个目标`)
-  } finally {
-    predicting.value = false
-  }
-}
-
-function clearPredictState() {
-  if (predictPreview.value) {
-    window.URL.revokeObjectURL(predictPreview.value)
-  }
-  predictFile.value = null
-  predictPreview.value = ''
-  predictResult.value = null
-}
-
 async function openLogDrawer(task) {
   logTask.value = { ...task }
   logLines.value = []
@@ -1506,7 +1362,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopPolling()
   stopLogPolling()
-  clearPredictState()
   window.removeEventListener('resize', resizeCharts)
   themeObserver?.disconnect()
   lossChart?.dispose()
@@ -1799,8 +1654,7 @@ onBeforeUnmount(() => {
 }
 
 .eval-toolbar,
-.eval-actions,
-.predict-summary {
+.eval-actions {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1827,8 +1681,7 @@ onBeforeUnmount(() => {
   margin-top: 16px;
 }
 
-.eval-section,
-.predict-panel {
+.eval-section {
   padding: 14px;
   border: 1px solid $border-color;
   border-radius: $border-radius-sm;
@@ -1866,64 +1719,32 @@ onBeforeUnmount(() => {
   }
 }
 
-.predict-layout {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 16px;
-}
-
-.predict-controls,
-.predict-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.file-input {
-  width: 100%;
-}
-
-.preview-image,
-.result-image {
-  display: block;
-  width: 100%;
-  max-height: 360px;
-  margin-top: 12px;
-  object-fit: contain;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
-  background: $surface-muted;
-}
-
-.predict-summary {
-  justify-content: space-between;
-  margin-bottom: 12px;
-  color: $text-secondary;
-}
-
 .task-table {
   width: 100%;
 }
 
 .task-row-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
+  grid-template-columns: repeat(3, 74px);
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
   padding: 4px 0;
 }
 
 .task-action-button {
-  width: 100%;
-  min-width: 0;
-  height: 32px;
+  width: 74px;
+  min-width: 74px;
+  height: 30px;
+  min-height: 30px;
   margin: 0 !important;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 1px solid $border-strong;
-  border-radius: 8px;
+  border-radius: 7px;
   color: $text-regular;
   background: $surface-color;
   box-shadow: none !important;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
   transition: border-color .18s ease, color .18s ease, background-color .18s ease;
@@ -1955,10 +1776,24 @@ onBeforeUnmount(() => {
     background: color-mix(in srgb, $success-color 12%, $surface-color);
   }
 
+  &.is-success-action:hover,
+  &.is-success-action:focus-visible {
+    border-color: $success-color;
+    color: $success-color;
+    background: color-mix(in srgb, $success-color 20%, $surface-color);
+  }
+
   &.is-danger-action {
     border-color: $danger-color;
     color: $danger-color;
     background: color-mix(in srgb, $danger-color 10%, $surface-color);
+  }
+
+  &.is-danger-action:hover,
+  &.is-danger-action:focus-visible {
+    border-color: $danger-color;
+    color: $danger-color;
+    background: color-mix(in srgb, $danger-color 18%, $surface-color);
   }
 }
 
@@ -2087,10 +1922,6 @@ onBeforeUnmount(() => {
   .metric-grid,
   .chart-grid,
   .eval-columns,
-  .predict-layout {
-    grid-template-columns: 1fr;
-  }
-
   .model-version-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

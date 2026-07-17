@@ -55,10 +55,12 @@
         <el-table-column label="创建时间" min-width="164">
           <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="132" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-            <el-button link type="danger" @click="removeTask(row)">删除</el-button>
+            <div class="history-row-actions">
+              <el-button class="history-action-button is-primary-action" size="small" :icon="View" @click="openDetail(row)">详情</el-button>
+              <el-button class="history-action-button is-danger-action" size="small" :icon="Delete" @click="removeTask(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -121,7 +123,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Refresh, Search, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteTask, getHistorySummary, getScenes, getTaskDetail, getTaskList } from '@/api/history'
 
@@ -241,6 +243,13 @@ onMounted(async () => {
 .filters :deep(.el-input), .filters :deep(.el-select), .filters :deep(.el-date-editor) { max-width: 100%; }
 .filters :deep(.el-date-editor.el-input__wrapper) { width: 100%; min-width: 0; }
 .task-id { color: $primary-color; font-weight: 600; }.pagination-row { min-height: 66px; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid $border-color; }.pagination-row > span { color: $text-secondary; font-size: 12px; }
+.history-row-actions { display: grid; grid-template-columns: repeat(2, 74px); gap: 6px; width: max-content; max-width: 100%; padding: 4px 0; }
+.history-action-button { width: 74px; min-width: 74px; height: 30px; min-height: 30px; margin: 0 !important; padding: 0 6px; border: 1px solid $border-strong; border-radius: 7px; color: $text-regular; background: $surface-color; box-shadow: none !important; font-size: 12px; font-weight: 500; white-space: nowrap; transition: border-color .18s ease, color .18s ease, background-color .18s ease; }
+.history-action-button:hover, .history-action-button:focus-visible { border-color: $text-secondary; color: $text-primary; background: $surface-muted; }
+.history-action-button.is-primary-action { border-color: $primary-color; color: $primary-color; background: $primary-soft; }
+.history-action-button.is-primary-action:hover, .history-action-button.is-primary-action:focus-visible { border-color: $primary-hover; color: $primary-hover; background: color-mix(in srgb, $primary-color 22%, $surface-color); }
+.history-action-button.is-danger-action { border-color: $danger-color; color: $danger-color; background: color-mix(in srgb, $danger-color 10%, $surface-color); }
+.history-action-button.is-danger-action:hover, .history-action-button.is-danger-action:focus-visible { border-color: $danger-color; color: $danger-color; background: color-mix(in srgb, $danger-color 18%, $surface-color); }
 .detail-content { min-height: 240px; display: flex; flex-direction: column; gap: 22px; }.detail-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }.detail-summary div { padding: 16px; display: flex; flex-direction: column; gap: 6px; border-radius: 12px; background: $surface-muted; }.detail-summary span { color: $text-secondary; font-size: 11px; }.detail-summary strong { color: $text-primary; font-size: 18px; }.class-summary h3, .result-section h3 { margin: 0 0 12px; color: $text-primary; font-size: 15px; }.class-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 @container history-records (max-width: 1060px) {
   .filter-keyword { flex-basis: calc(50% - 5px); }
@@ -255,12 +264,4 @@ onMounted(async () => {
 }
 @media (max-width: 800px) { .history-page { padding: 12px; }.page-header { padding: 24px; align-items: flex-start; }.summary-grid { grid-template-columns: repeat(2, 1fr); }.pagination-row { padding: 14px; align-items: flex-start; flex-direction: column; }.detail-summary { grid-template-columns: repeat(2, 1fr); } }
 
-/* 弱化操作列 link 按钮的焦点光圈 */
-:deep(.el-table .el-button.is-link) {
-  &:focus,
-  &:focus-visible {
-    outline: none;
-    box-shadow: none;
-  }
-}
 </style>

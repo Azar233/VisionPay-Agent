@@ -9,7 +9,6 @@ The service owns training task lifecycle management:
 
 from __future__ import annotations
 
-import base64
 from collections import deque
 import csv
 import contextlib
@@ -1678,83 +1677,6 @@ class TrainingService:
             "path": weights_path,
             "filename": f"{task.model_name}_{task.task_uuid}_best.pt",
             "file_size": weights_path.stat().st_size,
-        }
-
-    @staticmethod
-    def predict_test_image(
-        db: Session,
-        task_id: int,
-        image_path: str | Path,
-        conf: float = 0.25,
-        iou: float = 0.45,
-        device: str = "cpu",
-    ) -> dict[str, Any]:
-        """Run the trained best.pt on a single uploaded image and return detections."""
-
-        task = db.query(TrainingTask).filter(TrainingTask.id == task_id).first()
-        if task is None:
-            raise ValueError("training task not found")
-
-        weights_path = _best_weights_path(task.task_uuid)
-        if not weights_path.exists():
-            raise FileNotFoundError(f"best.pt not found: {weights_path}")
-
-        source_path = Path(image_path)
-        if not source_path.exists():
-            raise FileNotFoundError(f"image not found: {source_path}")
-
-        TrainingService._prepare_ultralytics_env()
-        from ultralytics import YOLO
-        import cv2
-
-        model = YOLO(str(weights_path))
-        started_at = time.perf_counter()
-        results = model.predict(
-            source=str(source_path),
-            conf=float(conf),
-            iou=float(iou),
-            imgsz=int(task.img_size or 640),
-            device=_normalize_device(device),
-            verbose=False,
-        )
-        elapsed = time.perf_counter() - started_at
-        result = results[0]
-        names = _class_names(getattr(result, "names", None) or getattr(model, "names", {}) or {})
-
-        detections: list[dict[str, Any]] = []
-        class_counts: dict[str, int] = {}
-        boxes = getattr(result, "boxes", None)
-        if boxes is not None:
-            for box in boxes:
-                cls_id = int(box.cls.detach().cpu().item())
-                score = float(box.conf.detach().cpu().item())
-                xyxy = [float(value) for value in box.xyxy[0].detach().cpu().tolist()]
-                class_name = names.get(cls_id, str(cls_id))
-                class_counts[class_name] = class_counts.get(class_name, 0) + 1
-                detections.append(
-                    {
-                        "class_id": cls_id,
-                        "class_name": class_name,
-                        "confidence": score,
-                        "bbox": xyxy,
-                    }
-                )
-
-        annotated = result.plot()
-        ok, buffer = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
-        annotated_image = None
-        if ok:
-            annotated_image = "data:image/jpeg;base64," + base64.b64encode(buffer).decode("ascii")
-
-        return {
-            "task_id": task.id,
-            "task_uuid": task.task_uuid,
-            "model_name": task.model_name,
-            "total_objects": len(detections),
-            "detections": detections,
-            "class_counts": class_counts,
-            "inference_time": elapsed,
-            "annotated_image": annotated_image,
         }
 
     @staticmethod

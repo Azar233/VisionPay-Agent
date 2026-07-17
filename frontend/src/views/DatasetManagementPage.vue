@@ -76,7 +76,12 @@
       <el-table v-loading="loading" :data="rows" stripe class="dataset-table" empty-text="暂无数据集版本">
         <el-table-column label="版本" min-width="220">
           <template #default="{ row }">
-            <div class="version-cell">
+            <button
+              type="button"
+              class="version-cell version-detail-trigger"
+              :aria-label="`查看数据集版本 ${row.version} 的详情`"
+              @click="openDetail(row)"
+            >
               <div class="version-title">
                 <strong>{{ row.version }}</strong>
                 <el-tag v-if="row.extra_metadata?.catalog_only" type="primary" size="small" effect="plain" round>
@@ -87,7 +92,7 @@
                 </el-tag>
               </div>
               <span class="version-name">{{ row.name }}</span>
-            </div>
+            </button>
           </template>
         </el-table-column>
         <el-table-column prop="scene_id" label="场景" width="130">
@@ -119,23 +124,22 @@
         <el-table-column label="更新时间" width="170">
           <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="500" fixed="right">
+        <el-table-column label="操作" width="276" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
-              <el-button class="row-action-button" size="small" :icon="View" @click="openDetail(row)">详情</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Plus" @click="openAddProductDialog(row)">添加样本</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="openDeleteProductDialog(row)">删除商品</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button" size="small" :icon="CircleCheck" @click="validateRow(row)">校验</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button is-primary-action" size="small" :icon="Lock" @click="freezeRow(row)">冻结</el-button>
+              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
+              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button is-primary-action" size="small" :icon="Plus" @click="openAddProductDialog(row)">添加样本</el-button>
+              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="openDeleteProductDialog(row)">删除商品</el-button>
+              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button" size="small" :icon="CircleCheck" @click="validateRow(row)">校验</el-button>
+              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button is-primary-action" size="small" :icon="Lock" @click="freezeRow(row)">冻结</el-button>
               <el-button
-                v-if="['pending_train', 'training', 'published'].includes(row.status)"
+                v-if="canArchiveDataset(row.status)"
                 class="row-action-button"
                 size="small"
                 @click="archiveRow(row)"
               >归档</el-button>
-              <el-button v-if="row.status === 'archived'" class="row-action-button is-primary-action" size="small" @click="openDeriveDialog(row)">派生版本</el-button>
-              <el-button v-if="row.status === 'draft'" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="deleteRow(row)">删除草稿</el-button>
+              <el-button v-if="canDeriveDataset(row.status)" class="row-action-button is-primary-action" size="small" @click="openDeriveDialog(row)">派生版本</el-button>
+              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button is-danger-action" size="small" :icon="Delete" @click="deleteRow(row)">删除草稿</el-button>
             </div>
           </template>
         </el-table-column>
@@ -645,7 +649,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck, Delete, Edit, Lock, Plus, Refresh, Search, UploadFilled, View } from '@element-plus/icons-vue'
+import { CircleCheck, Delete, Edit, Lock, Plus, Refresh, Search, UploadFilled } from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
 import {
   annotationReviewSummary,
@@ -653,6 +657,7 @@ import {
   buildDatasetProductCommitPayload,
 } from '@/utils/datasetAnnotationReview'
 import { collectProductFolderFiles } from '@/utils/datasetProductFiles'
+import { canArchiveDataset, canDeriveDataset, isDatasetDraft } from '@/utils/datasetLifecycle'
 import { beginVisionPetTask } from '@/utils/visionPet'
 import { getScenes } from '@/api/history'
 import { getAgentHandoffApi, updateAgentHandoffApi } from '@/api/handoffs'
@@ -1534,12 +1539,16 @@ onMounted(async () => {
 .model-import-upload :deep(.el-upload), .model-import-upload :deep(.el-upload-dragger) { width: 100%; }
 .model-import-switches { display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .status-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.version-detail-trigger { display: block; width: 100%; margin: 0; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.version-detail-trigger:hover .version-title strong { color: $primary-color; }
+.version-detail-trigger:focus-visible { border-radius: 6px; outline: 2px solid $primary-color; outline-offset: 4px; }
 .version-title { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }.version-title strong { flex: 1 0 100%; min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }.current-version-tag { flex: 0 0 auto; margin-top: 1px; border-radius: 999px; font-weight: 600; }.version-name { display: block; margin-top: 5px; color: $text-secondary; font-size: 12px; line-height: 1.45; }
 .split-cell strong, .split-cell span { display: block; }.split-cell span { margin-top: 3px; color: $text-secondary; font-size: 11px; }
 code { color: $text-secondary; font-size: 11px; }
-.row-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; }
-.row-action-button { width: 100%; height: 32px; min-height: 32px; margin: 0 !important; padding: 0 9px; border: 1px solid $border-strong; border-radius: 8px; color: $text-regular; background: $surface-color; box-shadow: none !important; font-weight: 500; transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease; }
-.row-action-button:hover, .row-action-button:focus-visible { border-color: $text-secondary; color: $text-primary; background: $surface-muted; }
+.row-actions { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px; width: max-content; max-width: 100%; }
+.row-action-button { width: max-content; min-width: 74px; height: 30px; min-height: 30px; margin: 0 !important; padding: 0 6px; border: 1px solid $border-strong; border-radius: 7px; color: $text-regular; background: $surface-color; box-shadow: none !important; font-size: 12px; font-weight: 500; white-space: nowrap; transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease; }
+.row-action-button:hover, .row-action-button:focus-visible { border-color: $text-secondary; color: $text-primary; background: $surface-muted; transform: none; }
+.row-action-button:active { transform: none; }
 .row-action-button.is-primary-action { border-color: $primary-color; color: $primary-color; background: $primary-soft; }
 .row-action-button.is-primary-action:hover, .row-action-button.is-primary-action:focus-visible { border-color: $primary-hover; color: $primary-hover; background: $primary-soft; }
 .row-action-button.is-success-action { border-color: $success-color; color: $success-color; background: color-mix(in srgb, $success-color 12%, transparent); }

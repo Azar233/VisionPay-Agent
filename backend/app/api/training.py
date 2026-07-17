@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -468,54 +467,6 @@ async def download_training_model(
         media_type="application/octet-stream",
         filename=download["filename"],
     )
-
-
-@router.post("/predict")
-async def predict_training_image(
-    task_id: int = Form(...),
-    conf: float = Form(0.25),
-    iou: float = Form(0.45),
-    device: str = Form("cpu"),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Upload a test image and run the trained best.pt for quick visual validation."""
-
-    _get_owned_task(db, task_id, current_user.id)
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}:
-        raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/BMP/WEBP 图片")
-
-    upload_dir = BACKEND_ROOT / settings.LOG_DIR / "predict_uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    upload_path = upload_dir / f"{uuid.uuid4().hex}{suffix}"
-    try:
-        upload_path.write_bytes(await file.read())
-        if upload_path.stat().st_size == 0:
-            raise HTTPException(status_code=400, detail="上传文件为空")
-        return training_service.predict_test_image(
-            db=db,
-            task_id=task_id,
-            image_path=upload_path,
-            conf=conf,
-            iou=iou,
-            device=device,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        logger.error("测试图验证失败：%s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"测试图验证失败：{exc}") from exc
-    finally:
-        try:
-            upload_path.unlink(missing_ok=True)
-        except OSError:
-            logger.warning("清理测试图临时文件失败：%s", upload_path)
 
 
 @router.post("/stop/{task_id}")
