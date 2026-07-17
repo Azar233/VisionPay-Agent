@@ -1,31 +1,17 @@
 <template>
   <div class="agent-chat-page" @dragover.prevent @drop.prevent="handleDrop">
-    <header class="page-header">
-      <div>
-        <span class="eyebrow"><i></i> VisionPay Intelligence</span>
-        <h1>管理智能体</h1>
-        <p>用自然语言管理数据集、训练、价目表，也可以上传素材进行商品检测。</p>
-      </div>
-      <div class="header-state">
-        <span :class="['status-dot', { online: agentStatus.configured }]"></span>
-        <div><strong>{{ agentStatus.configured ? 'Agent 服务在线' : 'Agent 未配置' }}</strong><small>{{ agentStatus.model || 'DeepSeek' }} · {{ agentStatus.agents?.length || 5 }} 个领域</small></div>
-      </div>
-    </header>
-
     <div :class="['chat-layout', { 'sessions-collapsed': sessionsCollapsed, 'insights-collapsed': insightsCollapsed }]">
-      <aside :class="['session-panel', { collapsed: sessionsCollapsed }]">
+      <aside v-show="!sessionsCollapsed" class="session-panel">
         <div class="sidebar-toolbar">
-          <el-tooltip content="新建对话" placement="right" :show-arrow="false" :disabled="!sessionsCollapsed">
-            <el-button class="new-chat" type="primary" :icon="Plus" :circle="sessionsCollapsed" @click="createNewChat">
-              <span v-show="!sessionsCollapsed">新建对话</span>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip :content="sessionsCollapsed ? '展开历史对话' : '收起历史对话'" placement="right" :show-arrow="false">
-            <el-button class="panel-toggle" :icon="sessionsCollapsed ? DArrowRight : DArrowLeft" circle @click="sessionsCollapsed = !sessionsCollapsed" />
+          <el-button class="new-chat" type="primary" :icon="Plus" @click="createNewChat">
+            <span>新建对话</span>
+          </el-button>
+          <el-tooltip content="收起历史对话" placement="right" :show-arrow="false">
+            <el-button class="panel-toggle" :icon="DArrowLeft" circle aria-label="收起历史对话" @click="sessionsCollapsed = true" />
           </el-tooltip>
         </div>
-        <div v-show="!sessionsCollapsed" class="panel-title"><span>最近对话</span><el-button text :icon="Refresh" :loading="sessionLoading" @click="loadSessions" /></div>
-        <div v-show="!sessionsCollapsed" class="session-list" v-loading="sessionLoading">
+        <div class="panel-title"><span>最近对话</span><el-button text :icon="Refresh" :loading="sessionLoading" @click="loadSessions" /></div>
+        <div class="session-list" v-loading="sessionLoading">
           <button
             v-for="session in agentStore.sessions"
             :key="session.session_uuid"
@@ -39,16 +25,30 @@
           </button>
           <div v-if="!sessionLoading && !agentStore.sessions.length" class="session-empty">还没有对话记录</div>
         </div>
-        <div v-show="!sessionsCollapsed" class="privacy-note"><el-icon><CircleCheckFilled /></el-icon><span>写操作必须经过影响预览与一次性确认</span></div>
+        <div class="privacy-note"><el-icon><CircleCheckFilled /></el-icon><span>写操作必须经过影响预览与一次性确认</span></div>
       </aside>
 
-      <main class="conversation-panel">
+      <main :class="['conversation-panel', { 'has-floating-controls': sessionsCollapsed || insightsCollapsed }]">
+        <div v-if="sessionsCollapsed || insightsCollapsed" class="floating-panel-controls" aria-label="侧栏快捷操作">
+          <div v-if="sessionsCollapsed" class="floating-control-capsule floating-control-capsule--left">
+            <el-tooltip content="展开历史对话" placement="bottom" :show-arrow="false">
+              <el-button class="floating-control-button" text :icon="DArrowRight" aria-label="展开历史对话" @click="sessionsCollapsed = false" />
+            </el-tooltip>
+            <span class="floating-control-divider" aria-hidden="true"></span>
+            <el-button class="floating-control-button" text :icon="Plus" aria-label="新建对话" @click="createNewChat" />
+          </div>
+          <div v-if="insightsCollapsed" class="floating-control-capsule floating-control-capsule--right">
+            <el-tooltip content="展开右侧设置" placement="bottom" :show-arrow="false">
+              <el-button class="floating-control-button" text :icon="DArrowLeft" aria-label="展开右侧设置" @click="insightsCollapsed = false" />
+            </el-tooltip>
+          </div>
+        </div>
         <div ref="messageListRef" class="message-list">
           <section v-if="!agentStore.messages.length" class="welcome-state">
-            <div class="welcome-orb"><el-icon><MagicStick /></el-icon></div>
-            <span>Multi-Agent Workspace</span>
-            <h2>今天想管理什么？</h2>
-            <p>我会自动选择合适的领域 Agent。涉及写入、删除或模型切换时，会先展示完整影响范围。</p>
+            <div class="welcome-mark" aria-hidden="true"><el-icon><Connection /></el-icon></div>
+            <span>管理工作区</span>
+            <h2>今天想处理什么？</h2>
+            <p>描述你的目标，我会选择合适的工具。涉及数据写入或模型变更时，会先请你确认。</p>
             <div class="quick-grid">
               <button v-for="item in quickPrompts" :key="item.title" type="button" @click="inputText = item.prompt">
                 <span :class="item.tone"><el-icon><component :is="item.icon" /></el-icon></span>
@@ -90,26 +90,29 @@
             </span>
           </div>
           <div class="composer-box">
-            <textarea v-model="inputText" rows="1" placeholder="向管理智能体发消息…" :disabled="agentStore.isLoading" @keydown.enter.exact.prevent="sendMessage"></textarea>
+            <textarea v-model="inputText" rows="1" placeholder="输入消息" :disabled="agentStore.isLoading" @keydown.enter.exact.prevent="sendMessage"></textarea>
             <div class="composer-actions">
               <input ref="fileInputRef" type="file" multiple accept="image/jpeg,image/png,image/bmp,image/webp,.zip,video/mp4,video/quicktime,video/x-msvideo,.mkv" @change="selectFiles($event.target.files); $event.target.value = ''" />
               <el-tooltip content="添加图片、ZIP 或视频"><el-button text :icon="Paperclip" :disabled="agentStore.isLoading" @click="fileInputRef?.click()" /></el-tooltip>
               <span>{{ selectedFiles.length ? `${selectedFiles.length} 个附件` : 'Enter 发送 · Shift+Enter 换行' }}</span>
               <el-button v-if="agentStore.isLoading" class="send-button" type="danger" :icon="VideoPause" circle @click="stopStream" />
-              <el-button v-else class="send-button" type="primary" :icon="Promotion" circle :disabled="!canSend" @click="sendMessage" />
+              <el-button v-else class="send-button" type="primary" :icon="Top" circle :disabled="!canSend" @click="sendMessage" />
             </div>
           </div>
         </footer>
       </main>
 
-      <aside :class="['insight-panel', { collapsed: insightsCollapsed }]">
+      <aside v-show="!insightsCollapsed" class="insight-panel">
         <div class="insight-toolbar">
-          <span v-show="!insightsCollapsed">管理辅助</span>
-          <el-tooltip :content="insightsCollapsed ? '展开管理辅助' : '收起管理辅助'" placement="left" :show-arrow="false">
-            <el-button class="panel-toggle" :icon="insightsCollapsed ? DArrowLeft : DArrowRight" circle @click="insightsCollapsed = !insightsCollapsed" />
+          <div class="insight-heading">
+            <span>管理辅助</span>
+            <small><i :class="{ online: agentStatus.configured }"></i>{{ agentStatus.configured ? '服务在线' : '未配置' }}</small>
+          </div>
+          <el-tooltip content="收起管理辅助" placement="left" :show-arrow="false">
+            <el-button class="panel-toggle" :icon="DArrowRight" circle aria-label="收起管理辅助" @click="insightsCollapsed = true" />
           </el-tooltip>
         </div>
-        <div v-show="!insightsCollapsed" class="insight-content">
+        <div class="insight-content">
         <section>
           <div class="panel-title"><span>Agent 团队</span><em>{{ activeAgent ? '正在协作' : '自动路由' }}</em></div>
           <div class="agent-list">
@@ -146,9 +149,9 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowRight, ChatDotRound, CircleCheckFilled, Clock, Close, Cpu, DArrowLeft, DArrowRight, DataAnalysis,
+  ArrowRight, ChatDotRound, CircleCheckFilled, Clock, Close, Connection, Cpu, DArrowLeft, DArrowRight, DataAnalysis,
   Delete, Document, Files, MagicStick, Operation, Paperclip, Plus, PriceTag,
-  Promotion, Refresh, VideoPause, View,
+  Refresh, Top, VideoPause, View,
 } from '@element-plus/icons-vue'
 import AgentConfirmationCard from '@/components/AgentConfirmationCard.vue'
 import AgentInputFormCard from '@/components/AgentInputFormCard.vue'
@@ -398,4 +401,109 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 :global(html.dark .composer textarea) { color: #f5f5f7; }
 :global(html.dark .attachment-tray > span) { background: #2c2c2e; border-color: rgba(255,255,255,.1); }
 :global(html.dark .safety-card) { background: linear-gradient(145deg,rgba(10,132,255,.14),rgba(191,90,242,.1)); border-color: rgba(10,132,255,.2); }
+
+/* Codex-inspired quiet workspace: flat surfaces, line icons and restrained color. */
+.agent-chat-page { min-height: 640px; gap: 0; }
+.chat-layout { --session-column: 232px; --insight-column: 286px; border-color: $border-color; border-radius: 16px; background: $surface-color; box-shadow: none; backdrop-filter: none; }
+.session-panel,.insight-panel { padding: 14px; background: $surface-muted; }
+.conversation-panel { background: $surface-color; }
+.new-chat { height: 40px; border-radius: 10px; box-shadow: none; }
+.panel-toggle { border-color: transparent; border-radius: 50%; background: transparent; }
+.panel-toggle:hover { border-color: transparent; background: color-mix(in srgb,$text-primary 7%,transparent); }
+.session-item { border-radius: 9px; }
+.session-item:hover { background: color-mix(in srgb,$surface-color 72%,transparent); transform: none; }
+.session-item.active { color: $text-primary; background: $surface-color; box-shadow: none; }
+.session-icon { border-radius: 8px; color: $text-secondary; background: transparent; }
+.privacy-note,.pending-empty { border: 1px solid $border-color; border-radius: 9px; background: transparent; }
+.insight-heading { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.insight-heading > span { color: $text-secondary; font-size: 11px; font-weight: 700; letter-spacing: 0; }
+.insight-heading small { display: flex; align-items: center; gap: 5px; color: $text-placeholder; font-size: 9px; font-weight: 500; }
+.insight-heading i { width: 6px; height: 6px; border-radius: 50%; background: $danger-color; }
+.insight-heading i.online { background: $success-color; }
+.message-list { padding-top: 24px; padding-bottom: 24px; }
+.welcome-state { width: min(100%,760px); margin: 0 auto; align-content: center; }
+.welcome-mark { width: auto; height: auto; display: block; color: $text-secondary; background: transparent; box-shadow: none; font-size: 38px; line-height: 1; transform: none; }
+.welcome-state > span { margin-top: 18px; color: $text-secondary; font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: none; }
+.welcome-state h2 { margin: 10px 0 8px; font-family: inherit; font-size: clamp(25px,3vw,32px); font-weight: 580; letter-spacing: -.035em; }
+.welcome-state > p { max-width: 520px; color: $text-placeholder; font-size: 12px; line-height: 1.65; }
+.quick-grid { width: min(100%,720px); gap: 10px; margin-top: 28px; }
+.quick-grid button { min-height: 84px; grid-template-columns: 30px minmax(0,1fr) 16px; gap: 3px 10px; padding: 14px 15px; border-color: $border-color; border-radius: 12px; background: transparent; transition: border-color .16s ease,background .16s ease; }
+.quick-grid button:hover { border-color: $border-strong; background: $surface-muted; box-shadow: none; transform: none; }
+.quick-grid button > span,.quick-grid span.dataset,.quick-grid span.training,.quick-grid span.catalog,.quick-grid span.knowledge { width: 30px; height: 30px; border-radius: 0; color: $text-secondary; background: transparent; font-size: 17px; }
+.quick-grid span.dataset { color: #8b5cf6; }
+.quick-grid span.training { color: #0ea5e9; }
+.quick-grid span.catalog { color: #f59e0b; }
+.quick-grid span.knowledge { color: #10b981; }
+.quick-grid strong { font-size: 12px; font-weight: 650; }
+.quick-grid small { font-size: 10px; }
+.agent-item { border-radius: 9px; }
+.agent-item.active { background: $surface-color; box-shadow: none; }
+.agent-item > span,.agent-item > span.dataset,.agent-item > span.training,.agent-item > span.catalog,.agent-item > span.knowledge { width: 30px; height: 30px; border: 1px solid $border-color; border-radius: 9px; color: $text-secondary; background: transparent; }
+.agent-item > span.detection { color: $primary-color; }
+.agent-item > span.dataset { color: #8b5cf6; }
+.agent-item > span.training { color: #0ea5e9; }
+.agent-item > span.catalog { color: #f59e0b; }
+.agent-item > span.knowledge { color: #10b981; }
+.agent-item.active > span { color: $primary-color; border-color: color-mix(in srgb,$primary-color 30%,$border-color); }
+.agent-item > i { width: 5px; height: 5px; }
+.panel-title em { color: $text-secondary; background: transparent; }
+.safety-card { border-color: $border-color; border-radius: 10px; background: transparent; }
+.composer { padding-top: 12px; border-top-color: $border-color; background: $surface-color; }
+.composer-box { padding: 13px 14px 10px; border-color: transparent; border-radius: 18px; background: $surface-muted; box-shadow: none; }
+.composer-box:focus-within { border-color: $border-strong; box-shadow: none; }
+.composer textarea { min-height: 42px; padding: 2px; font-size: 13px; }
+.composer-actions > span { font-size: 9px; }
+.send-button { box-shadow: none; }
+.message-row.user .message-bubble { border-color: transparent; border-radius: 16px 16px 4px 16px; background: $surface-muted; box-shadow: none; }
+.agent-activity .agent-pill { color: $text-secondary; border: 1px solid $border-color; background: transparent; }
+
+:global(html.dark .agent-chat-page .chat-layout) { color: #f5f5f7; background: #19191b; border-color: rgba(255,255,255,.1); box-shadow: none; }
+:global(html.dark .agent-chat-page .session-panel),
+:global(html.dark .agent-chat-page .insight-panel) { background: #151517; border-color: rgba(255,255,255,.08); }
+:global(html.dark .agent-chat-page .conversation-panel),
+:global(html.dark .agent-chat-page .composer) { background: #19191b; border-color: rgba(255,255,255,.08); }
+:global(html.dark .agent-chat-page .welcome-mark) { color: #737378; }
+:global(html.dark .agent-chat-page .quick-grid button) { color: #f5f5f7; background: transparent; border-color: rgba(255,255,255,.12); }
+:global(html.dark .agent-chat-page .quick-grid button:hover) { background: rgba(255,255,255,.045); border-color: rgba(255,255,255,.2); box-shadow: none; }
+:global(html.dark .agent-chat-page .quick-grid button > span),
+:global(html.dark .agent-chat-page .agent-item > span) { background: transparent; }
+:global(html.dark .agent-chat-page .session-item:hover),
+:global(html.dark .agent-chat-page .session-item.active),
+:global(html.dark .agent-chat-page .agent-item.active) { color: #f5f5f7; background: rgba(255,255,255,.055); box-shadow: none; }
+:global(html.dark .agent-chat-page .composer-box) { background: #2a2a2c; border-color: transparent; box-shadow: none; }
+:global(html.dark .agent-chat-page .composer-box:focus-within) { border-color: rgba(255,255,255,.2); box-shadow: none; }
+:global(html.dark .agent-chat-page .message-row.user .message-bubble) { color: #f5f5f7; background: #2a2a2c; border-color: transparent; }
+:global(html.dark .agent-chat-page .privacy-note),
+:global(html.dark .agent-chat-page .pending-empty),
+:global(html.dark .agent-chat-page .safety-card) { background: transparent; border-color: rgba(255,255,255,.1); }
+
+@media (min-width: 1420px) { .quick-grid { grid-template-columns: repeat(4,1fr); width: min(100%,900px); }.quick-grid button { min-height: 110px; grid-template-columns: 1fr 16px; grid-template-rows: 28px auto auto; align-content: space-between; }.quick-grid button > span { grid-column: 1; grid-row: 1; justify-self: start; }.quick-grid strong { grid-column: 1/3; grid-row: 2; }.quick-grid small { grid-column: 1/3; grid-row: 3; }.quick-arrow { grid-column: 2; grid-row: 1; } }
+
+/* 收起后的侧栏完全退出网格，入口悬浮在聊天内容上方。 */
+.chat-layout.sessions-collapsed { --session-column: 0px; }
+.chat-layout.insights-collapsed { --insight-column: 0px; }
+.session-panel { grid-column: 1; }
+.conversation-panel { position: relative; grid-column: 2; }
+.insight-panel { grid-column: 3; }
+.floating-panel-controls { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.floating-control-capsule { position: absolute; top: 16px; min-height: 42px; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid $border-color; border-radius: 999px; color: $text-secondary; background: color-mix(in srgb,$surface-color 92%,transparent); box-shadow: 0 10px 28px rgba(15,23,42,.1); backdrop-filter: blur(16px); pointer-events: auto; }
+.floating-control-capsule--left { left: 16px; }
+.floating-control-capsule--right { right: 16px; }
+.floating-control-button { width: 34px; min-width: 34px; height: 34px; margin: 0; border-radius: 50%; color: inherit; }
+.floating-control-button:hover,.floating-control-button:focus-visible { color: $primary-color; background: $primary-soft; }
+.floating-control-divider { width: 1px; height: 18px; background: $border-color; }
+.conversation-panel.has-floating-controls .message-list { padding-top: 82px; }
+
+:global(html.dark .agent-chat-page .floating-control-capsule) { color: #d1d1d6; border-color: rgba(255,255,255,.13); background: rgba(44,44,46,.9); box-shadow: 0 12px 30px rgba(0,0,0,.3); }
+:global(html.dark .agent-chat-page .floating-control-button:hover),
+:global(html.dark .agent-chat-page .floating-control-button:focus-visible) { color: #0a84ff; background: rgba(10,132,255,.14); }
+:global(html.dark .agent-chat-page .floating-control-divider) { background: rgba(255,255,255,.13); }
+
+@media (max-width: 820px) {
+  .conversation-panel { width: 100%; }
+  .conversation-panel.has-floating-controls .message-list { padding-top: 76px; }
+  .floating-control-capsule { top: 12px; }
+  .floating-control-capsule--left { left: 12px; }
+  .floating-control-capsule--right { right: 12px; }
+}
 </style>

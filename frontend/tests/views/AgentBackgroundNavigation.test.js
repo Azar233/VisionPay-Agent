@@ -127,7 +127,7 @@ describe('ChatPage background navigation', () => {
     expect(agentStore.currentSessionId).toBeNull()
     expect(agentStore.messages).toEqual([])
     expect(getChatSessionApi).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('今天想管理什么？')
+    expect(wrapper.text()).toContain('今天想处理什么？')
     expect(wrapper.text()).toContain('上一次对话')
   })
 
