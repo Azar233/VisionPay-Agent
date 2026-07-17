@@ -55,7 +55,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { CircleCheckFilled, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { beginVisionPetTask } from '@/utils/visionPet'
+import { beginVisionPetTask, getBackendErrorMessage } from '@/utils/visionPet'
 import {
   cancelAgentOperationApi,
   confirmAgentOperationApi,
@@ -143,18 +143,19 @@ async function confirmOperation() {
   if (working.value || props.operation.status !== 'pending') return
   working.value = true
   const tracksProgress = PROGRESS_ACTIONS.has(props.operation.action)
-  const petTask = tracksProgress
-    ? beginVisionPetTask({
-        id: `agent-operation-${props.operation.operation_uuid}`,
-        message: `${props.operation.impact?.title || '数据集操作'}：正在确认执行`,
-        progress: 0,
-        showProgress: true,
-      })
-    : null
+  const petTask = beginVisionPetTask({
+    id: `agent-operation-${props.operation.operation_uuid}`,
+    message: `${props.operation.impact?.title || '待确认操作'}：正在确认执行`,
+    progress: tracksProgress ? 0 : null,
+    showProgress: tracksProgress,
+  })
   try {
     let token = props.operation.confirmation_token
     if (!token) {
-      const refreshed = await rotateAgentOperationTokenApi(props.operation.operation_uuid)
+      const refreshed = await rotateAgentOperationTokenApi(
+        props.operation.operation_uuid,
+        { skipPetError: true },
+      )
       token = refreshed.confirmation_token
       Object.assign(props.operation, refreshed)
     }
@@ -162,7 +163,12 @@ async function confirmOperation() {
     let confirmationError
     let confirmationSettled = false
     let lastDisplayedProgress = 0
-    confirmAgentOperationApi(props.operation.operation_uuid, token, executionKey())
+    confirmAgentOperationApi(
+      props.operation.operation_uuid,
+      token,
+      executionKey(),
+      { skipPetError: true },
+    )
       .then((value) => { result = value })
       .catch((error) => { confirmationError = error })
       .finally(() => { confirmationSettled = true })
@@ -170,7 +176,10 @@ async function confirmOperation() {
     while (tracksProgress && !confirmationSettled) {
       await waitForProgressPoll()
       if (confirmationSettled) break
-      const current = await getAgentOperationApi(props.operation.operation_uuid).catch(() => null)
+      const current = await getAgentOperationApi(
+        props.operation.operation_uuid,
+        { skipGlobalError: true },
+      ).catch(() => null)
       const progress = current?.task_progress
       if (!progress) continue
       Object.assign(props.operation, current)
@@ -198,7 +207,7 @@ async function confirmOperation() {
     ElMessage.success(result.replayed ? '已返回首次执行结果，没有重复操作' : '操作执行成功')
     emit('changed', result)
   } catch (error) {
-    props.operation.error_message = error?.response?.data?.detail || error.message || '操作执行失败'
+    props.operation.error_message = getBackendErrorMessage(error, '操作执行失败')
     petTask?.finish({
       status: 'failed',
       message: `${props.operation.impact?.title || '数据集操作'}失败：${props.operation.error_message}`,
@@ -218,7 +227,7 @@ async function cancelOperation() {
     ElMessage.info('已取消待确认操作')
     emit('changed', result)
   } catch (error) {
-    props.operation.error_message = error?.response?.data?.detail || error.message || '取消失败'
+    props.operation.error_message = getBackendErrorMessage(error, '取消失败')
   } finally {
     working.value = false
   }

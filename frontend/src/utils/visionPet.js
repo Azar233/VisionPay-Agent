@@ -1,6 +1,7 @@
 export const VISION_PET_TASK_EVENT = 'visionpay:pet-task'
 
 const WORKING_TASK_STATUSES = new Set(['pending', 'queued', 'running', 'processing', 'streaming'])
+const ERROR_TASK_STATUSES = new Set(['failed', 'error', 'exception'])
 const AGENT_LABELS = {
   catalog: '商品',
   dataset: '数据集',
@@ -30,8 +31,39 @@ export function notifyVisionPetTaskProgress({ status = '', state, ...detail } = 
   notifyVisionPetTask({
     ...detail,
     status,
-    state: state || (WORKING_TASK_STATUSES.has(normalizedStatus) ? 'working' : 'idle'),
+    state: state || (
+      WORKING_TASK_STATUSES.has(normalizedStatus)
+        ? 'working'
+        : ERROR_TASK_STATUSES.has(normalizedStatus) ? 'error' : 'idle'
+    ),
   })
+}
+
+export function getBackendErrorMessage(error, fallback = '后端服务异常') {
+  const payload = error?.response?.data
+  const detail = payload?.detail ?? payload?.data ?? payload?.message
+  if (Array.isArray(detail)) {
+    return detail[0]?.msg || detail[0]?.message || detail[0] || fallback
+  }
+  return String(detail || error?.message || fallback)
+}
+
+export function isUnexpectedBackendError(error) {
+  if (!error || error.config?.skipPetError) return false
+  if (error.name === 'AbortError' || error.name === 'CanceledError' || error.code === 'ERR_CANCELED') return false
+  if (!error.response) return true
+  return Number(error.response.status) >= 500
+}
+
+/** Show the error animation only for backend/system failures, not expected 4xx business feedback. */
+export function notifyVisionPetBackendError(error, { message = '', duration = 5200 } = {}) {
+  if (!isUnexpectedBackendError(error)) return false
+  notifyVisionPetTask({
+    state: 'error',
+    message: message || getBackendErrorMessage(error),
+    duration,
+  })
+  return true
 }
 
 function latestActiveTask() {

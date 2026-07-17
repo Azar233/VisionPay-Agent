@@ -28,7 +28,7 @@ export function deriveDatasetVersionApi(datasetId, data) {
 }
 
 export function deriveDatasetVersionTaskApi(datasetId, data) {
-  return request.post(`/datasets/${datasetId}/derive-task`, data)
+  return request.post(`/datasets/${datasetId}/derive-task`, data, { skipPetError: true })
 }
 
 export function stageDatasetProductImagesApi(datasetId, formData) {
@@ -43,7 +43,7 @@ export function commitDatasetProductApi(datasetId, data) {
 }
 
 export function commitDatasetProductTaskApi(datasetId, data) {
-  return request.post(`/datasets/${datasetId}/products/commit-task`, data)
+  return request.post(`/datasets/${datasetId}/products/commit-task`, data, { skipPetError: true })
 }
 
 export function discardDatasetProductStageApi(datasetId, stagingToken) {
@@ -60,7 +60,7 @@ export function deleteDatasetProductApi(datasetId, productId, deactivateProduct 
 export function deleteDatasetProductTaskApi(datasetId, productId, deactivateProduct = true) {
   return request.post(`/datasets/${datasetId}/products/${productId}/delete-task`, {
     deactivate_product: deactivateProduct,
-  })
+  }, { skipPetError: true })
 }
 
 export function updateDatasetVersionApi(datasetId, data) {
@@ -88,7 +88,7 @@ export function deleteDatasetVersionApi(datasetId) {
 }
 
 export function deleteDatasetVersionTaskApi(datasetId) {
-  return request.post(`/datasets/${datasetId}/delete-task`)
+  return request.post(`/datasets/${datasetId}/delete-task`, undefined, { skipPetError: true })
 }
 
 export function getDatasetOperationStatusApi(taskId) {

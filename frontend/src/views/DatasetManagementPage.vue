@@ -658,7 +658,7 @@ import {
 } from '@/utils/datasetAnnotationReview'
 import { collectProductFolderFiles } from '@/utils/datasetProductFiles'
 import { canArchiveDataset, canDeriveDataset, isDatasetDraft } from '@/utils/datasetLifecycle'
-import { beginVisionPetTask } from '@/utils/visionPet'
+import { beginVisionPetTask, getBackendErrorMessage } from '@/utils/visionPet'
 import { getScenes } from '@/api/history'
 import { getAgentHandoffApi, updateAgentHandoffApi } from '@/api/handoffs'
 import {
@@ -1093,7 +1093,7 @@ async function runDatasetOperation(title, startTask) {
     operationProgressVisible.value = false
     return task.result
   } catch (error) {
-    const errorMessage = error.response?.data?.detail || '无法获取后台任务进度，请检查服务器状态'
+    const errorMessage = getBackendErrorMessage(error, '无法获取后台任务进度，请检查服务器状态')
     finishPetTask({ status: 'failed', message: `${title}失败：${errorMessage}`, duration: 5200 })
     if (!taskCreated) {
       operationProgressVisible.value = false

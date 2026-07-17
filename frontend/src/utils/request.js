@@ -8,6 +8,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
+import { getBackendErrorMessage, notifyVisionPetBackendError } from '@/utils/visionPet'
 
 // ── 创建 Axios 实例 ──────────────────────────────────
 const request = axios.create({
@@ -43,7 +44,9 @@ request.interceptors.response.use(
     if (error.config?.skipGlobalError) {
       return Promise.reject(error)
     }
+    notifyVisionPetBackendError(error)
     if (response) {
+      const detail = getBackendErrorMessage(error, `请求失败 (${response.status})`)
       switch (response.status) {
         case 401:
           // Token 过期或无效，清除用户信息并跳转登录页
@@ -56,22 +59,22 @@ request.interceptors.response.use(
           ElMessage.error('没有权限执行此操作')
           break
         case 404:
-          ElMessage.error(response.data?.detail || '请求的资源不存在')
+          ElMessage.error(detail || '请求的资源不存在')
           break
         case 422:
           // Pydantic 验证错误
-          const detail = response.data?.detail
-          if (Array.isArray(detail)) {
-            ElMessage.error(detail[0]?.msg || '参数验证失败')
+          const validationDetail = response.data?.detail ?? response.data?.data
+          if (Array.isArray(validationDetail)) {
+            ElMessage.error(validationDetail[0]?.msg || validationDetail[0] || '参数验证失败')
           } else {
-            ElMessage.error(detail || '参数验证失败')
+            ElMessage.error(validationDetail || detail || '参数验证失败')
           }
           break
         case 500:
           ElMessage.error('服务器内部错误')
           break
         default:
-          ElMessage.error(response.data?.detail || `请求失败 (${response.status})`)
+          ElMessage.error(detail)
       }
     } else {
       // 网络错误或请求超时
