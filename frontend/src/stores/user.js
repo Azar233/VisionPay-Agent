@@ -41,6 +41,8 @@ export const useUserStore = defineStore('user', {
      */
     async login(credentials) {
       const res = await loginApi(credentials)
+      // 每次新的登录会话都从空白对话开始，不恢复上一个账号或上次登录的活动会话。
+      useAgentStore().clear()
       // 保存 Token
       this.token = res.access_token
       localStorage.setItem(TOKEN_KEY, res.access_token)

@@ -12,6 +12,10 @@ export const useAgentStore = defineStore('agent', {
     messages: [],
     // 会话列表
     sessions: [],
+    // 当前输入框草稿；保留在 Pinia 中，路由切换不会丢失
+    draftText: '',
+    // 尚未发送的附件及其预览 URL；File 对象只在当前浏览器会话内保留
+    draftAttachments: [],
     // 是否正在等待 AI 响应
     isLoading: false,
     // 中断函数（用于取消 SSE 流式请求）
@@ -54,13 +58,25 @@ export const useAgentStore = defineStore('agent', {
     newChat() {
       this.currentSessionId = null
       this.messages = []
+      this.clearDraft()
       this.abort()
+    },
+    /** 清理未发送草稿，并释放图片预览 URL */
+    clearDraft() {
+      this.draftAttachments.forEach((item) => {
+        if (item?.preview && typeof URL !== 'undefined') {
+          URL.revokeObjectURL(item.preview)
+        }
+      })
+      this.draftText = ''
+      this.draftAttachments = []
     },
     /** 清除所有状态 */
     clear() {
       this.currentSessionId = null
       this.messages = []
       this.sessions = []
+      this.clearDraft()
       this.abort()
     },
   },

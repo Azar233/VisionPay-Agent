@@ -142,7 +142,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -165,8 +165,14 @@ import { streamChat } from '@/utils/stream'
 
 const router = useRouter()
 const agentStore = useAgentStore()
-const inputText = ref('')
-const selectedFiles = ref([])
+const inputText = computed({
+  get: () => agentStore.draftText,
+  set: (value) => { agentStore.draftText = value },
+})
+const selectedFiles = computed({
+  get: () => agentStore.draftAttachments,
+  set: (value) => { agentStore.draftAttachments = value },
+})
 const fileInputRef = ref(null)
 const messageListRef = ref(null)
 const sessionLoading = ref(false)
@@ -195,16 +201,15 @@ const quickPrompts = [
 onMounted(async () => {
   try { agentStatus.value = await getAgentStatusApi() } catch { /* 全局请求层处理 */ }
   await Promise.all([loadSessions(), loadPendingOperations()])
-  if (!agentStore.messages.length && agentStore.sessions.length) {
+  // 历史列表只用于展示。首次登录或刷新后的第一次进入保持空白新对话；
+  // 仅恢复本次浏览器会话中已经明确选中的活动会话。
+  if (agentStore.currentSessionId && !agentStore.messages.length) {
     const currentSession = agentStore.sessions.find(
       (session) => session.session_uuid === agentStore.currentSessionId,
     )
-    await openSession((currentSession || agentStore.sessions[0]).session_uuid)
+    if (currentSession) await openSession(currentSession.session_uuid)
   }
 })
-// The SSE stream belongs to the global agent store, so route changes only
-// release page-local file previews. Users can still stop it explicitly.
-onBeforeUnmount(clearFiles)
 
 function agentName(name) { return ({ detection: 'Detection Agent', dataset: 'Dataset Agent', training: 'Training Agent', catalog: 'Catalog Agent', knowledge: 'Knowledge Agent' })[name] || 'VisionPay Agent' }
 function toolName(name) { return ({
