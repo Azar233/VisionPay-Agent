@@ -165,7 +165,6 @@ import { streamChat } from '@/utils/stream'
 
 const router = useRouter()
 const agentStore = useAgentStore()
-agentStore.newChat()
 const inputText = ref('')
 const selectedFiles = ref([])
 const fileInputRef = ref(null)
@@ -196,9 +195,16 @@ const quickPrompts = [
 onMounted(async () => {
   try { agentStatus.value = await getAgentStatusApi() } catch { /* 全局请求层处理 */ }
   await Promise.all([loadSessions(), loadPendingOperations()])
-  if (agentStore.sessions.length) await openSession(agentStore.sessions[0].session_uuid)
+  if (!agentStore.messages.length && agentStore.sessions.length) {
+    const currentSession = agentStore.sessions.find(
+      (session) => session.session_uuid === agentStore.currentSessionId,
+    )
+    await openSession((currentSession || agentStore.sessions[0]).session_uuid)
+  }
 })
-onBeforeUnmount(() => { stopStream(); clearFiles() })
+// The SSE stream belongs to the global agent store, so route changes only
+// release page-local file previews. Users can still stop it explicitly.
+onBeforeUnmount(clearFiles)
 
 function agentName(name) { return ({ detection: 'Detection Agent', dataset: 'Dataset Agent', training: 'Training Agent', catalog: 'Catalog Agent', knowledge: 'Knowledge Agent' })[name] || 'VisionPay Agent' }
 function toolName(name) { return ({

@@ -4,6 +4,7 @@
  */
 import { defineStore } from 'pinia'
 import { loginApi, getUserInfoApi } from '@/api/auth'
+import { useAgentStore } from '@/stores/agent'
 
 const TOKEN_KEY = 'vp_agent_token'
 const USER_KEY = 'vp_agent_user'
@@ -64,6 +65,7 @@ export const useUserStore = defineStore('user', {
      * 退出登录
      */
     logout() {
+      useAgentStore().clear()
       this.token = ''
       this.user = null
       localStorage.removeItem(TOKEN_KEY)
