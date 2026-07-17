@@ -3,7 +3,11 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import VisionPet from '@/components/VisionPet.vue'
 import { useVisionPetStore } from '@/stores/visionPet'
-import { notifyVisionPetTask } from '@/utils/visionPet'
+import {
+  beginVisionPetTask,
+  notifyVisionPetTask,
+  notifyVisionPetTaskProgress,
+} from '@/utils/visionPet'
 
 describe('VisionPet', () => {
   beforeEach(() => {
@@ -56,6 +60,77 @@ describe('VisionPet', () => {
 
     expect(wrapper.classes()).not.toContain('is-dragging')
     expect(localStorage.getItem('vp_vision_pet_position')).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('maps backend task progress to the working sequence', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    notifyVisionPetTaskProgress({
+      status: 'running',
+      message: '正在分析任务',
+      duration: 0,
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(useVisionPetStore().state).toBe('working')
+    expect(wrapper.attributes('aria-label')).toContain('正在分析任务')
+    expect(wrapper.find('.pet-sprite').attributes('style')).toContain('visionpay-pet-working-v1.png')
+    expect(wrapper.find('.pet-sprite').attributes('style')).toContain('400% 100%')
+
+    notifyVisionPetTaskProgress({ status: 'completed', message: '任务完成', duration: 0 })
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().state).toBe('idle')
+    wrapper.unmount()
+  })
+
+  it('stays working until all concurrent task leases finish', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    const firstTask = beginVisionPetTask({ message: '正在准备数据' })
+    const secondTask = beginVisionPetTask({ message: '正在执行检测' })
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().state).toBe('working')
+    expect(wrapper.text()).toContain('正在执行检测')
+
+    firstTask.finish()
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().state).toBe('working')
+    expect(wrapper.text()).toContain('正在执行检测')
+
+    secondTask.finish()
+    expect(useVisionPetStore().state).toBe('idle')
+    wrapper.unmount()
+  })
+
+  it('shows a completion message briefly after returning to idle', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    notifyVisionPetTaskProgress({
+      status: 'completed',
+      message: '回答完成',
+      duration: 3200,
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(useVisionPetStore().state).toBe('idle')
+    expect(wrapper.text()).toContain('回答完成')
+
+    vi.advanceTimersByTime(3200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).not.toContain('回答完成')
     wrapper.unmount()
   })
 })

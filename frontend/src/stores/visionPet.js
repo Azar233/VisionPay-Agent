@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-const SUPPORTED_STATES = new Set(['idle', 'checkout'])
+const SUPPORTED_STATES = new Set(['idle', 'working', 'checkout'])
 
 export const useVisionPetStore = defineStore('vision-pet', {
   state: () => ({

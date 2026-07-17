@@ -33,6 +33,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import petSprites from '@/assets/pet/visionpay-pet-sprites-v4.png'
+import workingPetSprites from '@/assets/pet/visionpay-pet-working-v1.png'
 import { useVisionPetStore } from '@/stores/visionPet'
 import { VISION_PET_TASK_EVENT } from '@/utils/visionPet'
 
@@ -59,21 +60,35 @@ const sequences = {
     frames: [0, 1, 1, 2, 3],
     durations: [240, 280, 280, 760, 420],
   },
+  working: {
+    frames: [0, 1, 2, 1, 3, 1],
+    durations: [220, 180, 160, 180, 260, 180],
+  },
 }
 
 const petPositionStyle = computed(() => ({
   transform: `translate3d(${position.value.x}px, ${position.value.y}px, 0)`,
 }))
 
-const spriteStyle = computed(() => ({
-  backgroundImage: `url(${petSprites})`,
-  backgroundPosition: `${(activeFrame.value / 3) * 100}% ${petStore.state === 'checkout' ? 100 : 0}%`,
-}))
+const spriteStyle = computed(() => {
+  const isWorking = petStore.state === 'working'
+  return {
+    backgroundImage: `url(${isWorking ? workingPetSprites : petSprites})`,
+    backgroundSize: isWorking ? '400% 100%' : '400% 200%',
+    backgroundPosition: `${(activeFrame.value / 3) * 100}% ${petStore.state === 'checkout' ? 100 : 0}%`,
+  }
+})
+
+const stateLabels = {
+  idle: '待机',
+  working: '工作',
+  checkout: '结算',
+}
 
 const ariaLabel = computed(() => (
   petStore.message
     ? `VisionPay 桌宠：${petStore.message}`
-    : `VisionPay 桌宠，当前为${petStore.state === 'checkout' ? '结算' : '待机'}状态，可拖动`
+    : `VisionPay 桌宠，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`
 ))
 
 function petBounds() {

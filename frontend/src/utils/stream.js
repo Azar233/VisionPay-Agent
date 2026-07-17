@@ -1,6 +1,11 @@
+import { getActivePinia } from 'pinia'
 import router from '@/router'
+import { useAgentStore } from '@/stores/agent'
+import { beginVisionPetTask, updateVisionPetTaskFromWorkflow } from '@/utils/visionPet'
 
 function expireLogin() {
+  const pinia = getActivePinia()
+  if (pinia) useAgentStore(pinia).clear()
   localStorage.removeItem('vp_agent_token')
   localStorage.removeItem('vp_agent_user')
   const currentPath = router.currentRoute.value.fullPath
@@ -11,11 +16,24 @@ function expireLogin() {
 
 /** Parse a POST-based SSE stream without losing frames split across network chunks. */
 export function streamChat(url, body, callbacks = {}) {
-  const { onMessage, onDone, onError } = callbacks
+  const {
+    onMessage,
+    onDone,
+    onError,
+    trackPet = true,
+    petMessage = 'Agent 正在处理任务',
+    petDoneMessage = '回答完成',
+    petErrorMessage = '任务处理失败',
+    petStoppedMessage = '任务已停止',
+    petResultDuration = 3200,
+  } = callbacks
   const token = localStorage.getItem('vp_agent_token')
   const controller = new AbortController()
+  const petTask = trackPet ? beginVisionPetTask({ message: petMessage }) : null
+  let replyStarted = false
+  let petResult = { message: petDoneMessage, duration: petResultDuration }
 
-  const completion = fetch(url, {
+  const completion = Promise.resolve().then(() => fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -23,7 +41,7 @@ export function streamChat(url, body, callbacks = {}) {
     },
     body: JSON.stringify(body),
     signal: controller.signal,
-  }).then(async (response) => {
+  })).then(async (response) => {
     if (response.status === 401) {
       expireLogin()
       throw new Error('登录已过期，请重新登录')
@@ -64,15 +82,31 @@ export function streamChat(url, body, callbacks = {}) {
           return
         }
         try {
-          onMessage?.(JSON.parse(data))
+          const event = JSON.parse(data)
+          if (event.type === 'error') {
+            petResult = { message: petErrorMessage, duration: petResultDuration }
+          }
+          if (event.type !== 'text_chunk' || !replyStarted) {
+            updateVisionPetTaskFromWorkflow(petTask, event)
+          }
+          if (event.type === 'text_chunk') replyStarted = true
+          onMessage?.(event)
         } catch {
-          onMessage?.({ type: 'text_chunk', content: data })
+          const event = { type: 'text_chunk', content: data }
+          if (!replyStarted) updateVisionPetTaskFromWorkflow(petTask, event)
+          replyStarted = true
+          onMessage?.(event)
         }
       }
     }
   }).catch((error) => {
-    if (error.name !== 'AbortError') onError?.(error)
-  })
+    if (error.name === 'AbortError') {
+      petResult = { message: petStoppedMessage, duration: petResultDuration }
+      return
+    }
+    petResult = { message: petErrorMessage, duration: petResultDuration }
+    onError?.(error)
+  }).finally(() => petTask?.finish(petResult))
 
   return { stop: () => controller.abort(), completion }
 }
