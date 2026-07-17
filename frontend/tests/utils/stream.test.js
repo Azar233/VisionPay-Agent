@@ -82,4 +82,43 @@ describe('streamChat', () => {
     expect(updates.at(-1).state).toBe('idle')
     expect(updates.at(-1).message).toBe('回答完成')
   })
+
+  it('maps backend SSE error events to the pet error state', async () => {
+    const encoder = new TextEncoder()
+    const chunks = [encoder.encode([
+      'data: {"type":"routing","agent":"knowledge"}',
+      '',
+      'data: {"type":"error","content":"Agent 处理失败"}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n'))]
+    let chunkIndex = 0
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: async () => (
+            chunkIndex < chunks.length
+              ? { done: false, value: chunks[chunkIndex++] }
+              : { done: true, value: undefined }
+          ),
+        }),
+      },
+    }))
+    const updates = []
+    const listener = (event) => updates.push(event.detail)
+    window.addEventListener(VISION_PET_TASK_EVENT, listener)
+
+    const stream = streamChat('/api/chat/stream', { message: '检索知识库' })
+    await stream.completion
+    window.removeEventListener(VISION_PET_TASK_EVENT, listener)
+
+    expect(updates.at(-1)).toEqual(expect.objectContaining({
+      state: 'error',
+      message: '任务处理失败',
+      duration: 3200,
+    }))
+  })
 })

@@ -454,7 +454,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .composer textarea { min-height: 42px; padding: 2px; font-size: 13px; }
 .composer-actions > span { font-size: 9px; }
 .send-button { box-shadow: none; }
-.message-row.user .message-bubble { border-color: transparent; border-radius: 16px 16px 4px 16px; background: $surface-muted; box-shadow: none; }
+.message-row.user .message-bubble { color: #fff; border-color: transparent; border-radius: 16px 16px 4px 16px; background: $primary-color; box-shadow: 0 8px 22px rgba(0,113,227,.22); }
 .agent-activity .agent-pill { color: $text-secondary; border: 1px solid $border-color; background: transparent; }
 
 :global(html.dark .agent-chat-page .chat-layout) { color: #f5f5f7; background: #19191b; border-color: rgba(255,255,255,.1); box-shadow: none; }
@@ -472,7 +472,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 :global(html.dark .agent-chat-page .agent-item.active) { color: #f5f5f7; background: rgba(255,255,255,.055); box-shadow: none; }
 :global(html.dark .agent-chat-page .composer-box) { background: #2a2a2c; border-color: transparent; box-shadow: none; }
 :global(html.dark .agent-chat-page .composer-box:focus-within) { border-color: rgba(255,255,255,.2); box-shadow: none; }
-:global(html.dark .agent-chat-page .message-row.user .message-bubble) { color: #f5f5f7; background: #2a2a2c; border-color: transparent; }
+:global(html.dark .agent-chat-page .message-row.user .message-bubble) { color: #fff; background: $primary-color; border-color: transparent; box-shadow: 0 8px 24px rgba(0,113,227,.28); }
 :global(html.dark .agent-chat-page .privacy-note),
 :global(html.dark .agent-chat-page .pending-empty),
 :global(html.dark .agent-chat-page .safety-card) { background: transparent; border-color: rgba(255,255,255,.1); }

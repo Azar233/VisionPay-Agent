@@ -4,7 +4,11 @@
     ref="petRoot"
     class="vision-pet"
     data-testid="vision-pet"
-    :class="{ 'is-dragging': dragging, 'has-message': Boolean(petStore.message) }"
+    :class="{
+      'is-dragging': dragging,
+      'has-message': Boolean(petStore.message),
+      'is-error': petStore.state === 'error',
+    }"
     :style="petPositionStyle"
     role="status"
     aria-live="polite"
@@ -50,6 +54,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import petSprites from '@/assets/pet/visionpay-pet-sprites-v4.png'
 import workingPetSprites from '@/assets/pet/visionpay-pet-working-v1.png'
+import errorPetSprites from '@/assets/pet/visionpay-pet-error-v1.png'
 import { useVisionPetStore } from '@/stores/visionPet'
 import { VISION_PET_TASK_EVENT } from '@/utils/visionPet'
 
@@ -80,6 +85,10 @@ const sequences = {
     frames: [0, 1, 2, 1, 3, 1],
     durations: [220, 180, 160, 180, 260, 180],
   },
+  error: {
+    frames: [0, 1, 2, 3, 2, 1],
+    durations: [280, 220, 180, 240, 180, 220],
+  },
 }
 
 const petPositionStyle = computed(() => ({
@@ -96,9 +105,10 @@ const petProgress = computed(() => (
 
 const spriteStyle = computed(() => {
   const isWorking = petStore.state === 'working'
+  const isError = petStore.state === 'error'
   return {
-    backgroundImage: `url(${isWorking ? workingPetSprites : petSprites})`,
-    backgroundSize: isWorking ? '400% 100%' : '400% 200%',
+    backgroundImage: `url(${isError ? errorPetSprites : isWorking ? workingPetSprites : petSprites})`,
+    backgroundSize: isWorking || isError ? '400% 100%' : '400% 200%',
     backgroundPosition: `${(activeFrame.value / 3) * 100}% ${petStore.state === 'checkout' ? 100 : 0}%`,
   }
 })
@@ -107,6 +117,7 @@ const stateLabels = {
   idle: '待机',
   working: '工作',
   checkout: '结算',
+  error: '报错',
 }
 
 const ariaLabel = computed(() => (
@@ -214,7 +225,10 @@ function scheduleFrame(frameIndex = 0) {
 function scheduleMessageDismiss(duration = 4200) {
   window.clearTimeout(messageTimer)
   if (!petStore.message || duration <= 0) return
-  messageTimer = window.setTimeout(() => petStore.clearMessage(), duration)
+  messageTimer = window.setTimeout(() => {
+    petStore.clearMessage()
+    if (petStore.state === 'error') petStore.setState('idle')
+  }, duration)
 }
 
 function handleTaskEvent(event) {
@@ -357,6 +371,15 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: $success-color;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-success) 16%, transparent);
+}
+
+.vision-pet.is-error .pet-message {
+  border-color: color-mix(in srgb, var(--vp-danger) 42%, var(--vp-border));
+}
+
+.vision-pet.is-error .pet-status-dot {
+  background: $danger-color;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-danger) 16%, transparent);
 }
 
 .pet-bubble-enter-active,

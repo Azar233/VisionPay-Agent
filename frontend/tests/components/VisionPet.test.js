@@ -5,8 +5,10 @@ import VisionPet from '@/components/VisionPet.vue'
 import { useVisionPetStore } from '@/stores/visionPet'
 import {
   beginVisionPetTask,
+  notifyVisionPetBackendError,
   notifyVisionPetTask,
   notifyVisionPetTaskProgress,
+  VISION_PET_TASK_EVENT,
 } from '@/utils/visionPet'
 
 describe('VisionPet', () => {
@@ -91,6 +93,53 @@ describe('VisionPet', () => {
     await wrapper.vm.$nextTick()
     expect(useVisionPetStore().state).toBe('idle')
     wrapper.unmount()
+  })
+
+  it('maps failed backend tasks to the error sequence and returns to idle', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    notifyVisionPetTaskProgress({
+      status: 'failed',
+      message: '派生数据集失败',
+      duration: 1200,
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(useVisionPetStore().state).toBe('error')
+    expect(wrapper.classes()).toContain('is-error')
+    expect(wrapper.find('.pet-sprite').attributes('style')).toContain('visionpay-pet-error-v1.png')
+    expect(wrapper.find('.pet-sprite').attributes('style')).toContain('400% 100%')
+    expect(wrapper.attributes('aria-label')).toContain('派生数据集失败')
+
+    vi.advanceTimersByTime(1200)
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().state).toBe('idle')
+    expect(wrapper.text()).not.toContain('派生数据集失败')
+    wrapper.unmount()
+  })
+
+  it('only reports unexpected backend and network failures', () => {
+    const updates = []
+    const listener = (event) => updates.push(event.detail)
+    window.addEventListener(VISION_PET_TASK_EVENT, listener)
+
+    expect(notifyVisionPetBackendError({
+      response: { status: 422, data: { message: '参数验证失败' } },
+    })).toBe(false)
+    expect(notifyVisionPetBackendError({
+      response: { status: 503, data: { message: '知识库构建失败' } },
+    })).toBe(true)
+    expect(notifyVisionPetBackendError(new Error('网络已断开'))).toBe(true)
+
+    window.removeEventListener(VISION_PET_TASK_EVENT, listener)
+    expect(updates).toEqual([
+      expect.objectContaining({ state: 'error', message: '知识库构建失败' }),
+      expect.objectContaining({ state: 'error', message: '网络已断开' }),
+    ])
   })
 
   it('does not show a progress bar for normal chat task events', async () => {

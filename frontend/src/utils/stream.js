@@ -1,7 +1,11 @@
 import { getActivePinia } from 'pinia'
 import router from '@/router'
 import { useAgentStore } from '@/stores/agent'
-import { beginVisionPetTask, updateVisionPetTaskFromWorkflow } from '@/utils/visionPet'
+import {
+  beginVisionPetTask,
+  isUnexpectedBackendError,
+  updateVisionPetTaskFromWorkflow,
+} from '@/utils/visionPet'
 
 function expireLogin() {
   const pinia = getActivePinia()
@@ -54,7 +58,9 @@ export function streamChat(url, body, callbacks = {}) {
       } catch {
         // Keep the HTTP fallback when the response is not JSON.
       }
-      throw new Error(detail)
+      const error = new Error(detail)
+      error.response = { status: response.status }
+      throw error
     }
 
     const reader = response.body.getReader()
@@ -84,7 +90,7 @@ export function streamChat(url, body, callbacks = {}) {
         try {
           const event = JSON.parse(data)
           if (event.type === 'error') {
-            petResult = { message: petErrorMessage, duration: petResultDuration }
+            petResult = { status: 'failed', message: petErrorMessage, duration: petResultDuration }
           }
           if (event.type !== 'text_chunk' || !replyStarted) {
             updateVisionPetTaskFromWorkflow(petTask, event)
@@ -101,10 +107,14 @@ export function streamChat(url, body, callbacks = {}) {
     }
   }).catch((error) => {
     if (error.name === 'AbortError') {
-      petResult = { message: petStoppedMessage, duration: petResultDuration }
+      petResult = { status: 'cancelled', message: petStoppedMessage, duration: petResultDuration }
       return
     }
-    petResult = { message: petErrorMessage, duration: petResultDuration }
+    petResult = {
+      status: isUnexpectedBackendError(error) ? 'failed' : 'cancelled',
+      message: isUnexpectedBackendError(error) ? petErrorMessage : error.message,
+      duration: petResultDuration,
+    }
     onError?.(error)
   }).finally(() => petTask?.finish(petResult))
 
