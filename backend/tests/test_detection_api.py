@@ -1,6 +1,5 @@
 from io import BytesIO
 import asyncio
-import json
 from pathlib import Path
 import threading
 
@@ -308,9 +307,22 @@ def test_empty_price_summary_is_complete(db_session):
     }
 
 
-def test_detection_and_chat_routes_require_auth(client):
-    assert client.post("/api/detection/single").status_code == 401
+def test_chat_routes_require_auth(client):
     assert client.get("/api/chat/status").status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/api/detection/single"),
+        ("post", "/api/detection/batch"),
+        ("post", "/api/detection/zip"),
+        ("post", "/api/detection/video"),
+        ("get", "/api/detection/video/status/1"),
+    ],
+)
+def test_removed_detection_workbench_routes_are_not_exposed(client, method, path):
+    assert getattr(client, method)(path).status_code == 404
 
 
 def test_agent_status_does_not_expose_api_key(client):
@@ -319,180 +331,6 @@ def test_agent_status_does_not_expose_api_key(client):
     assert set(response.json()) == {
         "configured", "provider", "model", "multi_agent", "agents", "embedding"
     }
-
-
-def test_single_detection_passes_user_and_parameters(client, monkeypatch):
-    from app.api import detection as detection_api
-
-    headers = _auth_headers(client)
-    captured = {}
-
-    def fake_detect(path, **kwargs):
-        captured.update(kwargs)
-        assert path.is_file()
-        return {
-            "task_id": 7,
-            "source": "single",
-            "scene": "Vision Pay",
-            "model": "best.pt",
-            "total_images": 1,
-            "total_objects": 0,
-            "total_inference_time_ms": 1.2,
-            "class_counts": {},
-            "items": [],
-        }
-
-    monkeypatch.setattr(detection_api.detection_service, "detect_single", fake_detect)
-    response = client.post(
-        "/api/detection/single",
-        headers=headers,
-        data={"scene_id": "3", "conf": "0.4", "iou": "0.5"},
-        files={"file": ("checkout.jpg", _image_bytes(), "image/jpeg")},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["task_id"] == 7
-    assert captured["scene_id"] == 3
-    assert captured["conf"] == 0.4
-    assert captured["iou"] == 0.5
-    assert isinstance(captured["user_id"], int)
-
-
-def test_detection_rejects_unsupported_upload(client):
-    response = client.post(
-        "/api/detection/single",
-        headers=_auth_headers(client),
-        files={"file": ("payload.txt", b"not an image", "text/plain")},
-    )
-    assert response.status_code == 415
-
-
-def test_video_detection_rejects_non_video_upload(client):
-    response = client.post(
-        "/api/detection/video",
-        headers=_auth_headers(client),
-        files={"file": ("checkout.jpg", _image_bytes(), "image/jpeg")},
-    )
-    assert response.status_code == 415
-
-
-def test_video_detection_caps_requested_key_frames(client):
-    response = client.post(
-        "/api/detection/video",
-        headers=_auth_headers(client),
-        data={"max_frames": "51"},
-        files={"file": ("checkout.mp4", b"fake-video", "video/mp4")},
-    )
-    assert response.status_code == 422
-
-
-def test_video_detection_creates_background_task(client, monkeypatch):
-    from app.api import detection as detection_api
-
-    headers = _auth_headers(client)
-    captured = {}
-
-    monkeypatch.setattr(
-        detection_api.detection_service,
-        "create_video_task",
-        lambda **_kwargs: {"task_id": 123, "scene_id": 7, "scene": "Vision Pay"},
-    )
-    monkeypatch.setattr(detection_api.video_task_store, "set", lambda *_args: None)
-
-    def fake_run(**kwargs):
-        captured.update(kwargs)
-        kwargs["path"].unlink(missing_ok=True)
-
-    monkeypatch.setattr(detection_api, "_run_video_detection", fake_run)
-    response = client.post(
-        "/api/detection/video",
-        headers=headers,
-        data={
-            "scene_id": "7",
-            "conf": "0.35",
-            "iou": "0.55",
-            "frame_sample_rate": "8",
-            "max_frames": "40",
-        },
-        files={"file": ("checkout.mp4", b"fake-video", "video/mp4")},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["task_id"] == 123
-    assert captured["task_id"] == 123
-    assert captured["scene_id"] == 7
-    assert captured["conf"] == 0.35
-    assert captured["iou"] == 0.55
-    assert captured["frame_sample_rate"] == 8
-    assert captured["max_frames"] == 40
-    assert isinstance(captured["user_id"], int)
-
-
-def _video_task_for_user(db_session, username, *, status="processing"):
-    user = db_session.query(User).filter_by(username=username).first()
-    task = DetectionTask(
-        user_id=user.id,
-        scene_id=1,
-        task_type="video",
-        status=status,
-    )
-    db_session.add(task)
-    db_session.commit()
-    db_session.refresh(task)
-    return task
-
-
-def test_video_status_is_user_scoped(client, db_session, monkeypatch):
-    from app.api import detection as detection_api
-
-    owner_headers = _auth_headers(client)
-    task = _video_task_for_user(db_session, "detection_user")
-    monkeypatch.setattr(
-        detection_api.video_task_store,
-        "get",
-        lambda _task_id: {"status": "processing", "progress": 42, "message": "processing"},
-    )
-
-    client.post(
-        "/api/auth/register",
-        json={
-            "username": "video_other_user",
-            "email": "video_other_user@example.com",
-            "password": "123456",
-        },
-    )
-    login = client.post(
-        "/api/auth/login",
-        json={"username": "video_other_user", "password": "123456"},
-    )
-    other_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
-
-    assert client.get(f"/api/detection/video/status/{task.id}", headers=owner_headers).status_code == 200
-    assert client.get(f"/api/detection/video/status/{task.id}", headers=other_headers).status_code == 404
-
-
-def test_video_status_reads_completed_result_file(client, db_session, monkeypatch, tmp_path):
-    from app.api import detection as detection_api
-
-    headers = _auth_headers(client)
-    task = _video_task_for_user(db_session, "detection_user", status="completed")
-    result = {"task_id": task.id, "source": "video", "processed_frames": 2, "items": []}
-    result_path = tmp_path / "video-result.json"
-    result_path.write_text(json.dumps(result), encoding="utf-8")
-    monkeypatch.setattr(
-        detection_api.video_task_store,
-        "get",
-        lambda _task_id: {
-            "status": "completed",
-            "progress": 100,
-            "message": "completed",
-            "result_path": str(result_path),
-        },
-    )
-
-    response = client.get(f"/api/detection/video/status/{task.id}", headers=headers)
-    assert response.status_code == 200
-    assert response.json()["result"] == result
 
 
 def test_video_detection_samples_uniform_key_frames(db_session, monkeypatch, tmp_path):

@@ -17,7 +17,6 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ChatDotRound,
-  Camera,
   Cpu,
   Clock,
   DataAnalysis,
@@ -38,7 +37,6 @@ defineProps({
 const activeMenu = computed(() => '/' + route.path.split('/')[1])
 
 const menuItems = computed(() => [
-  { path: '/detection', title: '检测工作台', icon: Camera },
   { path: '/chat', title: '智能对话', icon: ChatDotRound },
   { path: '/training', title: '模型训练', icon: Cpu },
   { path: '/datasets', title: '数据集版本', icon: Files },

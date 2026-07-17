@@ -26,12 +26,6 @@ const routes = [
         meta: { title: '智能对话', icon: 'ChatDotRound' },
       },
       {
-        path: 'detection',
-        name: 'Detection',
-        component: () => import('@/views/DetectionPage.vue'),
-        meta: { title: '检测工作台', icon: 'Camera' },
-      },
-      {
         path: 'training',
         name: 'Training',
         component: () => import('@/views/TrainingPage.vue'),

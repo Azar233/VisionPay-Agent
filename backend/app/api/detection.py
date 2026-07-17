@@ -1,9 +1,8 @@
-"""Direct detection APIs used by the low-latency workbench controls."""
+"""Shared upload helpers and the checkout IP-camera detection socket."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import threading
 import time
@@ -13,26 +12,16 @@ from uuid import uuid4
 import torch
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
-    Depends,
-    File,
-    Form,
     HTTPException,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
 )
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy.orm import Session
-
-from app.api.auth import get_current_user
 from app.api.camera import configured_ip_webcam_url, normalize_ip_webcam_url
 from app.config.settings import settings
-from app.database.session import get_db
-from app.entity.db_models import DetectionTask
 from app.services.detection_service import DetectionServiceError, detection_service
 from app.services.realtime_stabilizer import RealtimeDetectionStabilizer
-from app.storage.video_task_store import video_task_store
 
 router = APIRouter(prefix="/api/detection", tags=["商品检测"])
 _CAMERA_SESSION_CLAIM_LOCK = asyncio.Lock()
@@ -219,215 +208,6 @@ async def save_upload(
     path = _upload_root() / _safe_name(file.filename)
     path.write_bytes(content)
     return path
-
-
-def _detection_kwargs(user_id: int, scene_id: int | None, conf: float, iou: float):
-    return {"user_id": user_id, "scene_id": scene_id, "conf": conf, "iou": iou}
-
-
-@router.post("/single", summary="单张商品图片检测")
-async def detect_single(
-    file: UploadFile = File(...),
-    scene_id: int | None = Form(None),
-    conf: float = Form(0.25, ge=0.05, le=0.95),
-    iou: float = Form(0.45, ge=0.05, le=0.95),
-    current_user=Depends(get_current_user),
-):
-    path = await save_upload(file)
-    try:
-        return await run_in_threadpool(
-            detection_service.detect_single,
-            path,
-            **_detection_kwargs(current_user.id, scene_id, conf, iou),
-        )
-    except DetectionServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/batch", summary="批量商品图片检测")
-async def detect_batch(
-    files: list[UploadFile] = File(...),
-    scene_id: int | None = Form(None),
-    conf: float = Form(0.25, ge=0.05, le=0.95),
-    iou: float = Form(0.45, ge=0.05, le=0.95),
-    current_user=Depends(get_current_user),
-):
-    if len(files) > settings.DETECTION_MAX_BATCH_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"单次最多上传 {settings.DETECTION_MAX_BATCH_SIZE} 张图片",
-        )
-    paths = [await save_upload(file) for file in files]
-    try:
-        return await run_in_threadpool(
-            detection_service.detect_batch,
-            paths,
-            **_detection_kwargs(current_user.id, scene_id, conf, iou),
-        )
-    except DetectionServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/zip", summary="ZIP 商品图片批量检测")
-async def detect_zip(
-    file: UploadFile = File(...),
-    scene_id: int | None = Form(None),
-    conf: float = Form(0.25, ge=0.05, le=0.95),
-    iou: float = Form(0.45, ge=0.05, le=0.95),
-    current_user=Depends(get_current_user),
-):
-    path = await save_upload(file, allow_zip=True)
-    if path.suffix.lower() != ".zip":
-        raise HTTPException(status_code=415, detail="该接口只接受 ZIP 文件")
-    try:
-        return await run_in_threadpool(
-            detection_service.detect_zip,
-            path,
-            **_detection_kwargs(current_user.id, scene_id, conf, iou),
-        )
-    except DetectionServiceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-def _video_result_path(task_id: int) -> Path:
-    root = Path(settings.VIDEO_RESULT_DIR).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    return root / f"task_{task_id}.json"
-
-
-def _write_video_result(task_id: int, result: dict) -> Path:
-    path = _video_result_path(task_id)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
-    temporary.replace(path)
-    return path
-
-
-def _run_video_detection(
-    *,
-    task_id: int,
-    path: Path,
-    user_id: int,
-    scene_id: int,
-    conf: float,
-    iou: float,
-    frame_sample_rate: int,
-    max_frames: int,
-) -> None:
-    def update(progress: int, message: str) -> None:
-        video_task_store.set(
-            task_id,
-            {"status": "processing", "progress": progress, "message": message},
-        )
-
-    try:
-        result = detection_service.detect_video(
-            path,
-            task_id=task_id,
-            user_id=user_id,
-            scene_id=scene_id,
-            conf=conf,
-            iou=iou,
-            frame_sample_rate=frame_sample_rate,
-            max_frames=max_frames,
-            progress_callback=update,
-        )
-        result_path = _write_video_result(task_id, result)
-        video_task_store.set(
-            task_id,
-            {
-                "status": "completed",
-                "progress": 100,
-                "message": "视频检测完成",
-                "result_path": str(result_path),
-            },
-        )
-    except Exception as exc:
-        video_task_store.set(
-            task_id,
-            {"status": "failed", "progress": 0, "message": str(exc)},
-        )
-    finally:
-        path.unlink(missing_ok=True)
-
-
-@router.post("/video", summary="上传视频并创建后台检测任务")
-async def detect_video_api(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    scene_id: int | None = Form(None),
-    conf: float = Form(0.25, ge=0.05, le=0.95),
-    iou: float = Form(0.45, ge=0.05, le=0.95),
-    frame_sample_rate: int = Form(settings.VIDEO_FRAME_SAMPLE_RATE, ge=1, le=300),
-    max_frames: int = Form(
-        settings.VIDEO_MAX_KEY_FRAMES,
-        ge=1,
-        le=settings.VIDEO_MAX_KEY_FRAMES,
-    ),
-    current_user=Depends(get_current_user),
-):
-    path = await save_upload(file, allow_video=True, video_only=True)
-    try:
-        task_info = await run_in_threadpool(
-            detection_service.create_video_task,
-            user_id=current_user.id,
-            scene_id=scene_id,
-            conf=conf,
-            iou=iou,
-        )
-    except DetectionServiceError as exc:
-        path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    task_id = task_info["task_id"]
-    video_task_store.set(
-        task_id,
-        {"status": "pending", "progress": 0, "message": "视频已上传，等待处理"},
-    )
-    background_tasks.add_task(
-        _run_video_detection,
-        task_id=task_id,
-        path=path,
-        user_id=current_user.id,
-        scene_id=task_info["scene_id"],
-        conf=conf,
-        iou=iou,
-        frame_sample_rate=frame_sample_rate,
-        max_frames=max_frames,
-    )
-    return {
-        "task_id": task_id,
-        "status": "pending",
-        "message": "视频已上传，正在后台处理",
-        "filename": file.filename,
-    }
-
-
-@router.get("/video/status/{task_id}", summary="查询视频检测进度和结果")
-async def get_video_detection_status(
-    task_id: int,
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    task = db.query(DetectionTask).filter(DetectionTask.id == task_id).first()
-    if not task or task.user_id != current_user.id or task.task_type != "video":
-        raise HTTPException(status_code=404, detail="视频检测任务不存在")
-    progress = video_task_store.get(task_id) or {
-        "status": task.status,
-        "progress": 100 if task.status == "completed" else 0,
-        "message": task.error_message or "任务状态已从数据库恢复",
-    }
-    response = {"task_id": task_id, **progress}
-    if response["status"] == "completed":
-        result_path_value = response.pop("result_path", None)
-        result_path = Path(result_path_value) if result_path_value else _video_result_path(task_id)
-        if result_path.is_file():
-            response["result"] = json.loads(result_path.read_text(encoding="utf-8"))
-        else:
-            response.update(
-                {"status": "failed", "message": "视频结果文件已过期或不存在"}
-            )
-    return response
 
 
 def _camera_options(payload: dict) -> dict:

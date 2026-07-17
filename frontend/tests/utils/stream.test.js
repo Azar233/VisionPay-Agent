@@ -4,7 +4,7 @@ const { replace } = vi.hoisted(() => ({ replace: vi.fn() }))
 
 vi.mock('@/router', () => ({
   default: {
-    currentRoute: { value: { path: '/detection', fullPath: '/detection?tab=agent' } },
+    currentRoute: { value: { path: '/chat', fullPath: '/chat' } },
     replace,
   },
 }))
@@ -32,7 +32,7 @@ describe('streamChat', () => {
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: '登录已过期，请重新登录' }))
     expect(replace).toHaveBeenCalledWith({
       path: '/login',
-      query: { redirect: '/detection?tab=agent' },
+      query: { redirect: '/chat' },
     })
   })
 })

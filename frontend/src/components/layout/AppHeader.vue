@@ -10,7 +10,7 @@
           @click="$emit('toggle-sidebar')"
         />
       </el-tooltip>
-      <router-link to="/detection" class="brand-mark" aria-label="返回检测工作台">
+      <router-link to="/chat" class="brand-mark" aria-label="返回智能对话">
         <img src="/favicon.svg" alt="" class="header-logo" />
       </router-link>
       <div class="brand-copy">

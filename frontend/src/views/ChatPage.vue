@@ -154,9 +154,9 @@ import AgentConfirmationCard from '@/components/AgentConfirmationCard.vue'
 import AgentInputFormCard from '@/components/AgentInputFormCard.vue'
 import DetectionResultCard from '@/components/DetectionResultCard.vue'
 import {
-  createDetectionSessionApi, deleteDetectionSessionApi, getAgentStatusApi,
-  getDetectionSessionApi, getDetectionSessionsApi, uploadChatFilesApi,
-} from '@/api/detection'
+  createChatSessionApi, deleteChatSessionApi, getAgentStatusApi,
+  getChatSessionApi, getChatSessionsApi, uploadChatFilesApi,
+} from '@/api/chat'
 import { getAgentOperationApi, listAgentOperationsApi } from '@/api/agentOperations'
 import { useAgentStore } from '@/stores/agent'
 import { CHAT_ATTACHMENT_MAX_COUNT, chatAttachmentKey, prepareChatAttachmentAdditions } from '@/utils/chatAttachments'
@@ -220,7 +220,7 @@ async function scrollBottom() { await nextTick(); if (messageListRef.value) mess
 
 async function loadSessions() {
   sessionLoading.value = true
-  try { agentStore.sessions = (await getDetectionSessionsApi()).items }
+  try { agentStore.sessions = (await getChatSessionsApi()).items }
   finally { sessionLoading.value = false }
 }
 async function loadPendingOperations() {
@@ -229,7 +229,7 @@ async function loadPendingOperations() {
 }
 async function ensureSession() {
   if (agentStore.currentSessionId) return agentStore.currentSessionId
-  const session = await createDetectionSessionApi()
+  const session = await createChatSessionApi()
   agentStore.currentSessionId = session.session_uuid
   return session.session_uuid
 }
@@ -240,7 +240,7 @@ async function openSession(sessionUuid) {
   if (agentStore.isLoading || sessionUuid === agentStore.currentSessionId && agentStore.messages.length) return
   stopStream(); sessionLoading.value = true
   try {
-    const data = await getDetectionSessionApi(sessionUuid)
+    const data = await getChatSessionApi(sessionUuid)
     agentStore.currentSessionId = sessionUuid
     agentStore.messages = data.messages.map((message) => ({ ...message, inputForm: message.input_form, loading: false }))
     await Promise.allSettled(agentStore.messages.filter((message) => message.confirmation?.operation_uuid).map(async (message) => {
@@ -253,7 +253,7 @@ async function openOperationSession(operation) { await openSession(operation.ses
 async function removeSession(session) {
   try {
     await ElMessageBox.confirm(`确定删除“${session.title}”吗？`, '删除对话', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
-    await deleteDetectionSessionApi(session.session_uuid)
+    await deleteChatSessionApi(session.session_uuid)
     agentStore.sessions = agentStore.sessions.filter((item) => item.session_uuid !== session.session_uuid)
     if (agentStore.currentSessionId === session.session_uuid) createNewChat()
   } catch (error) { if (error !== 'cancel' && error !== 'close') throw error }
