@@ -90,6 +90,7 @@ videos/
 *.jpg
 *.jpeg
 *.png
+!frontend/src/assets/pet/*.png
 *.gif
 *.bmp
 *.mp4
