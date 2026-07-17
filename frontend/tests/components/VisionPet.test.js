@@ -73,6 +73,8 @@ describe('VisionPet', () => {
     notifyVisionPetTaskProgress({
       status: 'running',
       message: '正在分析任务',
+      progress: 37,
+      showProgress: true,
       duration: 0,
     })
     await wrapper.vm.$nextTick()
@@ -81,10 +83,63 @@ describe('VisionPet', () => {
     expect(wrapper.attributes('aria-label')).toContain('正在分析任务')
     expect(wrapper.find('.pet-sprite').attributes('style')).toContain('visionpay-pet-working-v1.png')
     expect(wrapper.find('.pet-sprite').attributes('style')).toContain('400% 100%')
+    expect(wrapper.find('[role="progressbar"]').attributes('aria-valuenow')).toBe('37')
+    expect(wrapper.find('.pet-progress span').attributes('style')).toContain('37%')
+    expect(wrapper.attributes('aria-label')).toContain('进度 37%')
 
     notifyVisionPetTaskProgress({ status: 'completed', message: '任务完成', duration: 0 })
     await wrapper.vm.$nextTick()
     expect(useVisionPetStore().state).toBe('idle')
+    wrapper.unmount()
+  })
+
+  it('does not show a progress bar for normal chat task events', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    notifyVisionPetTaskProgress({
+      status: 'running',
+      message: '知识智能体正在处理',
+      duration: 0,
+    })
+    // A stray numeric value must not opt a normal chat task into progress UI.
+    useVisionPetStore().progress = 42
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('知识智能体正在处理')
+    expect(wrapper.text()).not.toContain('%')
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+    expect(wrapper.attributes('aria-label')).not.toContain('进度')
+    wrapper.unmount()
+  })
+
+  it('updates task lease progress and clears it after the completion message', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    const task = beginVisionPetTask({ message: '正在创建派生版本', progress: 0, showProgress: true })
+    task.update({ message: '正在复制数据集文件', progress: 64 })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('正在复制数据集文件')
+    expect(useVisionPetStore().progress).toBe(64)
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(true)
+
+    task.finish({ message: '派生版本已完成', progress: 100, duration: 1200 })
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().state).toBe('idle')
+    expect(useVisionPetStore().progress).toBe(100)
+
+    vi.advanceTimersByTime(1200)
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().progress).toBeNull()
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

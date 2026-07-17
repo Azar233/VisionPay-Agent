@@ -6,6 +6,8 @@ export const useVisionPetStore = defineStore('vision-pet', {
   state: () => ({
     state: 'idle',
     message: '',
+    progress: null,
+    showProgress: false,
     messageId: 0,
     visible: true,
   }),
@@ -14,17 +16,26 @@ export const useVisionPetStore = defineStore('vision-pet', {
     setState(nextState = 'idle') {
       this.state = SUPPORTED_STATES.has(nextState) ? nextState : 'idle'
     },
-    notify({ state = 'idle', message = '' } = {}) {
+    notify({ state = 'idle', message = '', progress = null, showProgress = false } = {}) {
       this.setState(state)
       this.message = String(message || '')
+      const numericProgress = Number(progress)
+      this.progress = progress !== null && progress !== '' && Number.isFinite(numericProgress)
+        ? Math.max(0, Math.min(100, Math.round(numericProgress)))
+        : null
+      this.showProgress = Boolean(showProgress)
       this.messageId += 1
     },
     clearMessage() {
       this.message = ''
+      this.progress = null
+      this.showProgress = false
     },
     reset() {
       this.state = 'idle'
       this.message = ''
+      this.progress = null
+      this.showProgress = false
       this.visible = true
     },
   },

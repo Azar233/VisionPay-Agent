@@ -12,8 +12,50 @@ from app.services.agent_confirmation_service import (
     AgentConfirmationError,
     agent_confirmation_service,
 )
+from app.storage.dataset_operation_store import dataset_operation_store
 
 router = APIRouter(prefix="/api/agent/operations", tags=["Agent 操作确认"])
+PROGRESS_ACTIONS = {"dataset.derive", "dataset.delete_draft", "dataset.delete_product"}
+
+
+def _progress_task_id(operation_uuid: str) -> str:
+    return f"agent-{operation_uuid}"
+
+
+def _serialize_operation(operation, *, confirmation_token: str | None = None, replayed: bool = False):
+    result = agent_confirmation_service.serialize(
+        operation,
+        confirmation_token=confirmation_token,
+        replayed=replayed,
+    )
+    progress = dataset_operation_store.get(_progress_task_id(operation.operation_uuid))
+    if progress is not None and int(progress.get("user_id", 0)) == int(operation.user_id):
+        result["task_progress"] = {
+            key: value for key, value in progress.items() if key not in {"user_id", "result"}
+        }
+    return result
+
+
+def _operation_progress(operation_uuid: str):
+    task_id = _progress_task_id(operation_uuid)
+
+    def update(progress: int, message: str) -> None:
+        normalized = max(0, min(99, int(progress)))
+        current = dataset_operation_store.get(task_id) or {}
+        history = list(current.get("history") or [])
+        last_recorded = int(history[-1]["progress"]) if history else -1
+        if normalized > last_recorded and (not history or normalized - last_recorded >= 4):
+            history.append({"progress": normalized, "message": message})
+            history = history[-16:]
+        dataset_operation_store.update(
+            task_id,
+            status="running",
+            progress=normalized,
+            message=message,
+            history=history,
+        )
+
+    return update
 
 
 class PreviewRequest(BaseModel):
@@ -88,7 +130,7 @@ def get_operation(
         operation = agent_confirmation_service.get(
             db, operation_uuid=operation_uuid, user_id=int(current_user.id)
         )
-        return agent_confirmation_service.serialize(operation)
+        return _serialize_operation(operation)
     except AgentConfirmationError as exc:
         _raise(exc)
 
@@ -118,17 +160,68 @@ def confirm_operation(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    progress_enabled = False
+    progress_task_id = _progress_task_id(operation_uuid)
     try:
-        return agent_confirmation_service.confirm(
+        operation = agent_confirmation_service.get(
+            db,
+            operation_uuid=operation_uuid,
+            user_id=int(current_user.id),
+        )
+        if operation.status == "expired":
+            raise AgentConfirmationError("确认令牌已过期", code="expired_token")
+        progress_enabled = operation.action in PROGRESS_ACTIONS
+        if progress_enabled:
+            dataset_operation_store.set(
+                progress_task_id,
+                {
+                    "task_id": progress_task_id,
+                    "operation": operation.action,
+                    "user_id": int(current_user.id),
+                    "status": "pending",
+                    "progress": 0,
+                    "message": "已确认操作，正在准备执行",
+                    "history": [{"progress": 0, "message": "已确认操作，正在准备执行"}],
+                    "result": None,
+                },
+            )
+        result = agent_confirmation_service.confirm(
             db,
             operation_uuid=operation_uuid,
             user_id=int(current_user.id),
             username=current_user.username,
             confirmation_token=request.confirmation_token,
             idempotency_key=request.idempotency_key,
+            progress_callback=_operation_progress(operation_uuid) if progress_enabled else None,
         )
+        if progress_enabled:
+            current = dataset_operation_store.get(progress_task_id) or {}
+            history = list(current.get("history") or [])
+            history.append({"progress": 100, "message": "数据集操作已完成"})
+            dataset_operation_store.update(
+                progress_task_id,
+                status="completed",
+                progress=100,
+                message="数据集操作已完成",
+                history=history[-16:],
+            )
+            operation = agent_confirmation_service.get(
+                db,
+                operation_uuid=operation_uuid,
+                user_id=int(current_user.id),
+            )
+            result = _serialize_operation(operation, replayed=bool(result.get("replayed")))
+        return result
     except AgentConfirmationError as exc:
         db.rollback()
+        if progress_enabled:
+            current = dataset_operation_store.get(progress_task_id) or {}
+            dataset_operation_store.update(
+                progress_task_id,
+                status="failed",
+                progress=min(99, int(current.get("progress", 0))),
+                message=str(exc),
+            )
         _raise(exc)
 
 
