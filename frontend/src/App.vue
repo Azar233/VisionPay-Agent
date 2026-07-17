@@ -1,8 +1,11 @@
 <template>
   <router-view />
+  <VisionPet />
 </template>
 
 <script setup>
+import VisionPet from '@/components/VisionPet.vue'
+
 // 根组件仅作为路由出口
 </script>
 
