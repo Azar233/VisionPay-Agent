@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import re
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ from app.config.settings import settings
 from app.embeddings import DashScopeEmbeddingClient
 from app.rag.chunker import TokenChunker
 from app.vectorstore import ChromaStore
+from app.rag.query_rewriter import retrieval_query_rewriter
 
 
 class KnowledgeRetriever:
@@ -26,15 +29,111 @@ class KnowledgeRetriever:
         *,
         top_k: int | None = None,
         domain: str | None = None,
+        min_similarity: float | None = None,
     ) -> list[dict[str, Any]]:
         if self.store.count == 0:
             return []
+        limit = max(1, int(top_k or settings.RAG_TOP_K))
+        candidate_limit = limit * max(1, int(settings.RAG_CANDIDATE_MULTIPLIER))
         where = {"domain": domain} if domain else None
-        return self.store.query(
+        candidates = self.store.query(
             embedding=self.embedding.embed_query(query),
-            top_k=top_k or settings.RAG_TOP_K,
+            top_k=candidate_limit,
             where=where,
         )
+        threshold = max(
+            float(settings.RAG_MIN_SIMILARITY),
+            float(settings.RAG_MIN_SIMILARITY if min_similarity is None else min_similarity),
+        )
+        filtered = [
+            item for item in candidates if float(item.get("similarity", -1.0)) >= threshold
+        ]
+        return self._deduplicate(filtered, limit=limit)
+
+    @staticmethod
+    def _normalized_content(value: str) -> str:
+        return re.sub(r"\s+", "", str(value or "")).lower()
+
+    @staticmethod
+    def _source_key(item: dict[str, Any]) -> str:
+        metadata = item.get("metadata") or {}
+        source = str(metadata.get("source") or "")
+        if source in {"confirmed_fault_case", ""}:
+            return f"{source}:{metadata.get('title') or item.get('id')}"
+        return source
+
+    def _deduplicate(
+        self, candidates: list[dict[str, Any]], *, limit: int
+    ) -> list[dict[str, Any]]:
+        selected: list[dict[str, Any]] = []
+        source_counts: dict[str, int] = {}
+        content_threshold = float(settings.RAG_DEDUP_SIMILARITY)
+        adjacent_threshold = float(settings.RAG_ADJACENT_DEDUP_SIMILARITY)
+        source_limit = max(1, int(settings.RAG_MAX_CHUNKS_PER_SOURCE))
+
+        for candidate in candidates:
+            source = self._source_key(candidate)
+            if source and source_counts.get(source, 0) >= source_limit:
+                continue
+            metadata = candidate.get("metadata") or {}
+            chunk_index = metadata.get("chunk_index")
+            normalized = self._normalized_content(candidate.get("content", ""))
+            duplicate = False
+            for existing in selected:
+                existing_metadata = existing.get("metadata") or {}
+                existing_source = self._source_key(existing)
+                existing_index = existing_metadata.get("chunk_index")
+                if (
+                    source
+                    and source == existing_source
+                    and isinstance(chunk_index, int)
+                    and isinstance(existing_index, int)
+                    and abs(chunk_index - existing_index) <= 1
+                ):
+                    existing_content = self._normalized_content(existing.get("content", ""))
+                    if normalized and existing_content and SequenceMatcher(
+                        None, normalized, existing_content
+                    ).ratio() >= adjacent_threshold:
+                        duplicate = True
+                        break
+                existing_content = self._normalized_content(existing.get("content", ""))
+                if normalized and existing_content and SequenceMatcher(
+                    None, normalized, existing_content
+                ).ratio() >= content_threshold:
+                    duplicate = True
+                    break
+            if duplicate:
+                continue
+            candidate = dict(candidate)
+            candidate["rank"] = len(selected) + 1
+            selected.append(candidate)
+            if source:
+                source_counts[source] = source_counts.get(source, 0) + 1
+            if len(selected) >= limit:
+                break
+        return selected
+
+    def retrieve(
+        self,
+        query: str,
+        *,
+        context_state: dict[str, Any] | None = None,
+        top_k: int | None = None,
+        domain: str | None = None,
+        min_similarity: float | None = None,
+    ) -> dict[str, Any]:
+        rewritten = retrieval_query_rewriter.rewrite(
+            query,
+            context_state=context_state,
+            domain=domain,
+        )
+        items = self.search(
+            rewritten.rewritten_query,
+            top_k=top_k,
+            domain=rewritten.domain,
+            min_similarity=min_similarity,
+        )
+        return {**rewritten.as_dict(), "items": items}
 
     def index_directory(self, root: Path) -> dict[str, int]:
         chunker = TokenChunker()

@@ -103,11 +103,24 @@ class ChromaStore:
             )
         return items
 
-    def list_items(self, *, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def list_items(
+        self,
+        *,
+        ids: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]]:
         """Return stored ids/documents/metadata without loading embeddings."""
         kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
+        if ids:
+            kwargs["ids"] = ids
         if where:
             kwargs["where"] = where
+        if limit is not None:
+            kwargs["limit"] = max(1, int(limit))
+        if offset is not None:
+            kwargs["offset"] = max(0, int(offset))
         result = self.collection.get(**kwargs)
         return [
             {"id": item_id, "content": document or "", "metadata": metadata or {}}

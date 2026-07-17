@@ -13,6 +13,7 @@
       <el-table-column label="用户请求" min-width="250" show-overflow-tooltip><template #default="{ row }"><span class="request-copy">{{ row.user_request || '—' }}</span></template></el-table-column>
       <el-table-column label="执行内容" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ row.action_label }}</template></el-table-column>
       <el-table-column label="附件" width="76" align="center"><template #default="{ row }">{{ row.attachment_count || '—' }}</template></el-table-column>
+      <el-table-column label="Token" width="92" align="right"><template #default="{ row }">{{ row.tokens_used != null ? row.tokens_used.toLocaleString() : '—' }}</template></el-table-column>
       <el-table-column label="耗时" width="100" align="right"><template #default="{ row }">{{ row.latency_ms != null ? `${row.latency_ms} ms` : '—' }}</template></el-table-column>
       <el-table-column label="状态" width="94"><template #default="{ row }"><el-tag :type="row.status === 'completed' ? 'success' : 'danger'" effect="light" round>{{ row.status === 'completed' ? '已完成' : '失败' }}</el-tag></template></el-table-column>
       <el-table-column label="操作" width="92" fixed="right"><template #default="{ row }"><el-button size="small" :icon="View" @click="openDetail(row)">详情</el-button></template></el-table-column>
@@ -27,6 +28,9 @@
           <el-descriptions :column="2" border>
             <el-descriptions-item label="调用时间">{{ formatDate(detail.created_at) }}</el-descriptions-item>
             <el-descriptions-item label="耗时">{{ detail.latency_ms != null ? `${detail.latency_ms} ms` : '未记录' }}</el-descriptions-item>
+            <el-descriptions-item label="模型总 Token">{{ detail.tokens_used != null ? detail.tokens_used.toLocaleString() : '模型未返回' }}</el-descriptions-item>
+            <el-descriptions-item label="历史上下文 Token">{{ detail.context_tokens != null ? detail.context_tokens.toLocaleString() : '未记录' }}</el-descriptions-item>
+            <el-descriptions-item label="输入 / 输出 Token">{{ detail.model_usage ? `${detail.model_usage.input_tokens || 0} / ${detail.model_usage.output_tokens || 0}` : '模型未返回' }}</el-descriptions-item>
             <el-descriptions-item label="会话">{{ detail.session_title || '未命名会话' }}</el-descriptions-item>
             <el-descriptions-item label="会话 ID"><span class="mono">{{ detail.session_uuid }}</span></el-descriptions-item>
             <el-descriptions-item label="路由方式">{{ routeMethod(detail.routing?.method) }}</el-descriptions-item>

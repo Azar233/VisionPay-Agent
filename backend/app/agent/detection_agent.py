@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from app.config.settings import settings
+from app.agent.usage import usage_metadata
 from app.core.logger import get_logger
 from app.agent.tools import build_interaction_tools
 from app.services.detection_service import detection_service, result_to_json
@@ -140,6 +141,7 @@ class DetectionAgent:
             base_url=settings.DEEPSEEK_BASE_URL,
             temperature=settings.DEEPSEEK_TEMPERATURE,
             streaming=True,
+            stream_usage=True,
         )
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -177,7 +179,7 @@ class DetectionAgent:
         attachment_paths: list[str],
         history: list[dict[str, str]] | None = None,
     ) -> AsyncGenerator[dict, None]:
-        from langchain_core.messages import AIMessage, HumanMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
         attachments = "\n".join(f"- {path}" for path in attachment_paths)
         agent_input = message
@@ -190,6 +192,8 @@ class DetectionAgent:
                 chat_history.append(HumanMessage(content=item.get("content", "")))
             elif item.get("role") == "assistant":
                 chat_history.append(AIMessage(content=item.get("content", "")))
+            elif item.get("role") == "system":
+                chat_history.append(SystemMessage(content=item.get("content", "")))
 
         detection_emitted = False
         async for event in self.executor.astream_events(
@@ -228,6 +232,14 @@ class DetectionAgent:
                     yield {"type": "detection_result", "result": self.last_detection_result}
             elif kind == "on_chat_model_stream":
                 chunk = event.get("data", {}).get("chunk")
+                usage = usage_metadata(chunk)
+                if usage:
+                    yield {
+                        "type": "model_usage",
+                        "agent": "detection",
+                        "run_id": str(event.get("run_id") or ""),
+                        "usage": usage,
+                    }
                 content = _content_text(getattr(chunk, "content", ""))
                 if content:
                     yield {"type": "text_chunk", "content": content}

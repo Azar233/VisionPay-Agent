@@ -9,6 +9,7 @@ from app.agent.detection_agent import DetectionAgent
 from app.agent.routing import AgentRouter, RouteDecision
 from app.core.logger import get_logger
 from app.memory import LongTermMemoryStore
+from app.rag.query_rewriter import retrieval_query_rewriter
 
 logger = get_logger(__name__)
 
@@ -20,11 +21,13 @@ class MultiAgentOrchestrator:
         user_id: int,
         scene_id: int | None,
         session_uuid: str,
+        context_state: dict | None = None,
         detection_agent_factory: Callable = DetectionAgent,
     ) -> None:
         self.user_id = user_id
         self.scene_id = scene_id
         self.session_uuid = session_uuid
+        self.context_state = context_state or {}
         self.detection_agent_factory = detection_agent_factory
         self.router = AgentRouter()
 
@@ -45,9 +48,13 @@ class MultiAgentOrchestrator:
 
     def _runtime_context(self, message: str) -> str:
         try:
+            rewritten = retrieval_query_rewriter.rewrite(
+                message,
+                context_state=self.context_state,
+            )
             items = LongTermMemoryStore().recall(
                 user_id=self.user_id,
-                query=message,
+                query=rewritten.rewritten_query,
             )
         except Exception as exc:  # noqa: BLE001 - memory must not block a request
             logger.info("长期记忆未注入: %s", exc)
