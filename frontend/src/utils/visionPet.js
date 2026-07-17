@@ -43,30 +43,65 @@ function latestActiveTask() {
  * idle after every active lease has finished, which prevents overlapping
  * requests from resetting each other's working state.
  */
-export function beginVisionPetTask({ id, message = '正在处理任务' } = {}) {
+export function beginVisionPetTask({ id, message = '正在处理任务', progress = null, showProgress = false } = {}) {
   const taskId = id || `pet-task-${++taskSequence}`
-  const task = { id: taskId, message: String(message || '正在处理任务') }
+  const task = { id: taskId, message: String(message || '正在处理任务'), progress, showProgress }
   activeTasks.set(taskId, task)
-  notifyVisionPetTaskProgress({ status: 'running', message: task.message, duration: 0 })
+  notifyVisionPetTaskProgress({
+    status: 'running',
+    message: task.message,
+    progress: task.progress,
+    showProgress: task.showProgress,
+    duration: 0,
+  })
 
   let finished = false
   return Object.freeze({
     id: taskId,
-    update(nextMessage) {
-      if (finished || !activeTasks.has(taskId) || !nextMessage) return
-      task.message = String(nextMessage)
-      notifyVisionPetTaskProgress({ status: 'running', message: task.message, duration: 0 })
+    update(nextUpdate) {
+      if (finished || !activeTasks.has(taskId) || !nextUpdate) return
+      if (typeof nextUpdate === 'object') {
+        if (nextUpdate.message) task.message = String(nextUpdate.message)
+        if (nextUpdate.progress !== undefined) task.progress = nextUpdate.progress
+      } else {
+        task.message = String(nextUpdate)
+      }
+      notifyVisionPetTaskProgress({
+        status: 'running',
+        message: task.message,
+        progress: task.progress,
+        showProgress: task.showProgress,
+        duration: 0,
+      })
     },
-    finish({ message: finalMessage = '', duration = 0 } = {}) {
+    finish({
+      message: finalMessage = '',
+      duration = 0,
+      progress = null,
+      showProgress: finalShowProgress = task.showProgress,
+      status = 'completed',
+    } = {}) {
       if (finished) return
       finished = true
       activeTasks.delete(taskId)
       const remainingTask = latestActiveTask()
       if (remainingTask) {
-        notifyVisionPetTaskProgress({ status: 'running', message: remainingTask.message, duration: 0 })
+        notifyVisionPetTaskProgress({
+          status: 'running',
+          message: remainingTask.message,
+          progress: remainingTask.progress,
+          showProgress: remainingTask.showProgress,
+          duration: 0,
+        })
         return
       }
-      notifyVisionPetTaskProgress({ status: 'completed', message: finalMessage, duration })
+      notifyVisionPetTaskProgress({
+        status,
+        message: finalMessage,
+        progress,
+        showProgress: finalShowProgress,
+        duration,
+      })
     },
   })
 }

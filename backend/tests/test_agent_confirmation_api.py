@@ -10,6 +10,7 @@ from app.entity.db_models import (
     User,
 )
 from datetime import datetime, timedelta
+from app.services.agent_confirmation_service import dataset_workspace_service
 
 
 def _auth(client, username="confirm_user"):
@@ -259,3 +260,55 @@ def test_frozen_dataset_can_preview_derive_and_current_archive(client, db_sessio
     assert archive.status_code == 200, archive.text
     assert archive.json()["impact"]["changes"]["status"] == "pending_train → archived"
     assert any("替代当前数据集" in item for item in archive.json()["impact"]["warnings"])
+
+
+def test_confirmed_dataset_derive_exposes_task_progress(client, db_session, monkeypatch):
+    headers, _, dataset, _ = _records(client, db_session)
+    progress_updates = []
+
+    def fake_derive(db, *, parent_id, version, name, description, user_id, progress_callback=None):
+        del db, parent_id, version, name, description, user_id
+        assert progress_callback is not None
+        progress_callback(18, "正在复制数据集文件")
+        progress_callback(76, "正在重建数据集索引")
+        progress_updates.extend([18, 76])
+        return dataset
+
+    monkeypatch.setattr(dataset_workspace_service, "derive", fake_derive)
+    preview = client.post(
+        "/api/agent/operations/preview",
+        headers=headers,
+        json={
+            "session_uuid": "confirmation-session",
+            "action": "dataset.derive",
+            "parameters": {
+                "dataset_id": dataset.id,
+                "version": "confirm-progress-v2",
+                "name": "确认派生进度版本",
+            },
+        },
+    ).json()
+
+    confirmed = client.post(
+        f"/api/agent/operations/{preview['operation_uuid']}/confirm",
+        headers=headers,
+        json={
+            "confirmation_token": preview["confirmation_token"],
+            "idempotency_key": "execute-derive-progress",
+        },
+    )
+
+    assert confirmed.status_code == 200, confirmed.text
+    assert progress_updates == [18, 76]
+    assert confirmed.json()["task_progress"]["status"] == "completed"
+    assert confirmed.json()["task_progress"]["progress"] == 100
+    assert [item["progress"] for item in confirmed.json()["task_progress"]["history"]] == [
+        0,
+        18,
+        76,
+        100,
+    ]
+    current = client.get(
+        f"/api/agent/operations/{preview['operation_uuid']}", headers=headers
+    ).json()
+    assert current["task_progress"]["progress"] == 100
