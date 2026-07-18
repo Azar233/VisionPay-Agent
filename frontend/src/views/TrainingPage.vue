@@ -3,8 +3,8 @@
     <div class="page-header">
       <div>
         <span class="vp-kicker">Model Operations</span>
-        <h2>模型训练与监控</h2>
-        <p>启动 YOLOv11 训练任务，实时观察 loss、mAP 与运行状态。</p>
+        <h1 class="vp-page-title">模型训练与监控</h1>
+        <p class="vp-page-subtitle">启动 YOLOv11 训练任务，实时观察 loss、mAP 与运行状态。</p>
       </div>
       <div class="page-actions">
         <el-button :icon="Upload" @click="openImportDialog">
@@ -16,8 +16,8 @@
       </div>
     </div>
 
-    <section class="panel detection-model-panel">
-      <div class="panel-header">
+    <section class="page-card detection-model-panel">
+      <div class="page-card-header">
         <div>
           <span>检测使用版本</span>
           <small>图片、视频和实时检测统一使用场景当前选中的 best.pt</small>
@@ -85,17 +85,17 @@
         <div class="model-path-row">
           <span>best.pt</span>
           <code>{{ selectedModelVersion.model_path }}</code>
-          <el-tag size="small" :type="selectedModelVersion.file_exists ? 'success' : 'danger'">
+          <span class="vp-pill" :class="selectedModelVersion.file_exists ? 'vp-pill--success' : 'vp-pill--danger'">
             {{ selectedModelVersion.file_exists ? '文件可用' : '文件缺失' }}
-          </el-tag>
+          </span>
         </div>
         <p v-if="selectedModelVersion.description" class="model-description">{{ selectedModelVersion.description }}</p>
       </div>
       <el-empty v-else-if="!loadingModelVersions" description="暂无可用的检测模型" />
     </section>
 
-    <section class="panel dataset-version-panel">
-      <div class="panel-header">
+    <section class="page-card dataset-version-panel">
+      <div class="page-card-header">
         <div>
           <span>可训练数据集版本</span>
           <small>仅展示待训练和已发布版本；训练状态由关联任务实时汇总</small>
@@ -114,7 +114,7 @@
           <template #default="{ row }">
             <div class="dataset-version-cell">
               <strong>{{ row.version }}</strong>
-              <el-tag v-if="row.is_current" size="small" type="success">当前</el-tag>
+              <span v-if="row.is_current" class="vp-pill vp-pill--success">当前</span>
               <span>{{ row.name }}</span>
             </div>
           </template>
@@ -129,9 +129,9 @@
         </el-table-column>
         <el-table-column label="训练状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="datasetTrainingStatusType(row.training_status)" size="small">
+            <span class="vp-pill" :class="`vp-pill--${datasetTrainingStatusType(row.training_status)}`">
               {{ datasetTrainingStatusText(row.training_status) }}
-            </el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="训练记录" width="130">
@@ -156,8 +156,8 @@
       </el-table>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
+    <section class="page-card">
+      <div class="page-card-header">
         <span>训练任务列表</span>
         <el-button text :icon="Refresh" :loading="loadingTasks" @click="fetchTasks">
           刷新
@@ -178,7 +178,7 @@
         <el-table-column label="数据集版本" min-width="150">
           <template #default="{ row }">
             <span v-if="row.dataset_version">{{ row.dataset_version }}</span>
-            <el-tag v-else size="small" type="info">Legacy</el-tag>
+            <span v-else class="vp-pill vp-pill--info">Legacy</span>
           </template>
         </el-table-column>
         <el-table-column prop="device" label="设备" width="170" />
@@ -211,9 +211,9 @@
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">
+            <span class="vp-pill" :class="`vp-pill--${statusType(row.status)}`">
               {{ statusText(row.status) }}
-            </el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="创建时间" min-width="170">
@@ -284,13 +284,13 @@
       </el-table>
     </section>
 
-    <section v-if="selectedTask" class="panel monitor-panel">
-      <div class="panel-header monitor-header">
+    <section v-if="selectedTask" class="page-card monitor-panel">
+      <div class="page-card-header monitor-header">
         <div>
           <span>训练监控 - 任务 {{ selectedTask.task_uuid }}</span>
-          <el-tag :type="statusType(selectedTask.status)" size="small">
+          <span class="vp-pill" :class="`vp-pill--${statusType(selectedTask.status)}`">
             {{ statusText(selectedTask.status) }}
-          </el-tag>
+          </span>
         </div>
         <div class="monitor-meta">
           <span>模型 {{ selectedTask.model_name }}</span>
@@ -334,7 +334,7 @@
       </div>
     </section>
 
-    <el-empty v-else class="empty-monitor" description="选择一个训练任务查看监控曲线" />
+    <el-empty v-else class="page-card empty-monitor" description="选择一个训练任务查看监控曲线" />
 
     <el-dialog
       v-model="showCreateDialog"
@@ -1124,7 +1124,7 @@ function updateCharts(metrics) {
   const epochs = metrics.map((item) => item.epoch)
   const styles = getComputedStyle(document.documentElement)
   const textColor = styles.getPropertyValue('--vp-text').trim() || '#1d1d1f'
-  const mutedColor = styles.getPropertyValue('--vp-muted').trim() || '#6e6e73'
+  const mutedColor = styles.getPropertyValue('--vp-muted').trim() || '#6b7280'
   const borderColor = styles.getPropertyValue('--vp-border-strong').trim() || 'rgba(0, 0, 0, .14)'
   const surfaceColor = styles.getPropertyValue('--vp-surface').trim() || '#fff'
   const axis = {
@@ -1405,7 +1405,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 18px;
   min-height: 100%;
-  padding: 32px;
+  padding: 24px;
   color: $text-primary;
   background: $bg-color;
 }
@@ -1417,31 +1417,19 @@ onBeforeUnmount(() => {
   gap: 20px;
   padding: 8px 0 14px;
 
-  h2 {
-    margin: 10px 0 0;
-    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
-    font-size: 40px;
-    line-height: 1.08;
-    color: $text-primary;
-    letter-spacing: 0;
-  }
-
-  p {
-    max-width: 560px;
-    margin: 12px 0 0;
-    color: $text-secondary;
-    font-size: 16px;
-    line-height: 1.6;
+  .vp-kicker {
+    margin-bottom: 6px;
   }
 }
 
 .page-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 10px;
 }
 
-.panel {
+.page-card {
   padding: 20px;
   background: $surface-color;
   border: 1px solid $border-color;
@@ -1449,7 +1437,7 @@ onBeforeUnmount(() => {
   box-shadow: $shadow-sm;
 }
 
-.panel-header {
+.page-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1484,7 +1472,7 @@ onBeforeUnmount(() => {
   margin-top: 14px;
   padding: 16px;
   border: 1px solid $border-color;
-  border-radius: 12px;
+  border-radius: $border-radius-sm;
   background: $surface-muted;
 }
 
@@ -1510,7 +1498,7 @@ onBeforeUnmount(() => {
     font-size: 20px;
   }
 
-  > .el-tag { flex: 0 0 auto; }
+  > .vp-pill { flex: 0 0 auto; }
 }
 
 .model-version-actions {
@@ -1605,13 +1593,22 @@ onBeforeUnmount(() => {
   :deep(.el-table__header th) {
     background: $surface-muted;
     color: $text-secondary;
-    font-weight: 800;
+    font-weight: 700;
+  }
+
+  :deep(.el-table__row td.el-table__cell) {
+    border-bottom: 1px solid $border-color;
   }
 
   code {
     color: $text-secondary;
     font: 12px/1.4 Consolas, 'Courier New', monospace;
   }
+}
+
+.el-button.train-version-button {
+  min-width: 88px;
+  padding-inline: 12px;
 }
 
 .dataset-version-cell {
@@ -1701,7 +1698,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #d7e1ef;
+  color: $text-regular;
   background: $bg-color-dark;
   border-radius: $border-radius-sm;
   font: 12px/1.6 Consolas, 'Courier New', monospace;
@@ -1828,11 +1825,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.el-button.train-version-button {
-  min-width: 88px;
-  padding-inline: 12px;
-}
-
 .task-row-actions {
   display: grid;
   grid-template-columns: repeat(3, 74px);
@@ -1944,8 +1936,8 @@ onBeforeUnmount(() => {
   margin: 10px 0 0;
   padding: 8px;
   overflow-x: auto;
-  color: #d7e1ef;
-  background: #111827;
+  color: $text-regular;
+  background: $bg-color-dark;
   border-radius: $border-radius-sm;
   font: 12px/1.5 Consolas, 'Courier New', monospace;
 }
@@ -2002,7 +1994,11 @@ onBeforeUnmount(() => {
 .task-table :deep(.el-table__header th) {
   background: $surface-muted;
   color: $text-secondary;
-  font-weight: 800;
+  font-weight: 700;
+}
+
+.task-table :deep(.el-table__row td.el-table__cell) {
+  border-bottom: 1px solid $border-color;
 }
 
 .task-table :deep(.el-table__row:hover > td.el-table__cell) {
@@ -2028,6 +2024,11 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, $primary-color 16%, $surface-color) !important;
 }
 
+:global(html.dark) .task-table :deep(th.task-actions-column-header),
+:global(html.dark) .task-table :deep(td.task-actions-column) {
+  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, .85);
+}
+
 @media (max-width: 1100px) {
   .metric-grid,
   .chart-grid,
@@ -2039,16 +2040,17 @@ onBeforeUnmount(() => {
 
 @media (max-width: 760px) {
   .training-page {
-    padding: 20px;
+    padding: 16px;
   }
 
   .page-header {
     align-items: flex-start;
     flex-direction: column;
+  }
 
-    h2 {
-      font-size: 30px;
-    }
+  .page-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .model-version-selector,

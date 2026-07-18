@@ -1,7 +1,17 @@
 <template>
   <aside :class="['app-sidebar', { collapsed }]">
-    <p v-if="!collapsed" class="nav-label">工作空间</p>
-    <el-menu :default-active="activeMenu" :router="true" background-color="transparent" text-color="#6e6e73" active-text-color="#1d1d1f">
+    <router-link to="/chat" class="brand" aria-label="返回智能对话">
+      <span class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none">
+          <path d="M18 12h-4a6 6 0 0 0-6 6v8M46 12h4a6 6 0 0 1 6 6v8M18 52h-4a6 6 0 0 1-6-6v-8M46 52h4a6 6 0 0 0 6-6v-8" stroke="white" stroke-width="5" stroke-linecap="round"/>
+          <rect x="18" y="21" width="28" height="24" rx="7" fill="white" fill-opacity=".96"/>
+          <path d="M24 35h16M24 29h9" stroke="#0071E3" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span v-if="!collapsed" class="brand-name">VisionPay</span>
+    </router-link>
+
+    <el-menu :default-active="activeMenu" :router="true" background-color="transparent" :text-color="'var(--vp-sidebar-text)'" :active-text-color="'var(--vp-sidebar-active-text)'">
       <el-tooltip v-for="item in menuItems" :key="item.path" :content="item.title" :disabled="!collapsed" placement="right" :show-arrow="false">
         <el-menu-item :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
@@ -9,6 +19,12 @@
         </el-menu-item>
       </el-tooltip>
     </el-menu>
+
+    <el-tooltip :content="collapsed ? '展开侧边栏' : '收起侧边栏'" placement="right" :show-arrow="false">
+      <button type="button" class="sidebar-collapse" :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'" @click="$emit('update:collapsed', !collapsed)">
+        <el-icon><DArrowRight v-if="collapsed" /><DArrowLeft v-else /></el-icon>
+      </button>
+    </el-tooltip>
   </aside>
 </template>
 
@@ -23,6 +39,8 @@ import {
   ShoppingCart,
   PriceTag,
   Files,
+  DArrowLeft,
+  DArrowRight,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -33,97 +51,137 @@ defineProps({
     default: false,
   },
 })
+defineEmits(['update:collapsed'])
 
 const activeMenu = computed(() => '/' + route.path.split('/')[1])
 
 const menuItems = computed(() => [
   { path: '/chat', title: '智能对话', icon: ChatDotRound },
-  { path: '/training', title: '模型训练', icon: Cpu },
   { path: '/datasets', title: '数据集版本', icon: Files },
-  { path: '/history', title: '历史记录', icon: Clock },
-  { path: '/dashboard', title: '数据概览', icon: DataAnalysis },
-  { path: '/checkout', title: '顾客结算', icon: ShoppingCart },
+  { path: '/training', title: '模型训练', icon: Cpu },
   { path: '/prices', title: '价目表管理', icon: PriceTag },
+  { path: '/history', title: '历史记录', icon: Clock },
+  { path: '/dashboard', title: '数据看板', icon: DataAnalysis },
+  { path: '/checkout', title: '用户结算端', icon: ShoppingCart },
 ])
 </script>
 
 <style lang="scss" scoped>
 .app-sidebar {
+  position: relative;
+  z-index: 100;
   width: $sidebar-width;
   height: 100%;
   flex-shrink: 0;
-  padding: 16px 12px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px 12px;
   background: $sidebar-bg;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, .04);
-  backdrop-filter: blur(24px) saturate(130%);
-  transition: width 0.22s ease, padding 0.22s ease;
+  border-right: 1px solid $border-color;
+  transition: width 0.22s ease, background-color .28s ease, border-color .28s ease;
+}
 
-  .nav-label {
-    margin: 0 0 8px 12px;
-    font-size: 12px;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: $header-height;
+  margin: 0 4px;
+  text-decoration: none;
+  border-bottom: 1px solid $border-color;
+}
+
+.brand-logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #3b8bff, #1f6fe0);
+
+  svg { width: 17px; height: 17px; }
+}
+
+.brand-name {
+  color: $text-primary;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+}
+
+.el-menu {
+  border-right: none;
+  height: auto;
+  padding-top: 12px;
+  background: transparent;
+}
+
+.el-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin-bottom: 2px;
+  padding: 0 12px !important;
+  border-radius: 10px;
+  color: $sidebar-text;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s;
+
+  .el-icon { font-size: 18px; }
+
+  &.is-active {
+    background-color: var(--vp-sidebar-active-bg) !important;
+    color: $sidebar-active-text !important;
     font-weight: 600;
-    color: #9ca3af;
-    letter-spacing: 0.05em;
   }
 
-  .el-menu {
-    border-right: none;
-    height: auto;
-    background: transparent;
+  &:hover {
+    background-color: var(--vp-sidebar-active-bg) !important;
+    color: $sidebar-active-text !important;
   }
+}
 
-  .el-menu-item {
-    height: 44px;
-    line-height: 44px;
-    margin-bottom: 4px;
-    border-radius: $border-radius-md;
-    color: $sidebar-text;
-    font-weight: 600;
-    transition: background 0.2s, color 0.2s, transform 0.2s;
+.sidebar-collapse {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: auto;
+  align-self: flex-start;
+  padding: 0;
+  color: $text-placeholder;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  transition: background .2s, color .2s;
 
-    &.is-active {
-      background-color: $primary-soft !important;
-      color: $sidebar-active-text !important;
-    }
+  &:hover { color: $text-primary; background: var(--vp-sidebar-active-bg); }
+}
 
-    &:hover {
-      background-color: #f5f6fb !important;
-      color: $text-primary !important;
-      transform: translateX(2px);
-    }
-  }
+.app-sidebar.collapsed {
+  width: $sidebar-collapsed-width;
+  padding: 0 10px 12px;
 
-  &.collapsed {
-    width: 68px;
-    padding: 16px 8px;
-
-    .el-menu-item {
-      justify-content: center;
-      padding: 0 !important;
-
-      span {
-        display: none;
-      }
-    }
-  }
+  .brand { justify-content: center; margin: 0; }
+  .brand-name { display: none; }
+  .el-menu-item { justify-content: center; padding: 0 !important; }
+  .el-menu-item span { display: none; }
+  .sidebar-collapse { margin-inline: 0; }
 }
 
 @media (max-width: 900px) {
   .app-sidebar {
-    width: 68px;
-    padding: 16px 8px;
+    width: $sidebar-collapsed-width;
+    padding: 0 10px 12px;
 
-    .el-menu-item {
-      justify-content: center;
-      padding: 0 !important;
-
-      span {
-        display: none;
-      }
-    }
+    .brand { justify-content: center; margin: 0; }
+    .brand-name { display: none; }
+    .el-menu-item { justify-content: center; padding: 0 !important; }
+    .el-menu-item span { display: none; }
+    .sidebar-collapse { margin-inline: 0; }
   }
 }
 </style>

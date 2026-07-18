@@ -7,7 +7,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { handleAuthExpired } from '@/utils/authExpiry'
+import { handleAuthExpired, resetAuthExpiryState } from '@/utils/authExpiry'
 import { getBackendErrorMessage, notifyVisionPetBackendError } from '@/utils/visionPet'
 
 // ── 创建 Axios 实例 ──────────────────────────────────
@@ -36,6 +36,7 @@ request.interceptors.request.use(
 // ── 响应拦截器 ──────────────────────────────────────
 request.interceptors.response.use(
   (response) => {
+    if (response.config?.url?.includes('/auth/login')) resetAuthExpiryState()
     // 请求成功，直接返回响应数据
     return response.data
   },

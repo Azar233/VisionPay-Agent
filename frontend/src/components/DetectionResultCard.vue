@@ -19,9 +19,12 @@
     <section v-if="result.price_summary" class="price-summary">
       <header>
         <div><span>商品总价</span><strong>{{ formatMoney(result.price_summary.total_price) }}</strong></div>
-        <el-tag :type="result.price_summary.pricing_complete ? 'success' : 'warning'" effect="light">
+        <span
+          class="vp-pill"
+          :class="result.price_summary.pricing_complete ? 'vp-pill--success' : 'vp-pill--warning'"
+        >
           {{ result.price_summary.pricing_complete ? '价格完整' : `${result.price_summary.unpriced_objects} 件未定价` }}
-        </el-tag>
+        </span>
       </header>
       <div v-if="result.price_summary.items?.length" class="price-items">
         <div v-for="item in result.price_summary.items" :key="item.class_id">
@@ -69,15 +72,34 @@ function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 .result-card { margin-top: 14px; border: 1px solid $border-color; border-radius: $border-radius-md; overflow: hidden; background: $surface-color; box-shadow: $shadow-sm; }
 .result-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid $border-color; }
 .result-header > div { display: flex; flex-direction: column; gap: 3px; }
-.result-header strong { color: $text-primary; font-size: 15px; }.eyebrow { color: $text-secondary; font-size: 11px; font-weight: 700; }
-.video-meta { display: flex; align-items: center; gap: 7px; padding: 9px 16px; overflow-x: auto; border-bottom: 1px solid $border-color; background: $surface-muted; }.video-meta > * { flex-shrink: 0; }.video-meta > span { color: $text-secondary; font-size: 10px; }
+.result-header strong { color: $text-primary; font-size: 15px; }
+.eyebrow { color: $text-secondary; font-size: 11px; font-weight: 700; }
+.video-meta { display: flex; align-items: center; gap: 7px; padding: 9px 16px; overflow-x: auto; border-bottom: 1px solid $border-color; background: $surface-muted; }
+.video-meta > * { flex-shrink: 0; }
+.video-meta > span { color: $text-secondary; font-size: 10px; }
 .class-strip { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: $surface-muted; }
 .class-stat { display: grid; grid-template-columns: 8px auto auto; align-items: center; gap: 7px; min-width: max-content; padding: 6px 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-color; font-size: 12px; }
-.class-stat strong { margin-left: 4px; }.swatch { width: 8px; height: 8px; border-radius: 2px; }
-.price-summary { padding: 13px 16px; border-top: 1px solid $border-color; background: $surface-muted; }.price-summary > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.price-summary > header > div { display: flex; align-items: baseline; gap: 10px; }.price-summary header span { color: $text-secondary; font-size: 12px; }.price-summary header strong { color: $text-primary; font-size: 21px; }.price-items { display: grid; gap: 6px; margin-top: 10px; }.price-items > div { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }.price-items > div > span { color: $text-secondary; }.price-items > div > strong { color: $text-primary; }.price-items .missing-price { color: $warning-color; }
+.class-stat strong { margin-left: 4px; }
+.swatch { width: 8px; height: 8px; border-radius: 2px; }
+.price-summary { padding: 13px 16px; border-top: 1px solid $border-color; background: $surface-muted; }
+.price-summary > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.price-summary > header > div { display: flex; align-items: baseline; gap: 10px; }
+.price-summary header span { color: $text-secondary; font-size: 12px; }
+.price-summary header strong { color: $text-primary; font-size: 21px; }
+.price-items { display: grid; gap: 6px; margin-top: 10px; }
+.price-items > div { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }
+.price-items > div > span { color: $text-secondary; }
+.price-items > div > strong { color: $text-primary; }
+.price-items .missing-price { color: $warning-color; }
 .result-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1px; background: $border-color; }
-.image-result { min-width: 0; background: $surface-color; padding-bottom: 10px; }.preview-button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border: 0; padding: 0; background: $surface-muted; cursor: zoom-in; overflow: hidden; }
-.preview-button img { width: 100%; height: 100%; object-fit: contain; }.preview-button span { position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: $border-radius-sm; color: #fff; background: rgba(17, 24, 39, .76); opacity: 0; transition: opacity .2s; }
-.preview-button:hover span { opacity: 1; }.image-meta { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: 12px; color: $text-secondary; }
-.image-meta strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $text-primary; }.image-result :deep(.el-table) { width: calc(100% - 24px); margin: 0 12px; }.dialog-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
+.image-result { min-width: 0; background: $surface-color; padding-bottom: 10px; }
+.preview-button { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; border: 0; padding: 0; background: $surface-muted; cursor: zoom-in; overflow: hidden; }
+.preview-button img { width: 100%; height: 100%; object-fit: contain; }
+.preview-button span { position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: $border-radius-sm; color: #fff; background: color-mix(in srgb, $bg-color-dark 76%, transparent); opacity: 0; transition: opacity .2s; }
+.preview-button:hover span { opacity: 1; }
+.image-meta { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: 12px; color: $text-secondary; }
+.image-meta strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $text-primary; }
+.image-result :deep(.el-table) { width: calc(100% - 24px); margin: 0 12px; }
+.image-result :deep(.el-table th.el-table__cell) { color: $text-secondary; font-weight: 600; background: $surface-muted; }
+.dialog-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
 </style>

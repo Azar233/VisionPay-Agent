@@ -38,6 +38,37 @@ class FormOptionSpec(BaseModel):
     value: ScalarValue
 
 
+def _dataset_version_options() -> list[dict[str, Any]]:
+    """Auto-fill dataset-version dropdowns server-side.
+
+    Fields marked ``dynamic_options`` ship without static options, and some Agents
+    (e.g. Catalog) have no tool to list dataset versions, so the LLM cannot always
+    supply ``option_overrides``. The form builder resolves the options itself;
+    failures leave the field empty instead of breaking form generation.
+    """
+    from app.database.session import SessionLocal
+    from app.services.dataset_service import dataset_service
+
+    db = SessionLocal()
+    try:
+        result = dataset_service.list(db, current_only=False, limit=50)
+    finally:
+        db.close()
+    options: list[dict[str, Any]] = []
+    for item in result.get("items", []):
+        base_label = item.get("version") or item.get("name") or str(item["id"])
+        label = f"{base_label}（{item.get('status', 'unknown')}）"
+        if item.get("is_current"):
+            label += " · 当前"
+        options.append({"label": label, "value": item["id"]})
+    return options
+
+
+_DYNAMIC_OPTION_RESOLVERS = {
+    "dataset_version_id": _dataset_version_options,
+}
+
+
 class FormVisibilitySpec(BaseModel):
     field: str = Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
     equals: ScalarValue
@@ -115,6 +146,14 @@ def build_interaction_tools(agent_name: str) -> list:
                 field["options"] = [
                     option.model_dump() for option in request.option_overrides[field["name"]]
                 ]
+            # LLM 未提供选项时，服务端兜底解析动态下拉（如数据集版本列表）。
+            if field.get("dynamic_options") and not field.get("options"):
+                resolver = _DYNAMIC_OPTION_RESOLVERS.get(field["name"])
+                if resolver is not None:
+                    try:
+                        field["options"] = resolver()
+                    except Exception:  # noqa: BLE001 - 选项缺失不应阻断表单生成
+                        field["options"] = []
             fields.append(
                 FormFieldSpec.model_validate(field).model_dump(
                     by_alias=True, exclude_none=True

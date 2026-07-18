@@ -3,8 +3,8 @@
     <header class="page-header">
       <div>
         <span class="vp-kicker">Retail Intelligence</span>
-        <h1>数据概览</h1>
-        <p>分别查看商品识别业务与多 Agent 模型调用情况，避免不同类型的数据相互干扰。</p>
+        <h1 class="vp-page-title">数据概览</h1>
+        <p class="vp-page-subtitle">分别查看商品识别业务与多 Agent 模型调用情况，避免不同类型的数据相互干扰。</p>
       </div>
       <el-button :icon="Refresh" :loading="loading" @click="refreshCurrent">刷新当前概览</el-button>
     </header>

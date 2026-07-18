@@ -266,13 +266,252 @@ defineExpose({ start, stop })
 </script>
 
 <style lang="scss" scoped>
-.ip-camera-panel { overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }
-.camera-head { height: 42px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; color: #dfe7ec; background: #1e2a34; font-size: 11px; }.camera-head > div { display: flex; align-items: center; gap: 7px; }.camera-head i { width: 7px; height: 7px; border-radius: 50%; background: #71808c; }.camera-head i.live { background: #2bd88f; box-shadow: 0 0 0 4px rgba(43,216,143,.13); }.camera-head small { color: #8fa0ad; }
-.camera-address { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid $border-color; background: $surface-muted; }.camera-address label { color: $text-primary; font-size: 11px; font-weight: 700; }.camera-address small { color: $text-secondary; font-size: 9px; }
-.camera-screen { position: relative; min-height: 360px; display: grid; place-items: center; overflow: hidden; background: #101820; }.camera-screen canvas { display: block; width: 100%; height: auto; max-width: 100%; max-height: 58vh; object-fit: contain; }.camera-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: #aebbc5; text-align: center; }.camera-empty .el-icon { font-size: 44px; color: #657682; }.camera-empty strong { color: #d8e1e7; }.camera-empty span { max-width: 430px; font-size: 11px; line-height: 1.6; }.live-badge { position: absolute; top: 12px; left: 12px; padding: 4px 7px; border-radius: 3px; color: #fff; background: #dc2626; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
-.camera-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid $border-color; border-bottom: 1px solid $border-color; }.camera-metrics > div { padding: 11px 13px; display: flex; flex-direction: column; gap: 3px; border-right: 1px solid $border-color; }.camera-metrics > div:last-child { border-right: 0; }.camera-metrics span { color: $text-secondary; font-size: 9px; }.camera-metrics strong { color: $text-primary; font-size: 13px; }
-.camera-classes { display: flex; gap: 6px; padding: 9px 12px; overflow-x: auto; background: $surface-muted; }.camera-classes span { flex-shrink: 0; padding: 5px 8px; border: 1px solid $border-color; border-radius: 4px; background: $surface-color; color: $text-secondary; font-size: 10px; }.camera-classes b { margin-left: 4px; color: $text-primary; }.camera-error { margin: 0; padding: 9px 13px; color: #9c2938; background: #fff0f2; font-size: 11px; }
-.camera-actions { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; }.camera-actions > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }.camera-actions span { overflow: hidden; color: $text-primary; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }.camera-actions small { color: $text-secondary; font-size: 9px; }
-.compact { border-radius: 0; box-shadow: none; }.compact .camera-screen { min-height: 340px; }.compact .camera-actions { border-top: 1px solid $border-color; }
-@media (max-width: 640px) { .camera-address { grid-template-columns: 1fr; gap: 5px; }.camera-screen, .compact .camera-screen { min-height: 260px; }.camera-metrics { grid-template-columns: repeat(2, 1fr); }.camera-metrics > div:nth-child(2) { border-right: 0; }.camera-metrics > div:nth-child(-n+2) { border-bottom: 1px solid $border-color; } }
+.ip-camera-panel {
+  overflow: hidden;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  background: $surface-color;
+  box-shadow: $shadow-sm;
+}
+
+.camera-head {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  color: $text-primary;
+  background: $surface-muted;
+  border-bottom: 1px solid $border-color;
+  font-size: 11px;
+
+  > div {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $text-placeholder;
+
+    &.live {
+      background: $success-color;
+      box-shadow: 0 0 0 4px var(--vp-success-bg);
+    }
+  }
+
+  small {
+    color: $text-secondary;
+  }
+}
+
+.camera-address {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid $border-color;
+  background: $surface-muted;
+
+  label {
+    color: $text-primary;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  small {
+    color: $text-secondary;
+    font-size: 9px;
+  }
+}
+
+.camera-screen {
+  position: relative;
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: $bg-color-dark;
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 58vh;
+    object-fit: contain;
+  }
+}
+
+.camera-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: $text-secondary;
+  text-align: center;
+
+  .el-icon {
+    font-size: 44px;
+    color: $text-placeholder;
+  }
+
+  strong {
+    color: $text-regular;
+  }
+
+  span {
+    max-width: 430px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+}
+
+.live-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 7px;
+  border-radius: 3px;
+  color: #fff;
+  background: $danger-color;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.camera-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid $border-color;
+  border-bottom: 1px solid $border-color;
+
+  > div {
+    padding: 11px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border-right: 1px solid $border-color;
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  span {
+    color: $text-secondary;
+    font-size: 9px;
+  }
+
+  strong {
+    color: $text-primary;
+    font-size: 13px;
+  }
+}
+
+.camera-classes {
+  display: flex;
+  gap: 6px;
+  padding: 9px 12px;
+  overflow-x: auto;
+  background: $surface-muted;
+
+  span {
+    flex-shrink: 0;
+    padding: 5px 8px;
+    border: 1px solid $border-color;
+    border-radius: 4px;
+    background: $surface-color;
+    color: $text-secondary;
+    font-size: 10px;
+  }
+
+  b {
+    margin-left: 4px;
+    color: $text-primary;
+  }
+}
+
+.camera-error {
+  margin: 0;
+  padding: 9px 13px;
+  color: $danger-color;
+  background: var(--vp-danger-bg);
+  font-size: 11px;
+}
+
+.camera-actions {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+
+  > div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  span {
+    overflow: hidden;
+    color: $text-primary;
+    font-size: 11px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: $text-secondary;
+    font-size: 9px;
+  }
+}
+
+.compact {
+  border-radius: 0;
+  box-shadow: none;
+
+  .camera-screen {
+    min-height: 340px;
+  }
+
+  .camera-actions {
+    border-top: 1px solid $border-color;
+  }
+}
+
+@media (max-width: 640px) {
+  .camera-address {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .camera-screen,
+  .compact .camera-screen {
+    min-height: 260px;
+  }
+
+  .camera-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .camera-metrics > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .camera-metrics > div:nth-child(-n+2) {
+    border-bottom: 1px solid $border-color;
+  }
+}
 </style>

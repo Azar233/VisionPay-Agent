@@ -157,8 +157,8 @@ def test_chat_persists_and_restores_structured_knowledge_sources(
         def __init__(self, **kwargs):
             pass
 
-        def route(self, message, **kwargs):
-            return RouteDecision("knowledge", "test", 1.0, "grounding test")
+        async def aroute(self, message, **kwargs):
+            return RouteDecision.single("knowledge", "test", 1.0, "grounding test")
 
         async def stream(self, message, attachment_paths, history, decision=None):
             yield decision.event()

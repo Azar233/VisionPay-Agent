@@ -1,10 +1,10 @@
 <template>
   <div class="checkout-history-page">
-    <el-card shadow="never" class="page-card">
+    <div class="card-container page-card">
       <div class="page-header">
         <div>
-          <h2>结算订单历史</h2>
-          <p class="subtitle">查询已创建的收银订单记录</p>
+          <h1 class="vp-page-title">结算订单历史</h1>
+          <p class="vp-page-subtitle">查询已创建的收银订单记录</p>
         </div>
         <div class="header-actions">
           <el-button type="primary" text :icon="ArrowLeft" @click="router.push('/checkout')">
@@ -37,7 +37,7 @@
         <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
       </div>
 
-      <el-table v-loading="loading" :data="orders" stripe border style="width: 100%">
+      <el-table v-loading="loading" :data="orders" stripe style="width: 100%">
         <el-table-column prop="order_uuid" label="订单编号" width="150">
           <template #default="{ row }">
             {{ orderNumber(row.order_uuid) }}
@@ -48,11 +48,18 @@
             ¥ {{ Number(row.amount).toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="110">
+        <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">
+            <span
+              class="vp-pill"
+              :class="{
+                'vp-pill--success': row.status === 'paid',
+                'vp-pill--warning': row.status === 'pending',
+                'vp-pill--danger': row.status === 'expired',
+              }"
+            >
               {{ statusText(row.status) }}
-            </el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column prop="item_count" label="商品数" width="90" />
@@ -98,14 +105,24 @@
           @change="handleSearch"
         />
       </div>
-    </el-card>
+    </div>
 
     <el-dialog v-model="detailVisible" title="订单详情" width="560px" append-to-body destroy-on-close>
       <el-skeleton v-if="detailLoading" :rows="6" animated />
       <div v-else-if="detailOrder" class="detail-body">
         <div class="detail-meta">
           <div><span>订单编号</span><b>{{ orderNumber(detailOrder.order_uuid) }}</b></div>
-          <div><span>订单状态</span><el-tag :type="statusType(detailOrder.status)" size="small">{{ statusText(detailOrder.status) }}</el-tag></div>
+          <div>
+            <span>订单状态</span>
+            <span
+              class="vp-pill"
+              :class="{
+                'vp-pill--success': detailOrder.status === 'paid',
+                'vp-pill--warning': detailOrder.status === 'pending',
+                'vp-pill--danger': detailOrder.status === 'expired',
+              }"
+            >{{ statusText(detailOrder.status) }}</span>
+          </div>
           <div><span>商品总数</span><b>{{ detailOrder.item_count }} 件</b></div>
           <div><span>应付金额</span><b>¥ {{ Number(detailOrder.amount).toFixed(2) }}</b></div>
           <div><span>创建时间</span><b>{{ formatTime(detailOrder.created_at) }}</b></div>
@@ -113,7 +130,7 @@
         </div>
         <el-divider />
         <h4>商品明细</h4>
-        <el-table :data="detailOrder.items" border size="small">
+        <el-table :data="detailOrder.items" stripe size="small">
           <el-table-column prop="class_id" label="类别 ID" width="90" />
           <el-table-column prop="name" label="商品名" show-overflow-tooltip />
           <el-table-column prop="count" label="数量" width="80" />
@@ -299,10 +316,11 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .checkout-history-page {
-  padding: 20px;
+  padding: 24px;
+  background: $bg-color;
 
   .page-card {
-    border-radius: 12px;
+    padding: $spacing-lg;
   }
 
   .page-header {
@@ -311,16 +329,10 @@ onMounted(() => {
     align-items: flex-start;
     margin-bottom: 20px;
 
-    h2 {
-      margin: 0 0 6px;
-      font-size: 20px;
-      font-weight: 600;
-    }
-
-    .subtitle {
-      margin: 0;
-      color: #6b7280;
-      font-size: 13px;
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
   }
 
@@ -336,12 +348,6 @@ onMounted(() => {
     display: flex;
     justify-content: flex-end;
     margin-top: 16px;
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
   }
 
   .table-actions {
@@ -363,11 +369,12 @@ onMounted(() => {
         gap: 4px;
 
         span {
-          color: #6b7280;
+          color: $text-secondary;
           font-size: 12px;
         }
 
         b {
+          color: $text-primary;
           font-size: 14px;
           font-weight: 600;
         }
@@ -376,8 +383,13 @@ onMounted(() => {
 
     h4 {
       margin: 0 0 12px;
+      color: $text-primary;
       font-size: 15px;
     }
   }
+}
+
+:global(html.dark .checkout-history-page) {
+  background: $bg-color;
 }
 </style>

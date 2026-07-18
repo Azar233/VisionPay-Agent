@@ -93,7 +93,7 @@ def test_detection_attachment_overrides_knowledge_embedding(monkeypatch):
     monkeypatch.setattr(
         AgentRouter,
         "_embedding_route",
-        lambda self, message: RouteDecision(
+        lambda self, message: RouteDecision.single(
             "knowledge", "embedding", 0.82, "test semantic candidate"
         ),
     )
@@ -155,7 +155,7 @@ def test_dataset_creation_overrides_knowledge_embedding(monkeypatch):
     monkeypatch.setattr(
         AgentRouter,
         "_embedding_route",
-        lambda self, message: RouteDecision(
+        lambda self, message: RouteDecision.single(
             "knowledge", "embedding", 0.79, "test semantic candidate"
         ),
     )
@@ -190,7 +190,7 @@ def test_dataset_sample_attachment_overrides_stale_training_context():
 
 def test_embedding_is_consulted_but_cannot_override_dataset_edit(monkeypatch):
     observed = []
-    semantic = RouteDecision("training", "embedding", 0.91, "test semantic candidate")
+    semantic = RouteDecision.single("training", "embedding", 0.91, "test semantic candidate")
     monkeypatch.setattr(
         AgentRouter,
         "_embedding_route",
@@ -205,14 +205,14 @@ def test_embedding_is_consulted_but_cannot_override_dataset_edit(monkeypatch):
 
 
 def test_embedding_is_primary_when_no_strong_intent(monkeypatch):
-    semantic = RouteDecision("knowledge", "embedding", 0.81, "test semantic candidate")
+    semantic = RouteDecision.single("knowledge", "embedding", 0.81, "test semantic candidate")
     monkeypatch.setattr(AgentRouter, "_embedding_route", lambda self, message: semantic)
 
     assert AgentRouter().route("帮我梳理一下最近的经营资料") == semantic
 
 
 def test_embedding_only_mode_skips_all_deterministic_routing(monkeypatch):
-    semantic = RouteDecision("catalog", "embedding", 0.88, "test semantic candidate")
+    semantic = RouteDecision.single("catalog", "embedding", 0.88, "test semantic candidate")
     monkeypatch.setattr(settings, "AGENT_ROUTING_MODE", "embedding_only")
     monkeypatch.setattr(AgentRouter, "_embedding_route", lambda self, message: semantic)
 
@@ -254,7 +254,7 @@ def test_general_explanation_still_consults_embedding(monkeypatch):
         AgentRouter,
         "_embedding_route",
         lambda self, message: observed.append(message)
-        or RouteDecision("training", "embedding", 0.9, "test semantic candidate"),
+        or RouteDecision.single("training", "embedding", 0.9, "test semantic candidate"),
     )
 
     decision = AgentRouter().route("什么是 loss？", preferred_agent="training")
@@ -277,7 +277,7 @@ def test_agent_capability_questions_override_domain_embedding(
     monkeypatch.setattr(
         AgentRouter,
         "_embedding_route",
-        lambda self, text: RouteDecision(
+        lambda self, text: RouteDecision.single(
             semantic_agent, "embedding", 0.91, "test semantic candidate"
         ),
     )
@@ -296,10 +296,78 @@ def test_actual_training_status_stays_with_training_agent():
 
 
 def test_ambiguous_message_uses_embedding_route(monkeypatch):
-    expected = RouteDecision("dataset", "embedding", 0.83, "test")
+    expected = RouteDecision.single("dataset", "embedding", 0.83, "test")
     monkeypatch.setattr(AgentRouter, "_embedding_route", lambda self, message: expected)
 
     assert AgentRouter().route("帮我处理一下新一批资料") == expected
+
+
+def test_parallel_intent_routes_detection_and_knowledge():
+    decision = AgentRouter().route(
+        "检测这张商品图片并解释一下什么是 mAP",
+        has_attachments=True,
+    )
+
+    assert decision.is_parallel
+    assert "detection" in decision.agents
+    assert "knowledge" in decision.agents
+    assert decision.agent == "detection"
+
+
+def test_dependent_price_query_routes_detection_and_catalog_pipeline():
+    decision = AgentRouter().route(
+        "识别这张图片里的商品并查询它们的价格",
+        has_attachments=True,
+    )
+
+    assert decision.is_pipeline
+    assert not decision.is_parallel
+    assert decision.execution_mode == "pipeline"
+    assert decision.agents == ["detection", "catalog"]
+
+
+def test_dependent_price_query_with_them_routes_to_pipeline():
+    decision = AgentRouter().route(
+        "识别图片中的商品，并查询他们的价格",
+        has_attachments=True,
+    )
+
+    assert decision.is_pipeline
+    assert decision.execution_mode == "pipeline"
+    assert decision.agents == ["detection", "catalog"]
+
+
+def test_detect_in_image_phrase_triggers_explicit_detection():
+    decision = AgentRouter().route(
+        "识别图中的商品并告诉我什么是mAP",
+        has_attachments=True,
+    )
+
+    assert "detection" in decision.agents
+    assert "knowledge" in decision.agents
+    assert decision.is_parallel
+
+
+def test_independent_parallel_intent_routes_detection_and_catalog():
+    decision = AgentRouter().route(
+        "检测这张商品图片并查看当前价目表",
+        has_attachments=True,
+    )
+
+    assert decision.is_parallel
+    assert not decision.is_pipeline
+    assert "detection" in decision.agents
+    assert "catalog" in decision.agents
+
+
+def test_pure_detection_intent_stays_single():
+    decision = AgentRouter().route(
+        "请检测这张图片",
+        has_attachments=True,
+    )
+
+    assert not decision.is_parallel
+    assert decision.agent == "detection"
 
 
 def test_ambiguous_message_falls_back_to_knowledge(monkeypatch):
@@ -309,3 +377,107 @@ def test_ambiguous_message_falls_back_to_knowledge(monkeypatch):
 
     assert decision.agent == "knowledge"
     assert decision.method == "fallback"
+
+
+# ── LLM 路由 ──────────────────────────────────────────────
+
+
+def test_parse_llm_decision_builds_pipeline_with_tasks():
+    payload = (
+        '{"agents": ["detection", "catalog"], "mode": "pipeline",'
+        ' "tasks": {"detection": "识别图片中的商品", "catalog": "查询这些商品的价格"},'
+        ' "reason": "查价依赖检测结果"}'
+    )
+
+    decision = AgentRouter._parse_llm_decision(payload, "识别图片中的商品并查询它们的价格")
+
+    assert decision is not None
+    assert decision.execution_mode == "pipeline"
+    assert decision.is_pipeline
+    assert decision.agents == ["detection", "catalog"]
+    assert decision.task_for("catalog", "fallback") == "查询这些商品的价格"
+
+
+def test_parse_llm_decision_rejects_invalid_payload():
+    assert AgentRouter._parse_llm_decision("not json", "msg") is None
+    assert AgentRouter._parse_llm_decision('{"agents": []}', "msg") is None
+    assert AgentRouter._parse_llm_decision('{"agents": ["unknown"]}', "msg") is None
+
+
+def test_parse_llm_decision_normalizes_mode_and_fills_missing_tasks():
+    payload = '{"agents": ["detection", "knowledge"], "mode": "weird", "tasks": {"detection": "检测"}}'
+
+    decision = AgentRouter._parse_llm_decision(payload, "检测图片并解释概念")
+
+    assert decision is not None
+    assert decision.execution_mode == "parallel"
+    # 缺失的子任务用原始消息兜底，保证每个 Agent 都有输入。
+    assert decision.task_for("knowledge", "") == "检测图片并解释概念"
+
+
+def test_parse_llm_decision_forces_single_mode_for_one_agent():
+    payload = '{"agents": ["knowledge"], "mode": "parallel", "tasks": {"knowledge": "解释"}}'
+
+    decision = AgentRouter._parse_llm_decision(payload, "什么是 mAP")
+
+    assert decision is not None
+    assert decision.execution_mode == "single"
+    assert not decision.is_parallel
+
+
+@pytest.mark.asyncio
+async def test_route_llm_returns_none_without_api_key(monkeypatch):
+    monkeypatch.setattr(settings, "DEEPSEEK_API_KEY", "")
+
+    assert await AgentRouter().route_llm("你好") is None
+
+
+def test_deterministic_safety_keeps_write_ops_deterministic():
+    router = AgentRouter()
+
+    decision = router.deterministic_safety("把可乐的价格改为 5 元")
+    assert decision.agent == "catalog"
+    assert decision.method == "explicit_intent"
+
+    decision = router.deterministic_safety("帮我创建新的数据集")
+    assert decision.agent == "dataset"
+
+
+def test_deterministic_safety_defers_attachment_detection_combo():
+    router = AgentRouter()
+
+    # 附件 + 明确检测意图 + 价目意图 → 交给 LLM 决定 parallel/pipeline。
+    assert (
+        router.deterministic_safety("识别图片中的商品并查询它们的价格", has_attachments=True)
+        is None
+    )
+    # 无检测意图的附件 + 写操作仍保持确定性。
+    decision = router.deterministic_safety("把这个商品的价格改为 5 元", has_attachments=True)
+    assert decision is not None
+    assert decision.agent == "catalog"
+
+
+def test_deterministic_safety_defers_dataset_combo_to_llm():
+    router = AgentRouter()
+
+    # 三意图组合：检测 + 知识 + 数据集查询，任何单领域规则都不应截胡。
+    assert (
+        router.deterministic_safety(
+            "检测图中商品，并告诉我mAP是什么，并查看所有数据集的使用状态",
+            has_attachments=True,
+        )
+        is None
+    )
+    # 检测 + 添加样品组合同样交给 LLM 拆分。
+    assert (
+        router.deterministic_safety("检测这张图片并添加新商品样品", has_attachments=True)
+        is None
+    )
+    # 纯数据集查询（无检测意图）仍保持确定性路由。
+    decision = router.deterministic_safety("查看所有数据集版本", has_attachments=True)
+    assert decision is not None
+    assert decision.agent == "dataset"
+    # 无附件的纯数据集写操作也保持确定性。
+    decision = router.deterministic_safety("归档旧的数据集版本")
+    assert decision is not None
+    assert decision.agent == "dataset"

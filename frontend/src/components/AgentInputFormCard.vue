@@ -161,7 +161,23 @@ function submit() {
 </script>
 
 <style lang="scss" scoped>
-.agent-input-form { margin-top: 16px; padding: 17px; border: 1px solid rgba(124,58,237,.28); border-radius: 18px; background: linear-gradient(145deg,rgba(250,247,255,.96),rgba(255,255,255,.98)); box-shadow: 0 12px 30px rgba(76,29,149,.08); }.form-heading { display: flex; align-items: center; gap: 10px; }.form-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: #fff; background: linear-gradient(145deg,#8b5cf6,#6d28d9); }.form-heading div:last-child { display: flex; flex-direction: column; gap: 2px; }.form-heading span { color: #7c3aed; font-size: 10px; font-weight: 800; letter-spacing: .06em; }.form-heading strong { color: $text-primary; font-size: 14px; }.agent-input-form > p { margin: 12px 0; color: $text-secondary; font-size: 12px; line-height: 1.65; }.form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; margin-top: 13px; }.form-grid label { min-width: 0; display: flex; flex-direction: column; gap: 6px; }.form-grid label.wide { grid-column: 1/-1; }.form-grid label > span { color: $text-secondary; font-size: 11px; font-weight: 700; }.form-grid b { margin-left: 4px; color: #dc2626; font-size: 9px; }.form-grid em { margin-left: 4px; color: $text-placeholder; font-size: 9px; font-style: normal; font-weight: 500; }.form-grid small { color: $text-placeholder; font-size: 9px; line-height: 1.5; }.form-grid :deep(.el-input-number),.form-grid :deep(.el-select),.form-grid :deep(.el-date-editor) { width: 100%; }.form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 13px; border-top: 1px solid rgba(124,58,237,.12); }.form-actions > span { color: $text-placeholder; font-size: 10px; line-height: 1.5; }.form-actions .el-button { flex: 0 0 auto; }.form-actions .el-button:not(.is-disabled) { background: #7c3aed; border-color: #7c3aed; }
-@media (max-width:640px) { .form-grid { grid-template-columns:1fr; }.form-grid label.wide { grid-column:auto; }.form-actions { align-items:flex-start; flex-direction:column; }.form-actions .el-button { width:100%; } }
-:global(html.dark .agent-input-form) { border-color:rgba(191,90,242,.3); background:linear-gradient(145deg,rgba(65,40,100,.4),rgba(44,44,46,.96)); box-shadow:0 14px 34px rgba(0,0,0,.28); }:global(html.dark .agent-input-form .form-heading strong) { color:#f5f5f7; }:global(html.dark .agent-input-form .form-actions) { border-color:rgba(255,255,255,.08); }
+.agent-input-form { margin-top: 16px; padding: 17px; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
+.form-heading { display: flex; align-items: center; gap: 10px; }
+.form-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: #fff; background: linear-gradient(145deg, $primary-color, $primary-hover); }
+.form-heading div:last-child { display: flex; flex-direction: column; gap: 2px; }
+.form-heading span { color: $primary-color; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+.form-heading strong { color: $text-primary; font-size: 14px; }
+.agent-input-form > p { margin: 12px 0; color: $text-secondary; font-size: 12px; line-height: 1.65; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-top: 13px; }
+.form-grid label { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.form-grid label.wide { grid-column: 1 / -1; }
+.form-grid label > span { color: $text-secondary; font-size: 11px; font-weight: 700; }
+.form-grid b { margin-left: 4px; color: $danger-color; font-size: 9px; }
+.form-grid em { margin-left: 4px; color: $text-placeholder; font-size: 9px; font-style: normal; font-weight: 500; }
+.form-grid small { color: $text-placeholder; font-size: 9px; line-height: 1.5; }
+.form-grid :deep(.el-input-number), .form-grid :deep(.el-select), .form-grid :deep(.el-date-editor) { width: 100%; }
+.form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 13px; border-top: 1px solid $border-color; }
+.form-actions > span { color: $text-placeholder; font-size: 10px; line-height: 1.5; }
+.form-actions .el-button { flex: 0 0 auto; }
+@media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; }.form-grid label.wide { grid-column: auto; }.form-actions { align-items: flex-start; flex-direction: column; }.form-actions .el-button { width: 100%; } }
 </style>

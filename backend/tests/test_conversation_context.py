@@ -212,9 +212,9 @@ def test_chat_route_and_model_history_receive_structured_workflow_state(
         def __init__(self, **kwargs):
             pass
 
-        def route(self, message, **kwargs):
+        async def aroute(self, message, **kwargs):
             captured["route"] = kwargs
-            return RouteDecision(
+            return RouteDecision.single(
                 kwargs["active_workflow_agent"],
                 "active_workflow",
                 0.94,
@@ -276,8 +276,8 @@ def test_chat_persists_real_usage_across_multiple_model_runs(
         def __init__(self, **kwargs):
             pass
 
-        def route(self, message, **kwargs):
-            return RouteDecision("knowledge", "test", 1.0, "usage test")
+        async def aroute(self, message, **kwargs):
+            return RouteDecision.single("knowledge", "test", 1.0, "usage test")
 
         async def stream(self, message, attachment_paths, history, decision=None):
             yield decision.event()
