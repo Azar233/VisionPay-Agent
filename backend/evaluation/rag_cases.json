@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "description": "VisionPay 业务知识与故障案例检索基准集",
+  "thresholds": {
+    "minimum": {
+      "source_hit_rate": 0.75,
+      "mrr": 0.65,
+      "domain_accuracy": 0.85,
+      "keyword_coverage_rate": 0.65
+    },
+    "maximum": {
+      "no_result_rate": 0.2
+    }
+  },
+  "cases": [
+    {
+      "id": "dataset-lifecycle-states",
+      "collection": "knowledge",
+      "query": "数据集版本从草稿到发布有哪些状态？",
+      "expected_domain": "dataset",
+      "expected_sources": ["dataset/dataset_lifecycle.md"],
+      "expected_keywords": ["draft", "pending_train", "published"]
+    },
+    {
+      "id": "dataset-existing-product-samples",
+      "collection": "knowledge",
+      "query": "给草稿数据集中的已有商品增加训练图片需要怎么操作？",
+      "expected_domain": "dataset",
+      "expected_sources": ["dataset/dataset_sample_workflow.md"],
+      "expected_keywords": ["train_existing", "product_id", "人工"]
+    },
+    {
+      "id": "dataset-contextual-freeze",
+      "collection": "knowledge",
+      "query": "这个版本怎么冻结，冻结后有什么影响？",
+      "context_state": {
+        "active_agent": "dataset",
+        "active_workflow": {
+          "agent": "dataset",
+          "purpose": "dataset.add_samples",
+          "status": "active"
+        },
+        "entities": {
+          "dataset_id": 21,
+          "version": "draft-v21"
+        }
+      },
+      "expected_domain": "dataset",
+      "expected_sources": [
+        "dataset/dataset_lifecycle.md",
+        "dataset/dataset_validation_rules.md",
+        "dataset/dataset_version_operations.md"
+      ],
+      "expected_keywords": ["冻结", "pending_train"]
+    },
+    {
+      "id": "training-metrics",
+      "collection": "knowledge",
+      "query": "Precision 很高但 Recall 很低通常说明什么？",
+      "expected_domain": "training",
+      "expected_sources": ["training/training_metrics_interpretation.md"],
+      "expected_keywords": ["Precision", "Recall", "漏检"]
+    },
+    {
+      "id": "training-model-comparison",
+      "collection": "knowledge",
+      "query": "比较两个训练模型时需要保持哪些测试条件一致？",
+      "expected_domain": "training",
+      "expected_sources": [
+        "training/model_comparison_and_release.md",
+        "training/training_metrics_interpretation.md"
+      ],
+      "expected_keywords": ["数据集", "置信度", "IoU"]
+    },
+    {
+      "id": "catalog-clear-price",
+      "collection": "knowledge",
+      "query": "清除商品价格会影响商品本身吗，需要怎样确认？",
+      "expected_domain": "catalog",
+      "expected_sources": ["catalog/price_management_workflow.md"],
+      "expected_keywords": ["R3", "价格记录", "商品"]
+    },
+    {
+      "id": "catalog-unpriced-checkout",
+      "collection": "knowledge",
+      "query": "结算时识别到没有定价的商品应该如何处理？",
+      "expected_domain": "catalog",
+      "expected_sources": ["catalog/unpriced_product_handling.md"],
+      "expected_keywords": ["未定价", "结算"]
+    },
+    {
+      "id": "detection-confidence",
+      "collection": "knowledge",
+      "query": "调高商品检测 confidence 会产生什么影响？",
+      "expected_domain": "detection",
+      "expected_sources": ["detection/detection_parameter_guide.md"],
+      "expected_keywords": ["confidence", "误检", "漏检"]
+    },
+    {
+      "id": "confirmation-token-audit",
+      "collection": "knowledge",
+      "query": "一次性确认令牌过期或使用后还能重复执行写操作吗？",
+      "expected_sources": ["general/confirmation_and_audit.md"],
+      "expected_keywords": ["一次性", "过期", "审计"]
+    },
+    {
+      "id": "fault-expired-jwt",
+      "collection": "fault_cases",
+      "query": "聊天突然返回 401 并跳回登录页应该怎么处理？",
+      "expected_sources": ["authentication/expired_jwt_401.md"],
+      "expected_keywords": ["JWT", "重新登录", "Token"]
+    },
+    {
+      "id": "fault-dataset-routed-training",
+      "collection": "fault_cases",
+      "query": "向新数据集版本增加商品训练图时为什么错误调用了 Training Agent？",
+      "expected_sources": ["routing/dataset_request_sent_to_training.md"],
+      "expected_keywords": ["Dataset", "Training", "样品"]
+    },
+    {
+      "id": "fault-number-input-crash",
+      "collection": "fault_cases",
+      "query": "数据集 ID 输入数字后页面运行出错，提示 min should not be greater than max",
+      "expected_sources": ["forms/input_number_page_crash.md"],
+      "expected_keywords": ["maximum", "null", "Element Plus"]
+    },
+    {
+      "id": "fault-attachment-overwrite",
+      "collection": "fault_cases",
+      "query": "聊天框第二次选择图片后，第一次选择的附件被覆盖了",
+      "expected_sources": ["detection/chat_multi_attachment_overwrite.md"],
+      "expected_keywords": ["multiple", "追加", "去重"]
+    },
+    {
+      "id": "fault-embedding-unavailable",
+      "collection": "fault_cases",
+      "query": "DashScope Key 已配置但知识库索引还是不可用",
+      "expected_sources": ["embedding/dashscope_key_or_index_unavailable.md"],
+      "expected_keywords": ["DASHSCOPE_API_KEY", "索引"]
+    },
+    {
+      "id": "fault-training-dataset-option",
+      "collection": "fault_cases",
+      "query": "启动训练时数据集版本下拉选项无效，提交后提示版本不可用",
+      "expected_sources": ["training/dataset_version_option_invalid.md"],
+      "expected_keywords": ["数据集版本", "训练"]
+    }
+  ]
+}

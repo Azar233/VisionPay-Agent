@@ -258,6 +258,16 @@ backend/
 | `remember_management_preference` | `visionpay_long_term_memory` | 仅在用户明确要求记住时保存稳定偏好，并绑定当前 `user_id` |
 | `recall_management_memory` | `visionpay_long_term_memory` | 仅召回当前经营者自己的相关记忆 |
 
+#### 强制检索与来源引用
+
+Knowledge Agent 不再只依赖提示词决定是否检索。除 Agent 能力边界、明确的长期记忆操作、问候等不需要知识库的问题外，知识型问题会在模型生成前由后端确定性调用 `search_management_knowledge`；包含报错、异常、失败、HTTP 错误码等故障信号时，会依次检索故障案例和业务知识。检索结果作为系统维护的 grounding 上下文注入模型，模型负责整理答案，不能跳过检索直接把自身推断表述为平台事实。
+
+每次强制检索都会发送 `knowledge_sources` SSE 事件，包含原问题、实际改写问题、集合、领域、来源文件、相似度、排名和内容摘要。`/chat` 会在回答下方显示可收缩的“参考知识”卡片；未达到相似度阈值时也会明确显示无可靠资料。结构化来源同时写入 `ChatMessage.tool_calls.knowledge_sources`，重新打开历史会话后仍可查看。
+
+#### RAG 离线评测
+
+`backend/evaluation/rag_cases.json` 保存与当前业务知识和故障文档绑定的基准问题，覆盖 Dataset、Training、Catalog、Detection、确认审计和常见故障。`backend/tools/evaluate_rag.py` 使用真实 Embedding 与本地 Chroma 索引计算来源命中率、MRR、领域准确率、关键词覆盖率和无结果率；评测数据中的阈值可用于本地或 CI 门禁。
+
 #### 数据边界与事实优先级
 
 | 信息类型 | 正确来源 | 是否进入业务知识 RAG |
@@ -324,7 +334,7 @@ flowchart LR
 4. 当前用户消息；结构化表单会先由后端校验，再作为可信参数附加到当前输入。
 5. 当前轮 Agent 的工具 scratchpad。工具返回的实时业务事实优先于摘要、RAG 内容和模型推断。
 
-Detection Agent 直接消费本轮待检测附件；Dataset、Training、Catalog 和 Knowledge 等管理端 Agent 会自动召回相关长期记忆。知识文档和故障案例由 Knowledge Agent 按需调用检索工具，不会在每轮把整个知识库注入 Prompt。
+Detection Agent 直接消费本轮待检测附件；Dataset、Training、Catalog 和 Knowledge 等管理端 Agent 会自动召回相关长期记忆。Knowledge Agent 的知识型问题会在生成前强制检索相关片段，故障问题同时检索故障案例与操作知识，但不会在每轮把整个知识库注入 Prompt；能力边界和记忆管理等问题仍使用各自的权威工具。
 
 #### 2.4.3 上下文如何参与路由
 
@@ -546,6 +556,16 @@ conda activate agentenv
 cd backend
 python tools/build_knowledge_index.py
 ```
+
+索引构建完成后可以运行离线 RAG 基准评测：
+
+```powershell
+python tools/evaluate_rag.py
+python tools/evaluate_rag.py --enforce-thresholds
+python tools/evaluate_rag.py --json
+```
+
+默认命令输出逐用例来源命中情况和汇总指标；`--enforce-thresholds` 在指标未达到 `backend/evaluation/rag_cases.json` 中的门槛时返回非零退出码，适合接入 CI；`--json` 输出完整机器可读报告。评测调用真实 DashScope Embedding，因此需要先配置 `DASHSCOPE_API_KEY` 并构建本地索引。
 
 待检索的操作文档放在 `backend/knowledge_base/`，可重复构建的已确认故障案例放在 `backend/fault_case_base/`（均支持 `.md`、`.txt`，一级子目录会成为领域标签）。新增、修改或删除文档后再次执行上述脚本；同步算法、集合职责和数据边界见 [2.3 知识库、故障案例与长期记忆架构](#23-知识库故障案例与长期记忆架构)。Chroma 数据保存在项目根目录 `.runtime/chroma`，不会提交到 Git。Embedding 不可用时，路由会自动降级为强意图、关键词、未完成工作流和会话上下文；知识库与长期记忆则返回不可用提示，不会阻塞检测、数据集、训练、价目表或结算业务。训练可以在其他机器或集群执行；管理端的 Training Agent 通过数据库任务、日志和指标进行监控，不要求当前后端机器具备 CUDA 训练环境。
 

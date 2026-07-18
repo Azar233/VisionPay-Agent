@@ -156,6 +156,7 @@ async def get_session(
                 "handoff": metadata.get("handoff"),
                 "input_form": metadata.get("input_form"),
                 "confirmation": metadata.get("confirmation"),
+                "knowledge_sources": metadata.get("knowledge_sources"),
                 "result": _parse_json(message.tool_result),
                 "created_at": message.created_at,
             }
@@ -386,6 +387,7 @@ async def chat_stream(
         handoff = None
         input_form = None
         confirmation = None
+        knowledge_sources = None
         error_text = None
         model_usage_by_run: dict[str, dict] = {}
         started_at = time.perf_counter()
@@ -443,6 +445,12 @@ async def chat_stream(
                         for key, value in raw_operation.items()
                         if key != "confirmation_token"
                     }
+                elif event.get("type") == "knowledge_sources":
+                    knowledge_sources = {
+                        key: value
+                        for key, value in event.items()
+                        if key not in {"type", "agent"}
+                    }
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.error("DeepSeek Agent 流式请求失败: %s", exc, exc_info=True)
@@ -487,6 +495,11 @@ async def chat_stream(
                                 **({"handoff": handoff} if handoff else {}),
                                 **({"input_form": input_form} if input_form else {}),
                                 **({"confirmation": confirmation} if confirmation else {}),
+                                **(
+                                    {"knowledge_sources": knowledge_sources}
+                                    if knowledge_sources
+                                    else {}
+                                ),
                             }
                             or None
                         ),
