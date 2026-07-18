@@ -131,7 +131,7 @@ async function handleLogin() {
   padding: 48px max(32px, calc((100vw - 1120px) / 2));
   background:
     radial-gradient(circle at 18% 18%, rgba(0, 113, 227, .1), transparent 28%),
-    linear-gradient(180deg, #fff, $bg-color 72%);
+    linear-gradient(180deg, $surface-color, $bg-color 72%);
 }
 
 .auth-hero {
@@ -266,7 +266,7 @@ async function handleLogin() {
 .login-card {
   width: 420px;
   padding: 36px;
-  background: rgba(255, 255, 255, .82);
+  background: color-mix(in srgb, $surface-color 82%, transparent);
   border: 1px solid $border-color;
   border-radius: $border-radius-lg;
   box-shadow: 0 24px 70px rgba(0, 0, 0, .1);

@@ -80,6 +80,15 @@
               <DetectionResultCard v-if="message.result" class="detection-result" :result="message.result" />
             </div>
           </article>
+          <button
+            v-if="showScrollToBottom"
+            class="scroll-bottom-button"
+            type="button"
+            aria-label="回到底部"
+            @click="scrollToBottomForce"
+          >
+            <el-icon><Bottom /></el-icon>
+          </button>
         </div>
 
         <footer class="composer" @paste="handlePaste">
@@ -149,11 +158,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowRight, ChatDotRound, CircleCheckFilled, Clock, Close, Connection, Cpu, DArrowLeft, DArrowRight, DataAnalysis,
+  ArrowRight, Bottom, ChatDotRound, CircleCheckFilled, Clock, Close, Connection, Cpu, DArrowLeft, DArrowRight, DataAnalysis,
   Delete, Document, Files, MagicStick, Operation, Paperclip, Plus, PriceTag,
   Refresh, Top, VideoPause, View,
 } from '@element-plus/icons-vue'
@@ -215,7 +224,17 @@ const quickPrompts = [
   { title: '故障排查', description: '检索知识库和故障案例', prompt: '帮我检查最近常见的商品漏检原因和排查步骤', icon: MagicStick, tone: 'knowledge' },
 ]
 
+// 上翻超过阈值时显示“回到底部”浮动按钮。
+const showScrollToBottom = ref(false)
+function handleMessageScroll() {
+  const el = messageListRef.value
+  if (!el) return
+  showScrollToBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight > 300
+}
+async function scrollToBottomForce() { await scrollBottom(); showScrollToBottom.value = false }
+
 onMounted(async () => {
+  messageListRef.value?.addEventListener('scroll', handleMessageScroll, { passive: true })
   try { agentStatus.value = await getAgentStatusApi() } catch { /* 全局请求层处理 */ }
   await Promise.all([loadSessions(), loadPendingOperations()])
   // 历史列表只用于展示。首次登录或刷新后的第一次进入保持空白新对话；
@@ -226,6 +245,10 @@ onMounted(async () => {
     )
     if (currentSession) await openSession(currentSession.session_uuid)
   }
+})
+
+onBeforeUnmount(() => {
+  messageListRef.value?.removeEventListener('scroll', handleMessageScroll)
 })
 
 function agentName(name) {
@@ -899,6 +922,32 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   overflow-y: auto;
   padding: 20px 20px 12px;
   scroll-behavior: smooth;
+}
+
+// sticky 吸附在消息滚动区可视底部，不遮挡输入框；纯箭头圆形按钮。
+.scroll-bottom-button {
+  position: sticky;
+  bottom: 12px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: -48px 8px 0 auto;
+  border: 1px solid $border-color;
+  border-radius: 50%;
+  color: $text-secondary;
+  background: $surface-color;
+  box-shadow: $shadow-md;
+  font-size: 16px;
+  cursor: pointer;
+  transition: color .2s ease, border-color .2s ease, background-color .2s ease;
+
+  &:hover {
+    color: $primary-color;
+    border-color: $primary-color;
+    background: $primary-soft;
+  }
 }
 
 .welcome-state {
