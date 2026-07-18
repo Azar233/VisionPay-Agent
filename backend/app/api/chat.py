@@ -497,6 +497,8 @@ async def chat_stream(
                                 **({"tools": tools_used} if tools_used else {}),
                                 "routing": decision.event(),
                                 "context_tokens": context_tokens,
+                                "model_name": settings.DEEPSEEK_MODEL,
+                                "model_run_count": max(len(model_usage_by_run), 1),
                                 **({"model_usage": model_usage} if model_usage else {}),
                                 **({"handoff": handoff} if handoff else {}),
                                 **({"input_form": input_form} if input_form else {}),

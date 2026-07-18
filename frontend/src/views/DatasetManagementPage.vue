@@ -95,7 +95,7 @@
             <span>{{ row.scene_name || `#${row.scene_id}` }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="150">
+        <el-table-column label="状态" min-width="150">
           <template #default="{ row }">
             <div class="status-tags">
               <span class="vp-pill" :class="`vp-pill--${statusType(row.status)}`">{{ statusText(row.status) }}</span>
@@ -103,7 +103,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="图片" width="170">
+        <el-table-column label="图片" min-width="180">
           <template #default="{ row }">
             <div v-if="row.extra_metadata?.catalog_only" class="split-cell">
               <strong>无需训练集</strong>
@@ -115,11 +115,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="class_count" label="类别" width="82" align="center" />
-        <el-table-column label="更新时间" width="170">
+        <el-table-column prop="class_count" label="类别" min-width="80" align="center" />
+        <el-table-column label="更新时间" min-width="170">
           <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="276" fixed="right">
+        <el-table-column label="操作" width="350" fixed="right">
           <template #default="{ row }">
             <div class="row-actions vp-table-action-safe-area">
               <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
@@ -1533,11 +1533,13 @@ onMounted(async () => {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+
+  :deep(.el-button + .el-button) { margin-left: 0; }
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: minmax(260px, 1.45fr) repeat(5, minmax(150px, 1fr));
   gap: 14px;
 }
 
@@ -1592,7 +1594,9 @@ onMounted(async () => {
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+
+  :deep(.el-button + .el-button) { margin-left: 0; }
 }
 
 .filters {
@@ -1615,6 +1619,9 @@ onMounted(async () => {
   }
 
   :deep(.el-table__row td.el-table__cell) {
+    height: 116px;
+    padding-top: 14px;
+    padding-bottom: 14px;
     border-bottom: 1px solid $border-color;
   }
 
@@ -2376,4 +2383,3 @@ code {
   }
 }
 </style>
-
