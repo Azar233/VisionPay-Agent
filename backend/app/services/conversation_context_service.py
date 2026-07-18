@@ -379,7 +379,14 @@ class ConversationContextService:
             if used + cost > budget:
                 content = self._trim_tokens(content, max(200, budget - used - 4), keep_tail=True)
                 cost = self.token_count(content) + 4
-            recent.append({"role": message.role, "content": content})
+            # 携带产生该消息的 Agent，供下游在构建 LLM 历史时标注身份，避免串角色。
+            recent.append(
+                {
+                    "role": message.role,
+                    "content": content,
+                    "agent": message.agent_used or "",
+                }
+            )
             used += cost
         recent.reverse()
         return [*system_items, *recent], used

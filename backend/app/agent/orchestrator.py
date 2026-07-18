@@ -432,8 +432,10 @@ class MultiAgentOrchestrator:
         covered can be honestly flagged instead of silently dropped. On LLM failure
         the raw drafts are concatenated as a fallback.
         """
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
         from langchain_openai import ChatOpenAI
+
+        from app.agent.history import build_chat_history
 
         material: list[str] = []
         for agent_name in agents:
@@ -471,14 +473,7 @@ class MultiAgentOrchestrator:
             "content": "各 Agent 执行完毕，正在汇总结果...",
         }
 
-        chat_history = []
-        for item in history or []:
-            if item.get("role") == "user":
-                chat_history.append(HumanMessage(content=item.get("content", "")))
-            elif item.get("role") == "assistant":
-                chat_history.append(AIMessage(content=item.get("content", "")))
-            elif item.get("role") == "system":
-                chat_history.append(SystemMessage(content=item.get("content", "")))
+        chat_history = build_chat_history(history)
 
         prompt = SUPERVISOR_SUMMARY_PROMPT.format(
             user_message=message,

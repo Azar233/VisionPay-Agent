@@ -132,12 +132,71 @@ class DetectionAgent:
             finally:
                 db.close()
 
+        def query_detection_stats(days: int = 1) -> str:
+            """查询当前用户的检测任务统计：任务数、图片数、商品实例数和按天/类型分布，适合"今天检测了多少任务/识别了多少东西"类问题。"""
+            from datetime import datetime, timedelta
+
+            from app.database.session import SessionLocal
+            from app.entity.db_models import DetectionTask
+
+            db = SessionLocal()
+            try:
+                days = max(1, min(int(days or 1), 90))
+                since = datetime.now() - timedelta(days=days)
+                tasks = (
+                    db.query(DetectionTask)
+                    .filter(
+                        DetectionTask.user_id == self.user_id,
+                        DetectionTask.created_at >= since,
+                    )
+                    .order_by(DetectionTask.created_at.desc())
+                    .all()
+                )
+                by_day: dict[str, dict] = {}
+                for task in tasks:
+                    day = task.created_at.strftime("%Y-%m-%d") if task.created_at else "unknown"
+                    bucket = by_day.setdefault(
+                        day, {"task_count": 0, "images": 0, "objects": 0, "types": {}}
+                    )
+                    bucket["task_count"] += 1
+                    bucket["images"] += int(task.total_images or 0)
+                    bucket["objects"] += int(task.total_objects or 0)
+                    task_type = str(task.task_type or "unknown")
+                    bucket["types"][task_type] = bucket["types"].get(task_type, 0) + 1
+                recent = [
+                    {
+                        "id": task.id,
+                        "task_type": task.task_type,
+                        "status": task.status,
+                        "images": int(task.total_images or 0),
+                        "objects": int(task.total_objects or 0),
+                        "created_at": task.created_at.strftime("%Y-%m-%d %H:%M")
+                        if task.created_at
+                        else None,
+                    }
+                    for task in tasks[:5]
+                ]
+                return json.dumps(
+                    {
+                        "days": days,
+                        "total_tasks": len(tasks),
+                        "total_images": sum(int(t.total_images or 0) for t in tasks),
+                        "total_objects": sum(int(t.total_objects or 0) for t in tasks),
+                        "by_day": by_day,
+                        "recent_tasks": recent,
+                    },
+                    ensure_ascii=False,
+                )
+            finally:
+                db.close()
+
         tools = [
             StructuredTool.from_function(single, name="detect_single_product_image"),
             StructuredTool.from_function(batch, name="detect_product_images"),
             StructuredTool.from_function(zip_images, name="detect_product_zip"),
             StructuredTool.from_function(video, name="detect_product_video"),
             StructuredTool.from_function(list_system_users, name="list_system_users"),
+            StructuredTool.from_function(query_detection_stats, name="query_detection_stats"),
         ] + build_interaction_tools("detection")
         llm = ChatOpenAI(
             model=settings.DEEPSEEK_MODEL,
@@ -161,7 +220,9 @@ class DetectionAgent:
 5. 管理员询问系统用户、管理员或账号列表时调用用户查询工具；普通用户无权查看全站用户目录。
 6. 没有附件时，可以回答本平台识别流程、模型能力和操作问题；不要声称已经执行检测。
 7. 始终禁止使用 emoji、颜文字或装饰性图标，除非用户自定义响应指令明确要求使用。未设置自定义指令时，直接给出结论，不要用“好的，我先……”等开场白；字段较多时可使用简洁 Markdown 表格。
-8. 若执行检测前确实需要用户选择置信度，调用 request_user_input_form，purpose 固定为 detection.parameters，并把已知阈值放入 known_values；不要自定义表单。图片、ZIP 和视频文件仍通过聊天附件上传。"""
+8. 若执行检测前确实需要用户选择置信度，调用 request_user_input_form，purpose 固定为 detection.parameters，并把已知阈值放入 known_values；不要自定义表单。图片、ZIP 和视频文件仍通过聊天附件上传。
+9. 用户询问检测任务数量、历史或统计（如“今天检测了多少任务”“识别了多少东西”）时，调用 query_detection_stats，按返回数据如实汇总，不要编造数字。
+10. 对话历史中带有“[XX Agent 的回复]”前缀的助手消息由对应 Agent 产生，不代表你的身份；你始终是 VisionPay 零售商品识别 Agent。"""
                     + CUSTOM_INSTRUCTIONS_PROMPT,
                 ),
                 MessagesPlaceholder("chat_history", optional=True),
@@ -173,7 +234,8 @@ class DetectionAgent:
         return AgentExecutor(
             agent=agent,
             tools=tools,
-            max_iterations=4,
+            # 与 scoped_agent 保持一致，避免多附件/多工具场景被中途掐停。
+            max_iterations=10,
             handle_parsing_errors=True,
             verbose=False,
         )
@@ -185,21 +247,14 @@ class DetectionAgent:
         history: list[dict[str, str]] | None = None,
         custom_instructions: str = "",
     ) -> AsyncGenerator[dict, None]:
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+        from app.agent.history import build_chat_history
 
         attachments = "\n".join(f"- {path}" for path in attachment_paths)
         agent_input = message
         if attachments:
             agent_input += f"\n\n本次附件路径：\n{attachments}"
 
-        chat_history = []
-        for item in history or []:
-            if item.get("role") == "user":
-                chat_history.append(HumanMessage(content=item.get("content", "")))
-            elif item.get("role") == "assistant":
-                chat_history.append(AIMessage(content=item.get("content", "")))
-            elif item.get("role") == "system":
-                chat_history.append(SystemMessage(content=item.get("content", "")))
+        chat_history = build_chat_history(history)
 
         detection_emitted = False
         async for event in self.executor.astream_events(

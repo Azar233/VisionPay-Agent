@@ -63,7 +63,9 @@ class ScopedToolAgent:
         return AgentExecutor(
             agent=agent,
             tools=self.tools,
-            max_iterations=5,
+            # 批量操作（如一次为 6 个商品生成改价预览）需要 查询+N个预览+回复 共 N+2 步，
+            # 上限过低会被中途掐停且前端拿不到任何输出。
+            max_iterations=10,
             handle_parsing_errors=True,
             verbose=False,
         )
@@ -75,16 +77,9 @@ class ScopedToolAgent:
         runtime_context: str = "无",
         custom_instructions: str = "",
     ) -> AsyncGenerator[dict, None]:
-        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+        from app.agent.history import build_chat_history
 
-        chat_history = []
-        for item in history or []:
-            if item.get("role") == "user":
-                chat_history.append(HumanMessage(content=item.get("content", "")))
-            elif item.get("role") == "assistant":
-                chat_history.append(AIMessage(content=item.get("content", "")))
-            elif item.get("role") == "system":
-                chat_history.append(SystemMessage(content=item.get("content", "")))
+        chat_history = build_chat_history(history)
 
         async for event in self.executor.astream_events(
             {
