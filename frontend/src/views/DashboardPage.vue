@@ -6,7 +6,9 @@
         <h1 class="vp-page-title">数据概览</h1>
         <p class="vp-page-subtitle">分别查看商品识别业务与多 Agent 模型调用情况，避免不同类型的数据相互干扰。</p>
       </div>
-      <el-button :icon="Refresh" :loading="loading" @click="refreshCurrent">刷新当前概览</el-button>
+      <div class="page-actions">
+        <el-button :icon="Refresh" :loading="loading" @click="refreshCurrent">刷新当前概览</el-button>
+      </div>
     </header>
 
     <section class="dashboard-workspace">
@@ -342,10 +344,10 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.dashboard-page { min-height: 100%; padding: 32px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
+.dashboard-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
 .page-header { padding: 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.page-header h1 { margin: 10px 0 0; color: $text-primary; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 40px; line-height: 1.08; }
-.page-header p { max-width: 620px; margin: 12px 0 0; color: $text-secondary; font-size: 16px; line-height: 1.6; }
+.page-header .vp-kicker { margin-bottom: 6px; }
+.page-actions { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
 .dashboard-workspace { min-width: 0; }.dashboard-tabs :deep(.el-tabs__header) { margin: 0 0 16px; padding: 5px; border: 1px solid $border-color; border-radius: 14px; background: $surface-muted; }.dashboard-tabs :deep(.el-tabs__nav-wrap::after),.dashboard-tabs :deep(.el-tabs__active-bar) { display: none; }.dashboard-tabs :deep(.el-tabs__item) { height: 42px; padding: 0 7px; color: $text-secondary; }.dashboard-tabs :deep(.el-tabs__item.is-active) { color: $text-primary; }.tab-label { height: 34px; padding: 0 13px; display: inline-flex; align-items: center; gap: 7px; border-radius: 10px; transition: .2s ease; }.dashboard-tabs :deep(.is-active) .tab-label { color: $primary-color; background: $surface-color; box-shadow: 0 5px 14px rgba(15,23,42,.07); }.tab-label small { min-width: 20px; padding: 2px 6px; border-radius: 999px; color: $text-placeholder; background: color-mix(in srgb,$border-color 60%,transparent); font-size: 9px; text-align: center; }.dashboard-tabs :deep(.is-active) .tab-label small { color: $primary-color; background: $primary-soft; }
 .dashboard-pane { display: flex; flex-direction: column; gap: 16px; }.pane-toolbar { min-height: 54px; padding: 2px 2px 8px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }.pane-toolbar > div:first-child { display: flex; flex-direction: column; gap: 4px; }.pane-toolbar strong { font-size: 17px; }.pane-toolbar small { color: $text-secondary; font-size: 12px; }
 .period-switch { max-width: 100%; padding: 3px; display: inline-flex !important; flex: none; flex-direction: row !important; align-items: center; gap: 2px !important; overflow-x: auto; border: 1px solid $border-color; border-radius: 12px; background: $surface-muted; white-space: nowrap; scrollbar-width: none; }.period-switch::-webkit-scrollbar { display: none; }.period-switch button { height: 30px; padding: 0 12px; flex: none; border: 0; border-radius: 9px; color: $text-secondary; background: transparent; font: inherit; font-size: 12px; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }.period-switch button:hover { color: $text-primary; }.period-switch button.active { color: $primary-color; background: $surface-color; box-shadow: 0 3px 10px rgba(15,23,42,.08); font-weight: 650; }
@@ -359,6 +361,6 @@ onBeforeUnmount(() => {
 .recent-card { overflow: visible; }.recent-card :deep(.el-table) { border-radius: 0 0 $border-radius-md $border-radius-md; }.record-count { color: $text-secondary !important; font-size: 12px; font-weight: 500 !important; }.model-name,.agent-badge { display: inline-flex; align-items: center; gap: 7px; }.model-name { color: $text-primary; font-weight: 600; }.agent-badge { font-weight: 700; }.agent-badge i { width: 8px; height: 8px; border-radius: 50%; background: #0071e3; }.agent-badge.dataset i { background: #8b5cf6; }.agent-badge.training i { background: #0ea5e9; }.agent-badge.catalog i { background: #f59e0b; }.agent-badge.knowledge i { background: #10b981; }
 :global(html.dark .dashboard-tabs .el-tabs__header) { background: rgba(22,22,24,.9); border-color: rgba(255,255,255,.1); }:global(html.dark .period-switch) { background: rgba(22,22,24,.9); border-color: rgba(255,255,255,.1); }:global(html.dark .period-switch button.active) { background: #2c2c2e; box-shadow: 0 4px 12px rgba(0,0,0,.24); }
 @media (max-width: 1100px) { .metric-grid { grid-template-columns: repeat(2, 1fr); }.model-chart-grid { grid-template-columns: 1fr; } }
-@media (max-width: 760px) { .dashboard-page { padding: 20px; }.page-header { align-items: flex-start; flex-direction: column; }.page-header h1 { font-size: 30px; }.metric-grid,.chart-grid { grid-template-columns: 1fr; }.chart-card.chart-wide { grid-column: auto; }.card-header { padding: 14px 18px; align-items: flex-start; flex-wrap: wrap; }.period-switch { width: fit-content; }.pane-toolbar { align-items: flex-start; flex-direction: column; }.chart { height: 300px; } }
+@media (max-width: 760px) { .dashboard-page { padding: 16px; }.page-header { align-items: flex-start; flex-direction: column; }.page-actions { width: 100%; justify-content: flex-start; }.metric-grid,.chart-grid { grid-template-columns: 1fr; }.chart-card.chart-wide { grid-column: auto; }.card-header { padding: 14px 18px; align-items: flex-start; flex-wrap: wrap; }.period-switch { width: fit-content; }.pane-toolbar { align-items: flex-start; flex-direction: column; }.chart { height: 300px; } }
 @media (max-width: 520px) { .dashboard-tabs :deep(.el-tabs__item) { padding: 0 2px; }.tab-label { padding: 0 9px; }.tab-label small { display: none; }.period-switch button { padding: 0 10px; } }
 </style>

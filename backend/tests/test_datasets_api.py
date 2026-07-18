@@ -69,6 +69,9 @@ def _payload(scene_id, version="v1"):
 
 def test_dataset_routes_require_auth(client):
     assert client.get("/api/datasets").status_code == 401
+    assert client.get("/api/datasets/1/products/1/sample-image").status_code == 401
+    assert client.get("/api/datasets/1/products/1/images").status_code == 401
+    assert client.get("/api/datasets/1/products/1/images/1").status_code == 401
 
 
 def test_dataset_draft_validate_freeze_and_current(client, db_session):

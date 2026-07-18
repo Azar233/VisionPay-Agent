@@ -37,13 +37,19 @@
 
         <div v-show="sourceMode === 'upload'" class="upload-stage" @dragover.prevent @drop.prevent="handleDrop">
           <input ref="uploadInputRef" type="file" accept="image/*" hidden @change="handleUpload" />
-          <img v-if="previewUrl" :src="previewUrl" alt="待识别商品预览" />
+          <img v-if="previewUrl" :src="uploadDisplayImage" :alt="uploadImageAlt" />
           <template v-else>
             <el-icon><UploadFilled /></el-icon>
             <strong>拖入或选择一张商品图片</strong>
             <span>支持 JPG、PNG、WEBP</span>
           </template>
-          <button type="button" @click="uploadInputRef.click()">选择图片</button>
+          <button v-if="!selectedUploadFile" type="button" class="select-image-button" @click="openUploadPicker">选择图片</button>
+          <div v-else class="upload-actions">
+            <button type="button" class="secondary" :disabled="detecting" @click="openUploadPicker">重新选择</button>
+            <button type="button" class="primary" :disabled="detecting" @click="startUploadDetection">
+              {{ uploadDetectionButtonText }}
+            </button>
+          </div>
         </div>
 
         <div class="capture-footer">
@@ -103,6 +109,7 @@ import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
 const router = useRouter()
 const sourceMode = ref('camera')
 const uploadInputRef = ref(null)
+const selectedUploadFile = ref(null)
 const previewUrl = ref('')
 const cameraDetectionRef = ref(null)
 const cameraState = ref({ loading: false, running: false, error: '' })
@@ -120,7 +127,27 @@ const totalItems = computed(() => products.value.reduce((sum, item) => sum + ite
 const totalPrice = computed(() => Number(checkoutSummary.value?.total_price || 0))
 const unpricedItems = computed(() => Number(checkoutSummary.value?.unpriced_objects || 0))
 const pricingComplete = computed(() => products.value.length > 0 && checkoutSummary.value?.pricing_complete === true)
-const detectionStatus = computed(() => cameraState.value.running && sourceMode.value === 'camera' ? '实时识别中' : detecting.value || cameraState.value.loading ? '识别中' : detectionError.value ? '识别失败' : detectionResult.value ? '已完成' : '待扫描')
+const detectionStatus = computed(() => {
+  if (sourceMode.value === 'camera') {
+    if (cameraState.value.running) return '实时识别中'
+    if (cameraState.value.loading) return '识别中'
+  }
+  if (detecting.value) return '识别中'
+  if (detectionError.value) return '识别失败'
+  if (detectionResult.value?.source === sourceMode.value) return '已完成'
+  if (sourceMode.value === 'upload' && selectedUploadFile.value) return '待识别'
+  return '待扫描'
+})
+const uploadDetectionButtonText = computed(() => {
+  if (detecting.value) return '正在识别'
+  if (detectionResult.value?.source === 'upload' || detectionError.value) return '重新识别'
+  return '开始识别'
+})
+const uploadDisplayImage = computed(() => {
+  if (detectionResult.value?.source !== 'upload') return previewUrl.value
+  return detectionResult.value.items?.[0]?.annotated_image || previewUrl.value
+})
+const uploadImageAlt = computed(() => detectionResult.value?.source === 'upload' ? '商品检测标注结果' : '待识别商品预览')
 const averageConfidence = computed(() => {
   const detections = detectionResult.value?.items?.flatMap((item) => item.detections || []) || []
   if (!detections.length) return '--'
@@ -154,6 +181,7 @@ function productsFromDetection(detections, priceSummary) {
 }
 
 function applyRealtimeDetection(result) {
+  if (sourceMode.value !== 'camera') return
   const item = { filename: 'IP Webcam 当前帧', detections: result.detections || [] }
   detectionResult.value = { source: 'camera', items: [item] }
   activeModelVersionId.value = result.model_version_id || null
@@ -168,19 +196,40 @@ function handleCameraStatus(status) {
   if (status.error) detectionError.value = status.error
 }
 
-async function setPreview(file) {
-  if (!file?.type?.startsWith('image/')) return
-  const sequence = ++detectionSequence
+function selectUploadImage(file) {
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!file || !allowedTypes.has(file.type)) {
+    ElMessage.warning('请选择 JPG、PNG 或 WEBP 格式的图片')
+    return
+  }
+  detectionSequence++
+  pricingSequence++
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  selectedUploadFile.value = file
   previewUrl.value = URL.createObjectURL(file)
+  detecting.value = false
+  pricing.value = false
+  detectionError.value = ''
+  detectionResult.value = null
+  activeModelVersionId.value = null
+  products.value = []
+  checkoutSummary.value = null
+}
+
+async function startUploadDetection() {
+  const file = selectedUploadFile.value
+  if (!file || detecting.value) return
+  const sequence = ++detectionSequence
   detecting.value = true
   detectionError.value = ''
+  detectionResult.value = null
+  activeModelVersionId.value = null
   products.value = []
   checkoutSummary.value = null
   try {
     const result = await detectCheckoutApi(file)
     if (sequence !== detectionSequence) return
-    detectionResult.value = result
+    detectionResult.value = { ...result, source: 'upload' }
     activeModelVersionId.value = result.model_version_id || null
     checkoutSummary.value = result.price_summary
     products.value = productsFromDetection(
@@ -196,8 +245,13 @@ async function setPreview(file) {
     if (sequence === detectionSequence) detecting.value = false
   }
 }
-function handleUpload(event) { setPreview(event.target.files?.[0]); event.target.value = '' }
-function handleDrop(event) { setPreview(event.dataTransfer.files?.[0]) }
+function openUploadPicker() {
+  if (!detecting.value) uploadInputRef.value?.click()
+}
+function handleUpload(event) { selectUploadImage(event.target.files?.[0]); event.target.value = '' }
+function handleDrop(event) {
+  if (!detecting.value) selectUploadImage(event.dataTransfer.files?.[0])
+}
 async function recalculateCart() {
   const sequence = ++pricingSequence
   if (!products.value.length) {
@@ -235,7 +289,7 @@ async function removeProduct(classId) {
   try { await recalculateCart() }
   catch { products.value = previous }
 }
-function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; activeModelVersionId.value = null; detectionError.value = ''; if (sourceMode.value === 'camera') cameraDetectionRef.value?.start(); else selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
+function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; activeModelVersionId.value = null; detectionError.value = ''; selectedUploadFile.value = null; if (sourceMode.value === 'camera') cameraDetectionRef.value?.start(); else selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
 function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 async function goToPayment() {
   const order = { items: products.value, itemCount: totalItems.value, totalPrice: totalPrice.value, currency: 'CNY', modelVersionId: activeModelVersionId.value }
@@ -249,7 +303,19 @@ async function goToPayment() {
     creatingOrder.value = false
   }
 }
-function selectSource(mode) { sourceMode.value = mode }
+function selectSource(mode) {
+  if (sourceMode.value === mode) return
+  detectionSequence++
+  pricingSequence++
+  detecting.value = false
+  pricing.value = false
+  detectionResult.value = null
+  checkoutSummary.value = null
+  activeModelVersionId.value = null
+  detectionError.value = ''
+  products.value = []
+  sourceMode.value = mode
+}
 onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); cameraDetectionRef.value?.stop() })
 </script>
 
@@ -536,12 +602,40 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     &:hover {
       background: $primary-hover;
     }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: .58;
+    }
   }
 
   img {
     max-width: 90%;
     max-height: 350px;
     object-fit: contain;
+  }
+}
+
+.upload-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  button.secondary {
+    border: 1px solid $border-color;
+    color: $text-primary;
+    background: $surface-color;
+
+    &:hover:not(:disabled) {
+      border-color: $primary-color;
+      color: $primary-color;
+      background: $primary-soft;
+    }
+  }
+
+  button.primary:hover:not(:disabled) {
+    background: $primary-hover;
   }
 }
 

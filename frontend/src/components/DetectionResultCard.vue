@@ -41,10 +41,16 @@
           <span><el-icon><ZoomIn /></el-icon></span>
         </button>
         <div class="image-meta"><strong :title="item.filename">{{ isVideo ? `帧 ${item.frame_index} · ${Number(item.timestamp_seconds || 0).toFixed(2)}s` : item.filename }}</strong><span>{{ item.object_count }} 件 · {{ formatTime(item.inference_time_ms) }}</span></div>
-        <el-table v-if="item.detections.length" :data="item.detections" size="small" max-height="190">
-          <el-table-column prop="class_name" label="商品类别" min-width="110" />
-          <el-table-column label="置信度" width="92"><template #default="scope">{{ (scope.row.confidence * 100).toFixed(1) }}%</template></el-table-column>
-        </el-table>
+        <details v-if="item.detections.length" class="confidence-details">
+          <summary>
+            <span>商品置信度明细</span>
+            <small>{{ item.detections.length }} 项</small>
+          </summary>
+          <el-table :data="item.detections" size="small" max-height="190">
+            <el-table-column prop="class_name" label="商品类别" min-width="110" />
+            <el-table-column label="置信度" width="92"><template #default="scope">{{ (scope.row.confidence * 100).toFixed(1) }}%</template></el-table-column>
+          </el-table>
+        </details>
       </article>
     </div>
     <el-dialog v-model="previewVisible" title="标注图预览" width="min(920px, 92vw)" append-to-body>
@@ -99,7 +105,14 @@ function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 .preview-button:hover span { opacity: 1; }
 .image-meta { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: 12px; color: $text-secondary; }
 .image-meta strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: $text-primary; }
-.image-result :deep(.el-table) { width: calc(100% - 24px); margin: 0 12px; }
+.confidence-details { margin: 0 12px; overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-color; }
+.confidence-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 38px; padding: 0 11px; color: $text-secondary; background: $surface-muted; cursor: pointer; font-size: 12px; font-weight: 600; list-style: none; user-select: none; }
+.confidence-details summary::-webkit-details-marker { display: none; }
+.confidence-details summary::after { content: ''; width: 7px; height: 7px; flex: none; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translate(-1px, 1px); transition: transform .2s ease; }
+.confidence-details[open] summary::after { transform: rotate(225deg) translate(-1px, 1px); }
+.confidence-details summary span { flex: 1; }
+.confidence-details summary small { color: $text-placeholder; font-size: 10px; font-weight: 500; }
+.confidence-details :deep(.el-table) { width: 100%; border-top: 1px solid $border-color; }
 .image-result :deep(.el-table th.el-table__cell) { color: $text-secondary; font-weight: 600; background: $surface-muted; }
 .dialog-image { display: block; max-width: 100%; max-height: 72vh; margin: auto; object-fit: contain; }
 </style>

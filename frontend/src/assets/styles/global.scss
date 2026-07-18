@@ -212,6 +212,20 @@ html.dark .el-select__wrapper,
 html.dark .el-input-number { color: #f3f4f6; background: #1f232c; }
 html.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .2); }
 
+/* Keep all teleported Element Plus modal surfaces anchored to the current viewport. */
+body > .el-overlay,
+body > .el-overlay-message-box {
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+body > .el-overlay .el-overlay-dialog,
+body > .el-overlay-message-box {
+  max-height: 100dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
 .page-container {
   min-height: calc(100vh - $header-height);
   padding: 24px;

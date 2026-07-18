@@ -12,12 +12,13 @@ from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.config.settings import settings
 from app.database.session import SessionLocal, get_db
-from app.entity.db_models import DatasetVersion
+from app.entity.db_models import DatasetAnnotation, DatasetImage, DatasetVersion
 from app.entity.schemas import (
     DatasetValidationRequest,
     DatasetValidationResponse,
@@ -430,6 +431,155 @@ def get_dataset_version(
         return dataset_service.serialize(dataset_service.get(db, dataset_id))
     except DatasetNotFoundError as exc:
         _raise_service_error(exc)
+
+
+@router.get(
+    "/{dataset_id}/products/{product_id}/sample-image",
+    summary="查看商品训练集样例图片",
+)
+def get_product_sample_image(
+    dataset_id: int,
+    product_id: int,
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    """返回当前数据集中含有指定商品标注的一张训练图片。"""
+
+    try:
+        dataset = dataset_service.get(db, dataset_id)
+    except DatasetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    image = (
+        db.query(DatasetImage)
+        .join(DatasetAnnotation, DatasetAnnotation.dataset_image_id == DatasetImage.id)
+        .filter(
+            DatasetImage.dataset_version_id == dataset_id,
+            DatasetImage.split == "train",
+            DatasetAnnotation.product_id == product_id,
+        )
+        .order_by(DatasetImage.id.asc())
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="该商品暂无训练集图片")
+
+    storage_root = dataset_service._resolve_local_path(dataset.storage_path)
+    if storage_root is None:
+        raise HTTPException(status_code=404, detail="远程数据集暂不支持图片预览")
+
+    relative_path = Path(image.relative_path)
+    if relative_path.is_absolute():
+        raise HTTPException(status_code=404, detail="训练集图片路径无效")
+
+    storage_root = storage_root.resolve()
+    image_path = (storage_root / relative_path).resolve()
+    try:
+        image_path.relative_to(storage_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="训练集图片路径无效") from exc
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="训练集图片文件不存在")
+
+    return FileResponse(path=str(image_path))
+
+
+def _resolve_dataset_image_path(dataset: DatasetVersion, image: DatasetImage) -> Path:
+    storage_root = dataset_service._resolve_local_path(dataset.storage_path)
+    if storage_root is None:
+        raise HTTPException(status_code=404, detail="远程数据集暂不支持图片预览")
+
+    relative_path = Path(image.relative_path)
+    if relative_path.is_absolute():
+        raise HTTPException(status_code=404, detail="数据集图片路径无效")
+
+    storage_root = storage_root.resolve()
+    image_path = (storage_root / relative_path).resolve()
+    try:
+        image_path.relative_to(storage_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="数据集图片路径无效") from exc
+    if not image_path.is_file():
+        raise HTTPException(status_code=404, detail="数据集图片文件不存在")
+    return image_path
+
+
+@router.get(
+    "/{dataset_id}/products/{product_id}/images",
+    summary="列出商品的全部训练集图片",
+)
+def list_product_dataset_images(
+    dataset_id: int,
+    product_id: int,
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    """列出当前数据集中所有包含指定商品标注的训练集图片。"""
+
+    try:
+        dataset_service.get(db, dataset_id)
+    except DatasetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    images = (
+        db.query(DatasetImage)
+        .join(DatasetAnnotation, DatasetAnnotation.dataset_image_id == DatasetImage.id)
+        .filter(
+            DatasetImage.dataset_version_id == dataset_id,
+            DatasetImage.split == "train",
+            DatasetAnnotation.product_id == product_id,
+        )
+        .distinct()
+        .all()
+    )
+    split_order = {"train": 0, "val": 1, "test": 2}
+    images.sort(key=lambda item: (split_order.get(item.split, 3), item.id))
+    return {
+        "total": len(images),
+        "items": [
+            {
+                "id": image.id,
+                "split": image.split,
+                "filename": Path(image.relative_path).name,
+            }
+            for image in images
+        ],
+    }
+
+
+@router.get(
+    "/{dataset_id}/products/{product_id}/images/{image_id}",
+    summary="查看商品训练集图片",
+)
+def get_product_dataset_image(
+    dataset_id: int,
+    product_id: int,
+    image_id: int,
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    """返回一张确实与指定商品关联的训练集图片。"""
+
+    try:
+        dataset = dataset_service.get(db, dataset_id)
+    except DatasetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    image = (
+        db.query(DatasetImage)
+        .join(DatasetAnnotation, DatasetAnnotation.dataset_image_id == DatasetImage.id)
+        .filter(
+            DatasetImage.id == image_id,
+            DatasetImage.dataset_version_id == dataset_id,
+            DatasetImage.split == "train",
+            DatasetAnnotation.product_id == product_id,
+        )
+        .first()
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="商品数据集图片不存在")
+
+    return FileResponse(path=str(_resolve_dataset_image_path(dataset, image)))
 
 
 @router.put("/{dataset_id}", response_model=DatasetVersionResponse, summary="修改数据集草稿")

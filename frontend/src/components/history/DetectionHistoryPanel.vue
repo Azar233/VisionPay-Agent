@@ -30,7 +30,7 @@
 
     <footer class="pagination-row"><span>共 {{ pagination.total }} 条记录</span><el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize" :page-sizes="[10, 20, 50]" :total="pagination.total" layout="sizes, prev, pager, next" @current-change="loadTasks" @size-change="handleSizeChange" /></footer>
 
-    <el-drawer v-model="detailVisible" :title="detail?.task ? `识别任务 #${detail.task.id}` : '任务详情'" size="min(720px, 92vw)">
+    <el-drawer v-model="detailVisible" :title="detail?.task ? `识别任务 #${detail.task.id}` : '任务详情'" size="min(720px, 92vw)" append-to-body>
       <div v-loading="detailLoading" class="detail-content">
         <template v-if="detail?.task">
           <section class="detail-summary">
