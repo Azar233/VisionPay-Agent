@@ -543,6 +543,50 @@ class AgentConfirmationService:
             return cls._preview_training(db, action, parameters, user_id)
         return cls._preview_catalog(db, action, parameters)
 
+    # 同一目标存在多张待确认卡会导致叠加执行（如同一商品先后改成两个价），
+    # 新预览创建时自动取消这些键所标识目标上的旧待确认操作；空元组表示同 action 全部取代。
+    _SUPERSEDE_TARGET_KEYS: dict[str, tuple[str, ...]] = {
+        "catalog.update_price": ("dataset_version_id", "product_id"),
+        "catalog.clear_price": ("dataset_version_id", "product_id"),
+        "dataset.derive": ("dataset_id",),
+        "dataset.freeze": ("dataset_id",),
+        "dataset.archive": ("dataset_id",),
+        "dataset.delete_draft": ("dataset_id",),
+        "dataset.delete_product": ("dataset_id", "product_id"),
+        "training.stop": ("task_id",),
+        "training.set_default_model": (),
+    }
+
+    @classmethod
+    def _cancel_superseded_pending(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        username: str | None,
+        action: str,
+        parameters: dict,
+    ) -> None:
+        if action not in cls._SUPERSEDE_TARGET_KEYS:
+            return
+        keys = cls._SUPERSEDE_TARGET_KEYS[action]
+        candidates = db.query(AgentPendingOperation).filter(
+            AgentPendingOperation.user_id == user_id,
+            AgentPendingOperation.action == action,
+            AgentPendingOperation.status == "pending",
+        ).all()
+        for candidate in candidates:
+            candidate_params = candidate.parameters or {}
+            if all(candidate_params.get(key) == parameters.get(key) for key in keys):
+                candidate.status = "cancelled"
+                cls._audit(
+                    db,
+                    candidate,
+                    username=username,
+                    event="confirmation_superseded",
+                    detail="已被新的影响预览取代",
+                )
+
     @classmethod
     def create_preview(
         cls,
@@ -595,6 +639,13 @@ class AgentConfirmationService:
             return cls.serialize(existing, confirmation_token=token, replayed=True)
 
         domain, risk_level, _ = ACTION_META[action]
+        cls._cancel_superseded_pending(
+            db,
+            user_id=user_id,
+            username=username,
+            action=action,
+            parameters=normalized,
+        )
         operation = AgentPendingOperation(
             operation_uuid=uuid4().hex,
             user_id=user_id,

@@ -76,7 +76,7 @@
                 <KnowledgeSourcesCard v-if="message.knowledgeSources" :payload="message.knowledgeSources" />
                 <AgentInputFormCard v-if="message.inputForm" :form="message.inputForm" @submit="submitInputForm" />
                 <el-button v-if="message.handoff?.page_url" class="handoff-action" type="primary" plain @click="router.push(message.handoff.page_url)">前往数据集页面完成人工标注 <el-icon><ArrowRight /></el-icon></el-button>
-                <AgentConfirmationCard v-if="message.confirmation" :operation="message.confirmation" @changed="loadPendingOperations" />
+                <AgentConfirmationCard v-for="operation in (message.confirmations || [])" :key="operation.operation_uuid" :operation="operation" @changed="handleOperationCardChanged" />
               </div>
               <DetectionResultCard v-if="message.result" class="detection-result" :result="message.result" />
             </div>
@@ -141,6 +141,10 @@
         </section>
         </div>
       </aside>
+
+      <el-dialog v-model="operationDialogVisible" title="待确认操作" width="560px" append-to-body destroy-on-close>
+        <AgentConfirmationCard v-if="focusedOperation" :operation="focusedOperation" @changed="handleOperationCardChanged" />
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -287,15 +291,30 @@ async function openSession(sessionUuid) {
       ...message,
       inputForm: message.input_form,
       knowledgeSources: message.knowledge_sources,
+      // 历史消息统一成确认卡数组：新数据用 confirmations，旧数据用单个 confirmation 兜底。
+      confirmations: message.confirmations || (message.confirmation ? [message.confirmation] : []),
       loading: false,
     }))
-    await Promise.allSettled(agentStore.messages.filter((message) => message.confirmation?.operation_uuid).map(async (message) => {
-      Object.assign(message.confirmation, await getAgentOperationApi(message.confirmation.operation_uuid))
-    }))
+    await syncMessageConfirmations()
     await scrollBottom()
   } finally { sessionLoading.value = false }
 }
-async function openOperationSession(operation) { await openSession(operation.session_uuid); await scrollBottom() }
+// 同步对话页里所有确认卡的最新状态（弹窗确认、切换会话后都会用到）。
+async function syncMessageConfirmations() {
+  await Promise.allSettled(
+    agentStore.messages
+      .flatMap((message) => message.confirmations || [])
+      .filter((operation) => operation?.operation_uuid)
+      .map(async (operation) => {
+        Object.assign(operation, await getAgentOperationApi(operation.operation_uuid))
+      }),
+  )
+}
+// 侧边栏待确认操作：直接弹出该操作的确认卡，而不是静默跳转会话。
+const focusedOperation = ref(null)
+const operationDialogVisible = ref(false)
+function openOperationSession(operation) { focusedOperation.value = operation; operationDialogVisible.value = true }
+function handleOperationCardChanged() { loadPendingOperations(); syncMessageConfirmations() }
 async function removeSession(session) {
   try {
     await ElMessageBox.confirm(`确定删除“${session.title}”吗？`, '删除对话', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
@@ -349,7 +368,7 @@ async function sendMessage() {
   let sessionUuid
   try { sessionUuid = await ensureSession() } catch (error) { ElMessage.error(error.message || '无法创建对话'); return }
   agentStore.addMessage({ role: 'user', content: text, files: files.map((file) => ({ name: file.name })) })
-  const assistant = agentStore.addMessage({ role: 'assistant', content: '', loading: true, tool: '', result: null, agent: '', parallelAgents: [], _lastTextAgent: '', knowledgeSources: null })
+  const assistant = agentStore.addMessage({ role: 'assistant', content: '', loading: true, tool: '', result: null, agent: '', parallelAgents: [], _lastTextAgent: '', knowledgeSources: null, confirmations: [] })
   inputText.value = ''; agentStore.setLoading(true); scrollBottom()
   try {
     const upload = files.length ? await uploadChatFilesApi(files) : { files: [] }
@@ -390,7 +409,7 @@ async function sendMessage() {
         if (event.type === 'knowledge_sources') { assistant.knowledgeSources = event; assistant.tool = '' }
         if (event.type === 'input_form') { assistant.inputForm = event.form; assistant.tool = '' }
         if (event.type === 'handoff_required') { assistant.handoff = event; assistant.tool = '' }
-        if (event.type === 'confirmation_required') { assistant.confirmation = event.operation; assistant.tool = ''; loadPendingOperations() }
+        if (event.type === 'confirmation_required') { assistant.confirmations.push(event.operation); assistant.confirmation = event.operation; assistant.tool = ''; loadPendingOperations() }
         if (event.type === 'detection_result') { assistant.result = event.result; assistant.tool = '' }
         if (event.type === 'error') assistant.content += `\n\n${event.content}`
         scrollBottomIfNearBottom()

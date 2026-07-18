@@ -69,6 +69,8 @@ describe('AgentConfirmationCard', () => {
     }
     mocks.get
       .mockResolvedValueOnce({ ...operation })
+      // 确认前的状态同步仍然返回 pending，流程才会继续。
+      .mockResolvedValueOnce({ ...operation })
       .mockResolvedValue({
         ...operation,
         status: 'executing',
@@ -114,6 +116,42 @@ describe('AgentConfirmationCard', () => {
       progress: 96,
     })
     expect(mocks.petFinish).toHaveBeenCalledWith(expect.objectContaining({ progress: 100 }))
+    wrapper.unmount()
+  })
+
+  it('waits for non-progress confirmations (e.g. price update) instead of failing early', async () => {
+    const confirmation = deferred()
+    const operation = {
+      operation_uuid: 'price-op-1',
+      action: 'catalog.update_price',
+      status: 'pending',
+      risk_level: 'R2',
+      confirmation_token: 'token-with-at-least-twenty-characters',
+      impact: { title: '更新商品价格', summary: '商品价格将从 3.5 改为 13.5 CNY' },
+    }
+    mocks.get.mockResolvedValue({ ...operation })
+    mocks.confirm.mockReturnValue(confirmation.promise)
+
+    const wrapper = mount(AgentConfirmationCard, {
+      props: { operation },
+      global: { stubs },
+    })
+    await flushPromises()
+    await wrapper.get('button').trigger('click')
+
+    // 请求未返回期间不得误报“操作执行未返回结果”。
+    await vi.advanceTimersByTimeAsync(500)
+    await flushPromises()
+    expect(mocks.petFinish).not.toHaveBeenCalled()
+    expect(operation.error_message).toBeFalsy()
+
+    confirmation.resolve({ ...operation, status: 'completed', result: { updated: true } })
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(100)
+    await flushPromises()
+
+    expect(mocks.petFinish).toHaveBeenCalledWith(expect.objectContaining({ progress: 100 }))
+    expect(operation.status).toBe('completed')
     wrapper.unmount()
   })
 })

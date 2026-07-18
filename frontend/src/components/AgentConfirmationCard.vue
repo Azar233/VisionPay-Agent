@@ -150,6 +150,13 @@ async function syncOperation() {
 async function confirmOperation() {
   if (working.value || props.operation.status !== 'pending') return
   working.value = true
+  // 该操作可能已在待确认弹窗等其他入口被处理，先同步最新状态再决定是否继续，
+  // 避免对已完成的操作重复刷新令牌而报“只有待确认操作可以刷新令牌”。
+  await syncOperation()
+  if (props.operation.status !== 'pending') {
+    working.value = false
+    return
+  }
   const tracksProgress = PROGRESS_ACTIONS.has(props.operation.action)
   const petTask = beginVisionPetTask({
     id: `agent-operation-${props.operation.operation_uuid}`,
@@ -196,6 +203,11 @@ async function confirmOperation() {
         progress: progress.progress,
       })
       lastDisplayedProgress = Math.max(lastDisplayedProgress, Number(progress.progress || 0))
+    }
+    // 非进度类操作（如改价）不走进度轮询，也必须等待请求落定，
+    // 否则会在响应返回前误判“操作执行未返回结果”。
+    while (!confirmationSettled) {
+      await waitForProgressPoll(20)
     }
     if (confirmationError) throw confirmationError
     if (!result) throw new Error('操作执行未返回结果')

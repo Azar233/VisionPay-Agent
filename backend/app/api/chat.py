@@ -156,6 +156,8 @@ async def get_session(
                 "handoff": metadata.get("handoff"),
                 "input_form": metadata.get("input_form"),
                 "confirmation": metadata.get("confirmation"),
+                "confirmations": metadata.get("confirmations")
+                or ([metadata["confirmation"]] if metadata.get("confirmation") else None),
                 "knowledge_sources": metadata.get("knowledge_sources"),
                 "result": _parse_json(message.tool_result),
                 "created_at": message.created_at,
@@ -388,6 +390,7 @@ async def chat_stream(
         handoff = None
         input_form = None
         confirmation = None
+        confirmations: list[dict] = []
         knowledge_sources = None
         error_text = None
         model_usage_by_run: dict[str, dict] = {}
@@ -446,6 +449,8 @@ async def chat_stream(
                         for key, value in raw_operation.items()
                         if key != "confirmation_token"
                     }
+                    # 批量预览会产生多张确认卡，全部持久化，前端按数组渲染。
+                    confirmations.append(dict(confirmation))
                 elif event.get("type") == "knowledge_sources":
                     knowledge_sources = {
                         key: value
@@ -496,6 +501,7 @@ async def chat_stream(
                                 **({"handoff": handoff} if handoff else {}),
                                 **({"input_form": input_form} if input_form else {}),
                                 **({"confirmation": confirmation} if confirmation else {}),
+                                **({"confirmations": confirmations} if confirmations else {}),
                                 **(
                                     {"knowledge_sources": knowledge_sources}
                                     if knowledge_sources

@@ -312,3 +312,87 @@ def test_confirmed_dataset_derive_exposes_task_progress(client, db_session, monk
         f"/api/agent/operations/{preview['operation_uuid']}", headers=headers
     ).json()
     assert current["task_progress"]["progress"] == 100
+
+
+def test_new_preview_supersedes_pending_operation_for_same_product(client, db_session):
+    headers, user, dataset, product = _records(client, db_session)
+
+    first = client.post(
+        "/api/agent/operations/preview",
+        headers=headers,
+        json={
+            "session_uuid": "confirmation-session",
+            "action": "catalog.update_price",
+            "parameters": {
+                "dataset_version_id": dataset.id,
+                "product_id": product.id,
+                "unit_price": 4.2,
+                "currency": "CNY",
+            },
+        },
+    )
+    assert first.status_code == 200, first.text
+    first_uuid = first.json()["operation_uuid"]
+
+    # 同一商品生成第二个不同价格的预览：旧的待确认必须被取代，避免叠加执行。
+    second = client.post(
+        "/api/agent/operations/preview",
+        headers=headers,
+        json={
+            "session_uuid": "confirmation-session",
+            "action": "catalog.update_price",
+            "parameters": {
+                "dataset_version_id": dataset.id,
+                "product_id": product.id,
+                "unit_price": 5.0,
+                "currency": "CNY",
+            },
+        },
+    )
+    assert second.status_code == 200, second.text
+    second_uuid = second.json()["operation_uuid"]
+    assert second_uuid != first_uuid
+
+    operations = db_session.query(AgentPendingOperation).filter(
+        AgentPendingOperation.operation_uuid.in_([first_uuid, second_uuid])
+    ).all()
+    by_uuid = {operation.operation_uuid: operation.status for operation in operations}
+    assert by_uuid[first_uuid] == "cancelled"
+    assert by_uuid[second_uuid] == "pending"
+
+    # 不同商品的待确认互不影响。
+    other = Product(product_key="confirm:other", name="雪碧", sku_name="sprite")
+    db_session.add(other)
+    db_session.flush()
+    db_session.add(
+        DatasetClassMapping(
+            dataset_version_id=dataset.id,
+            class_index=1,
+            product_id=other.id,
+            product_key=other.product_key,
+            category_id=302,
+            class_name="sprite",
+            display_name="雪碧",
+        )
+    )
+    db_session.commit()
+    third = client.post(
+        "/api/agent/operations/preview",
+        headers=headers,
+        json={
+            "session_uuid": "confirmation-session",
+            "action": "catalog.update_price",
+            "parameters": {
+                "dataset_version_id": dataset.id,
+                "product_id": other.id,
+                "unit_price": 6.0,
+                "currency": "CNY",
+            },
+        },
+    )
+    assert third.status_code == 200, third.text
+    db_session.expire_all()
+    still_pending = db_session.query(AgentPendingOperation).filter(
+        AgentPendingOperation.operation_uuid == second_uuid
+    ).one()
+    assert still_pending.status == "pending"
