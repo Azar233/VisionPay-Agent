@@ -8,6 +8,26 @@ export function getDatasetVersionApi(datasetId) {
   return request.get(`/datasets/${datasetId}`)
 }
 
+export function getDatasetProductSampleImageApi(datasetId, productId) {
+  return request.get(`/datasets/${datasetId}/products/${productId}/sample-image`, {
+    responseType: 'blob',
+    skipGlobalError: true,
+  })
+}
+
+export function getDatasetProductImagesApi(datasetId, productId) {
+  return request.get(`/datasets/${datasetId}/products/${productId}/images`, {
+    skipGlobalError: true,
+  })
+}
+
+export function getDatasetProductImageApi(datasetId, productId, imageId) {
+  return request.get(`/datasets/${datasetId}/products/${productId}/images/${imageId}`, {
+    responseType: 'blob',
+    skipGlobalError: true,
+  })
+}
+
 export function createDatasetVersionApi(data) {
   return request.post('/datasets', data)
 }

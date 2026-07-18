@@ -6,7 +6,9 @@
         <h1 class="vp-page-title">历史记录</h1>
         <p class="vp-page-subtitle">集中追溯商品识别、Agent 调用和模型生命周期，快速还原系统在什么时间执行了什么操作。</p>
       </div>
-      <el-button :icon="Refresh" :loading="refreshing" @click="refreshCurrent">刷新当前记录</el-button>
+      <div class="page-actions">
+        <el-button :icon="Refresh" :loading="refreshing" @click="refreshCurrent">刷新当前记录</el-button>
+      </div>
     </header>
 
     <section class="summary-grid">
@@ -73,8 +75,10 @@ onMounted(loadOverview)
 </script>
 
 <style lang="scss" scoped>
-.history-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-.page-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.history-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
+.page-header { padding: 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.page-header .vp-kicker { margin-bottom: 6px; }
+.page-actions { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .summary-grid article { min-width: 0; padding: 17px 18px; display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 12px; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
 .summary-grid article > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; font-size: 19px; }
@@ -96,5 +100,5 @@ onMounted(loadOverview)
 .tab-label small { min-width: 20px; padding: 2px 6px; border-radius: 999px; color: $text-placeholder; background: $surface-muted; font-size: 9px; text-align: center; }
 .history-tabs :deep(.is-active) .tab-label small { color: $primary-color; background: $primary-soft; }
 @media (max-width: 1050px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 680px) { .history-page { padding: 16px; }.page-header { align-items: flex-start; flex-direction: column; }.summary-grid { grid-template-columns: 1fr; }.history-tabs :deep(.el-tabs__item) { padding: 0 2px; }.tab-label { padding: 0 8px; }.tab-label small { display: none; } }
+@media (max-width: 760px) { .history-page { padding: 16px; }.page-header { align-items: flex-start; flex-direction: column; }.page-actions { width: 100%; justify-content: flex-start; }.summary-grid { grid-template-columns: 1fr; }.history-tabs :deep(.el-tabs__item) { padding: 0 2px; }.tab-label { padding: 0 8px; }.tab-label small { display: none; } }
 </style>

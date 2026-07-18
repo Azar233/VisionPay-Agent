@@ -44,7 +44,8 @@ def _write_dataset(root):
         (root / "labels" / split).mkdir(parents=True)
         for class_index in (0, 1):
             stem = f"{split}_{class_index}"
-            (root / "images" / split / f"{stem}.jpg").write_bytes(_jpeg_bytes())
+            image_color = (20 + class_index * 80, 80, 160 - class_index * 80)
+            (root / "images" / split / f"{stem}.jpg").write_bytes(_jpeg_bytes(image_color))
             (root / "labels" / split / f"{stem}.txt").write_text(
                 f"{class_index} 0.5 0.5 0.8 0.8\n",
                 encoding="utf-8",
@@ -102,6 +103,46 @@ def test_managed_dataset_end_to_end(client, db_session, tmp_path, monkeypatch):
     assert all(item["product_id"] for item in baseline["classes"])
     assert len({item["product_key"] for item in baseline["classes"]}) == 2
     assert (managed / f"scene_{scene.id}" / "baseline-v1" / "manifest.json").is_file()
+
+    first_sample = client.get(
+        f"/api/datasets/{baseline['id']}/products/{baseline['classes'][0]['product_id']}/sample-image",
+        headers=headers,
+    )
+    assert first_sample.status_code == 200, first_sample.text
+    assert first_sample.headers["content-type"] == "image/jpeg"
+    assert first_sample.content == _jpeg_bytes((20, 80, 160))
+    assert first_sample.content != _jpeg_bytes((100, 80, 80))
+    missing_sample = client.get(
+        f"/api/datasets/{baseline['id']}/products/999999/sample-image",
+        headers=headers,
+    )
+    assert missing_sample.status_code == 404
+    assert missing_sample.json()["message"] == "该商品暂无训练集图片"
+
+    first_product_id = baseline["classes"][0]["product_id"]
+    second_product_id = baseline["classes"][1]["product_id"]
+    image_listing = client.get(
+        f"/api/datasets/{baseline['id']}/products/{first_product_id}/images",
+        headers=headers,
+    )
+    assert image_listing.status_code == 200, image_listing.text
+    listed_images = image_listing.json()
+    assert listed_images["total"] == 1
+    assert [item["split"] for item in listed_images["items"]] == ["train"]
+    assert [item["filename"] for item in listed_images["items"]] == ["train_0.jpg"]
+
+    first_image_id = listed_images["items"][0]["id"]
+    first_image = client.get(
+        f"/api/datasets/{baseline['id']}/products/{first_product_id}/images/{first_image_id}",
+        headers=headers,
+    )
+    assert first_image.status_code == 200, first_image.text
+    assert first_image.content == _jpeg_bytes((20, 80, 160))
+    unrelated_image = client.get(
+        f"/api/datasets/{baseline['id']}/products/{second_product_id}/images/{first_image_id}",
+        headers=headers,
+    )
+    assert unrelated_image.status_code == 404
 
     derive_task_response = client.post(
         f"/api/datasets/{baseline['id']}/derive-task",

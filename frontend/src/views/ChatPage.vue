@@ -1,7 +1,7 @@
 <template>
   <div class="agent-chat-page" @dragover.prevent @drop.prevent="handleDrop">
     <div :class="['chat-layout', { 'sessions-collapsed': sessionsCollapsed, 'insights-collapsed': insightsCollapsed }]">
-      <aside v-show="!sessionsCollapsed" class="session-panel">
+      <aside class="session-panel" :aria-hidden="sessionsCollapsed">
         <div class="sidebar-toolbar">
           <el-button class="new-chat" type="primary" :icon="Plus" @click="createNewChat">
             <span>新建对话</span>
@@ -43,7 +43,11 @@
           </div>
         </div>
         <div ref="messageListRef" class="message-list">
-          <section v-if="!agentStore.messages.length" class="welcome-state">
+          <section
+            v-if="!agentStore.messages.length"
+            :key="`welcome-${newChatViewKey}`"
+            class="welcome-state"
+          >
             <div class="welcome-mark" aria-hidden="true"><el-icon><Connection /></el-icon></div>
             <span>管理工作区</span>
             <h2>今天想处理什么？</h2>
@@ -102,7 +106,7 @@
         </footer>
       </main>
 
-      <aside v-show="!insightsCollapsed" class="insight-panel">
+      <aside class="insight-panel" :aria-hidden="insightsCollapsed">
         <div class="insight-toolbar">
           <div class="insight-heading">
             <span>管理辅助</span>
@@ -187,6 +191,7 @@ const messageListRef = ref(null)
 const sessionLoading = ref(false)
 const sessionsCollapsed = ref(false)
 const insightsCollapsed = ref(false)
+const newChatViewKey = ref(0)
 const agentStatus = ref({ configured: false, model: 'DeepSeek', agents: [] })
 const pendingOperations = ref([])
 const pendingFormSubmission = ref(null)
@@ -279,7 +284,7 @@ async function ensureSession() {
   return session.session_uuid
 }
 function createNewChat() {
-  stopStream(); agentStore.currentSessionId = null; agentStore.messages = []; inputText.value = ''; pendingFormSubmission.value = null; clearFiles()
+  stopStream(); agentStore.currentSessionId = null; agentStore.messages = []; inputText.value = ''; pendingFormSubmission.value = null; clearFiles(); newChatViewKey.value += 1
 }
 async function openSession(sessionUuid) {
   if (agentStore.isLoading || sessionUuid === agentStore.currentSessionId && agentStore.messages.length) return
@@ -441,31 +446,41 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   --insight-column: 280px;
   min-height: 0;
   flex: 1;
-  display: grid;
-  grid-template-columns: var(--session-column) minmax(0, 1fr) var(--insight-column);
-  gap: 16px;
+  display: flex;
+  gap: 0;
   overflow: hidden;
 }
 
 .chat-layout.sessions-collapsed {
-  grid-template-columns: minmax(0, 1fr) var(--insight-column);
-
-  .session-panel { display: none; }
-  .conversation-panel { grid-column: 1 / 2; }
-  .insight-panel { grid-column: 2 / 3; }
+  .session-panel {
+    width: 0;
+    flex-basis: 0;
+    margin-right: 0;
+    padding-right: 0;
+    padding-left: 0;
+    border-width: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-18px);
+    pointer-events: none;
+    transition-delay: 0s, 0s, 0s, 0s, 0s, 0s, 0s, .28s;
+  }
 }
 
 .chat-layout.insights-collapsed {
-  grid-template-columns: var(--session-column) minmax(0, 1fr);
-
-  .insight-panel { display: none; }
-  .conversation-panel { grid-column: 2 / 3; }
-}
-
-.chat-layout.sessions-collapsed.insights-collapsed {
-  grid-template-columns: minmax(0, 1fr);
-
-  .conversation-panel { grid-column: 1 / 2; }
+  .insight-panel {
+    width: 0;
+    flex-basis: 0;
+    margin-left: 0;
+    padding-right: 0;
+    padding-left: 0;
+    border-width: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(18px);
+    pointer-events: none;
+    transition-delay: 0s, 0s, 0s, 0s, 0s, 0s, 0s, .28s;
+  }
 }
 
 .session-panel,
@@ -479,9 +494,42 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   border-radius: $border-radius-md;
 }
 
-.session-panel { grid-column: 1 / 2; padding: 14px; }
-.conversation-panel { grid-column: 2 / 3; position: relative; min-width: 0; }
-.insight-panel { grid-column: 3 / 4; padding: 14px; }
+.session-panel,
+.insight-panel {
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition:
+    width .28s cubic-bezier(.2, .8, .2, 1),
+    flex-basis .28s cubic-bezier(.2, .8, .2, 1),
+    margin .28s cubic-bezier(.2, .8, .2, 1),
+    padding .28s cubic-bezier(.2, .8, .2, 1),
+    border-width .18s ease,
+    transform .28s cubic-bezier(.2, .8, .2, 1),
+    opacity .18s ease,
+    visibility 0s linear;
+}
+
+.session-panel {
+  width: var(--session-column);
+  flex: 0 0 var(--session-column);
+  margin-right: 16px;
+  padding: 14px;
+}
+
+.conversation-panel {
+  position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.insight-panel {
+  width: var(--insight-column);
+  flex: 0 0 var(--insight-column);
+  margin-left: 16px;
+  padding: 14px;
+}
 
 .sidebar-toolbar,
 .insight-toolbar {
@@ -866,6 +914,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   background: rgba($surface-color, .92);
   box-shadow: $shadow-md;
   pointer-events: auto;
+  animation: panel-control-in .22s .1s both;
 }
 
 .floating-control-capsule--left { left: 14px; }
@@ -899,6 +948,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   overflow-y: auto;
   padding: 20px 20px 12px;
   scroll-behavior: smooth;
+  transition: padding-top .22s cubic-bezier(.2, .8, .2, 1);
 }
 
 .welcome-state {
@@ -906,6 +956,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   margin: 0 auto;
   padding: 48px 0;
   text-align: center;
+  animation: new-conversation-in .34s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .welcome-mark {
@@ -1295,6 +1346,16 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 }
 
 /* 动画 */
+@keyframes panel-control-in {
+  from { opacity: 0; transform: translateY(-6px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes new-conversation-in {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes thinking {
   0%, 70%, 100% { opacity: .25; transform: translateY(0); }
   35% { opacity: 1; transform: translateY(-2px); }
@@ -1340,15 +1401,19 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 }
 
 @media (max-width: 920px) {
-  .chat-layout { grid-template-columns: 1fr; overflow: visible; }
+  .chat-layout { display: grid; grid-template-columns: 1fr; overflow: visible; }
   .session-panel,
   .conversation-panel,
   .insight-panel {
     grid-column: auto;
     position: static;
     width: auto;
+    flex-basis: auto;
+    margin: 0;
     border: 1px solid $border-color;
   }
+  .chat-layout.sessions-collapsed .session-panel,
+  .chat-layout.insights-collapsed .insight-panel { display: none; }
   .conversation-panel { min-height: 560px; }
   .message-list, .composer { padding-left: 14px; padding-right: 14px; }
   .welcome-state { padding: 32px 0; }
@@ -1359,5 +1424,14 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   .quick-grid { grid-template-columns: 1fr; }
   .message-column { max-width: 100%; }
   .message-row.user .message-column { max-width: 92%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-panel,
+  .insight-panel,
+  .message-list { transition: none; }
+
+  .floating-control-capsule,
+  .welcome-state { animation: none; }
 }
 </style>

@@ -2,6 +2,7 @@
   <div class="price-management-page">
     <div class="page-header">
       <div>
+        <span class="vp-kicker">Catalog Operations</span>
         <h1 class="vp-page-title">价目表管理</h1>
         <p class="vp-page-subtitle">选择数据集版本后，只管理该版本中已有商品的价格</p>
       </div>
@@ -44,6 +45,7 @@
         <strong>{{ selectedDataset.version }}</strong>
         <span>{{ selectedDataset.name }}</span>
         <span class="summary-count">{{ selectedDataset.class_count }} 种商品</span>
+        <span v-if="isCatalogOnly" class="catalog-only-note">导入的可用模型无法查看图片</span>
       </div>
     </section>
 
@@ -75,36 +77,55 @@
         <el-table
           v-loading="loading"
           :data="paginatedPriceList"
+          class="price-table"
           row-key="product_id"
-          stripe
-          border
-          style="width: 100%"
           :default-sort="{ prop: 'class_index', order: 'ascending' }"
+          empty-text="当前数据集版本暂无商品"
           @sort-change="handleSortChange"
         >
-          <el-table-column prop="class_index" label="class_id" sortable="custom" width="105" />
-          <el-table-column prop="product_id" label="product_id" sortable="custom" width="112" />
-          <el-table-column prop="name" label="商品名称" min-width="150" show-overflow-tooltip>
-            <template #default="{ row }">{{ row.name || row.display_name || '-' }}</template>
+          <el-table-column prop="name" label="商品信息" min-width="210">
+            <template #default="{ row }">
+              <div class="product-identity">
+                <strong :title="row.name || row.display_name || '-'">{{ row.name || row.display_name || '-' }}</strong>
+                <span :title="row.class_name">{{ row.class_name || '未命名类别' }}</span>
+              </div>
+            </template>
           </el-table-column>
-          <el-table-column prop="class_name" label="类别名称" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="product_key" label="product_key" min-width="210" show-overflow-tooltip />
-          <el-table-column prop="barcode" label="商品条码" min-width="140" show-overflow-tooltip>
+          <el-table-column prop="class_index" label="class_id" sortable="custom" min-width="100">
+            <template #default="{ row }">{{ row.class_index }}</template>
+          </el-table-column>
+          <el-table-column prop="product_id" label="product_id" min-width="110" />
+          <el-table-column prop="product_key" label="product_key" min-width="190" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.product_key || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="barcode" label="商品条码" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">{{ row.barcode || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="unit_price" label="单价" sortable="custom" width="120">
+          <el-table-column prop="unit_price" label="销售价格" sortable="custom" min-width="130" align="right">
             <template #default="{ row }">
-              <span v-if="row.has_price" class="price-value">{{ formatPrice(row.unit_price) }}</span>
+              <div v-if="row.has_price" class="price-cell">
+                <strong>{{ formatPrice(row.unit_price) }}</strong>
+                <span>{{ row.currency || 'CNY' }}</span>
+              </div>
               <span v-else class="vp-pill vp-pill--warning">未配置</span>
             </template>
           </el-table-column>
-          <el-table-column prop="currency" label="货币" width="80" />
-          <el-table-column prop="updated_at" label="更新时间" width="170">
+          <el-table-column prop="updated_at" label="更新时间" min-width="170">
             <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="120" fixed="right" align="center">
+          <el-table-column label="操作" :width="isCatalogOnly ? 112 : 190" fixed="right" align="center">
             <template #default="{ row }">
               <div class="table-actions vp-table-action-safe-area">
+                <el-button
+                  v-if="!isCatalogOnly"
+                  class="row-action image-action"
+                  size="small"
+                  :icon="Picture"
+                  aria-label="查看训练集图片"
+                  @click="openSamplePreview(row)"
+                >
+                  <span class="row-action-label">查看图片</span>
+                </el-button>
                 <el-button
                   class="row-action vp-table-action-button is-primary-action"
                   size="small"
@@ -120,13 +141,14 @@
         </el-table>
 
         <footer class="pagination-row">
-          <span>共 {{ priceList.length }} 种商品，每页 {{ PAGE_SIZE }} 条</span>
+          <span>共 {{ priceList.length }} 种商品</span>
           <el-pagination
             v-model:current-page="currentPage"
-            :page-size="PAGE_SIZE"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
             :total="priceList.length"
-            background
-            layout="prev, pager, next"
+            layout="sizes, prev, pager, next"
+            @size-change="handleSizeChange"
           />
         </footer>
       </section>
@@ -176,18 +198,65 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="samplePreviewVisible"
+      :title="`${samplePreviewProduct?.name || samplePreviewProduct?.display_name || '商品'} · 全部训练集图片`"
+      width="min(1120px, 94vw)"
+      append-to-body
+      destroy-on-close
+      @closed="closeSamplePreview"
+    >
+      <div v-loading="samplePreviewLoading" class="sample-preview">
+        <el-empty
+          v-if="!samplePreviewLoading && !samplePreviewItems.length"
+          description="该商品暂无关联的训练集图片"
+          :image-size="96"
+        />
+        <div v-else class="sample-preview-grid">
+          <article v-for="item in samplePreviewItems" :key="item.id" class="sample-preview-card">
+            <div v-loading="item.loading" class="sample-preview-image">
+              <img
+                v-if="item.url"
+                :src="item.url"
+                :alt="`${samplePreviewProduct?.name || '商品'} · ${item.filename}`"
+              >
+              <span v-else-if="item.error">图片加载失败</span>
+            </div>
+            <div class="sample-preview-card-meta">
+              <span :title="item.filename">{{ item.filename }}</span>
+              <span :class="['dataset-split', `dataset-split--${item.split}`]">
+                {{ splitLabel(item.split) }}
+              </span>
+            </div>
+          </article>
+        </div>
+      </div>
+      <template #footer>
+        <div class="sample-preview-footer">
+          <span class="sample-preview-meta">
+            product_id {{ samplePreviewProduct?.product_id }} ·
+            已加载 {{ samplePreviewLoadedCount }} / {{ samplePreviewItems.length }} 张
+          </span>
+          <el-button @click="samplePreviewVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Edit, Search } from '@element-plus/icons-vue'
-import { getDatasetVersionsApi } from '@/api/datasets'
+import { Edit, Picture, Search } from '@element-plus/icons-vue'
+import {
+  getDatasetProductImageApi,
+  getDatasetProductImagesApi,
+  getDatasetVersionsApi,
+} from '@/api/datasets'
 import { getDetectionModelVersionsApi } from '@/api/training'
 import { getPricesApi, updatePriceApi } from '@/api/prices'
 
-const PAGE_SIZE = 10
 const datasetLoading = ref(false)
 const loading = ref(false)
 const submitting = ref(false)
@@ -196,9 +265,15 @@ const selectedDatasetId = ref(null)
 const priceList = ref([])
 const searchKeyword = ref('')
 const currentPage = ref(1)
+const pageSize = ref(10)
 const sortState = ref({ prop: 'class_index', order: 'ascending' })
 const dialogVisible = ref(false)
 const editingRow = ref(null)
+const samplePreviewVisible = ref(false)
+const samplePreviewLoading = ref(false)
+const samplePreviewItems = ref([])
+const samplePreviewProduct = ref(null)
+const samplePreviewRequestId = ref(0)
 const formRef = ref(null)
 const form = ref(emptyForm())
 
@@ -209,6 +284,10 @@ const formRules = {
 
 const selectedDataset = computed(() => (
   datasetVersions.value.find((item) => item.id === selectedDatasetId.value) || null
+))
+const isCatalogOnly = computed(() => Boolean(selectedDataset.value?.extra_metadata?.catalog_only))
+const samplePreviewLoadedCount = computed(() => (
+  samplePreviewItems.value.filter((item) => Boolean(item.url)).length
 ))
 
 const sortedPriceList = computed(() => {
@@ -223,8 +302,8 @@ const sortedPriceList = computed(() => {
 })
 
 const paginatedPriceList = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return sortedPriceList.value.slice(start, start + PAGE_SIZE)
+  const start = (currentPage.value - 1) * pageSize.value
+  return sortedPriceList.value.slice(start, start + pageSize.value)
 })
 
 function emptyForm() {
@@ -282,7 +361,7 @@ async function fetchPrices() {
   loading.value = true
   try {
     priceList.value = await getPricesApi(selectedDatasetId.value, searchKeyword.value)
-    const lastPage = Math.max(1, Math.ceil(priceList.value.length / PAGE_SIZE))
+    const lastPage = Math.max(1, Math.ceil(priceList.value.length / pageSize.value))
     currentPage.value = Math.min(currentPage.value, lastPage)
   } catch {
     priceList.value = []
@@ -309,6 +388,10 @@ function handleSortChange({ prop, order }) {
   currentPage.value = 1
 }
 
+function handleSizeChange() {
+  currentPage.value = 1
+}
+
 function resetForm() {
   editingRow.value = null
   form.value = emptyForm()
@@ -326,6 +409,85 @@ function openEditDialog(row) {
     currency: row.currency || 'CNY',
   }
   dialogVisible.value = true
+}
+
+function splitLabel(split) {
+  return { train: '训练集', val: '验证集', test: '测试集' }[split] || split
+}
+
+function revokeSamplePreviewUrls() {
+  samplePreviewItems.value.forEach((item) => {
+    if (item.url) URL.revokeObjectURL(item.url)
+  })
+  samplePreviewItems.value = []
+}
+
+async function loadPreviewImage(item, datasetId, productId, requestId) {
+  try {
+    const imageBlob = await getDatasetProductImageApi(datasetId, productId, item.id)
+    if (requestId !== samplePreviewRequestId.value || !samplePreviewVisible.value) return
+    item.url = URL.createObjectURL(imageBlob)
+  } catch {
+    if (requestId === samplePreviewRequestId.value) item.error = true
+  } finally {
+    if (requestId === samplePreviewRequestId.value) item.loading = false
+  }
+}
+
+async function loadPreviewImages(items, datasetId, productId, requestId) {
+  const queue = [...items]
+  const worker = async () => {
+    while (queue.length && requestId === samplePreviewRequestId.value) {
+      const item = queue.shift()
+      await loadPreviewImage(item, datasetId, productId, requestId)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker))
+}
+
+async function openSamplePreview(row) {
+  if (!selectedDatasetId.value || isCatalogOnly.value) return
+  const requestId = ++samplePreviewRequestId.value
+  revokeSamplePreviewUrls()
+  samplePreviewProduct.value = row
+  samplePreviewLoading.value = true
+  samplePreviewVisible.value = true
+  try {
+    const response = await getDatasetProductImagesApi(
+      selectedDatasetId.value,
+      row.product_id,
+    )
+    if (requestId !== samplePreviewRequestId.value || !samplePreviewVisible.value) return
+    samplePreviewItems.value = (response.items || []).map((item) => ({
+      ...item,
+      url: '',
+      loading: true,
+      error: false,
+    }))
+    samplePreviewLoading.value = false
+    if (!samplePreviewItems.value.length) return
+    void loadPreviewImages(
+      samplePreviewItems.value,
+      selectedDatasetId.value,
+      row.product_id,
+      requestId,
+    )
+  } catch (error) {
+    if (requestId !== samplePreviewRequestId.value) return
+    const detail = error.response?.data?.detail || error.response?.data?.message
+    ElMessage.warning(detail || '无法读取该商品的训练集图片')
+    samplePreviewVisible.value = false
+    samplePreviewProduct.value = null
+  } finally {
+    if (requestId === samplePreviewRequestId.value) samplePreviewLoading.value = false
+  }
+}
+
+function closeSamplePreview() {
+  samplePreviewRequestId.value += 1
+  samplePreviewLoading.value = false
+  revokeSamplePreviewUrls()
+  samplePreviewProduct.value = null
 }
 
 async function handleSubmit() {
@@ -355,6 +517,8 @@ onMounted(async () => {
   }
 })
 
+onBeforeUnmount(revokeSamplePreviewUrls)
+
 async function autoSelectDefaultModelDataset() {
   try {
     const response = await getDetectionModelVersionsApi()
@@ -377,11 +541,25 @@ async function autoSelectDefaultModelDataset() {
 
 <style lang="scss" scoped>
 .price-management-page {
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 100%;
+  padding: 24px;
+  color: $text-primary;
+  background: $bg-color;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 8px 0 14px;
+
+  .vp-kicker {
+    margin-bottom: 6px;
+  }
 }
 
 .dataset-scope-panel {
@@ -421,6 +599,14 @@ async function autoSelectDefaultModelDataset() {
   .summary-count { color: $text-secondary; }
 }
 
+.catalog-only-note {
+  padding-left: 10px;
+  color: $warning-color;
+  font-size: 13px;
+  font-weight: 600;
+  border-left: 1px solid $border-color;
+}
+
 .empty-card {
   display: flex;
   align-items: center;
@@ -429,22 +615,27 @@ async function autoSelectDefaultModelDataset() {
 }
 
 .table-card {
-  padding: 20px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
 }
 
 .table-toolbar {
+  min-height: 58px;
+  padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
   gap: 12px;
   flex-wrap: wrap;
+  border-bottom: 1px solid $border-color;
+  background: $surface-color;
 }
 
 .scope-hint { color: $text-secondary; font-size: 13px; }
-.table-actions { display: flex; align-items: center; justify-content: center; }
+.table-actions { display: flex; align-items: center; justify-content: center; gap: 8px; }
 .row-action {
-  min-width: 88px;
+  min-width: 78px;
   max-width: 100%;
   margin-left: 0;
   padding-inline: 12px;
@@ -452,6 +643,18 @@ async function autoSelectDefaultModelDataset() {
   font-weight: 500;
 
   :deep(.el-icon) { flex: 0 0 auto; }
+}
+.image-action {
+  color: $text-regular;
+  border-color: $border-color;
+  background: $surface-color;
+
+  &:hover,
+  &:focus-visible {
+    color: $primary-color;
+    border-color: $primary-color;
+    background: $primary-soft;
+  }
 }
 .edit-action {
   color: $primary-color;
@@ -466,19 +669,54 @@ async function autoSelectDefaultModelDataset() {
   }
 }
 
-.price-value { color: $text-primary; font-weight: 600; }
+.product-identity,
+.price-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.product-identity strong {
+  overflow: hidden;
+  color: $text-primary;
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-identity span,
+.price-cell span {
+  color: $text-secondary;
+  font-size: 12.5px;
+}
+
+.price-cell { align-items: flex-end; }
+.price-cell strong { color: $text-primary; font-size: 15px; font-weight: 700; }
 
 :deep(.el-table) {
-  --el-table-header-bg-color: #{$surface-color};
+  --el-table-header-bg-color: #{$surface-muted};
   --el-table-header-text-color: #{$text-secondary};
+  --el-table-row-hover-bg-color: #{$surface-muted};
+
+  .cell {
+    padding: 0 14px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
 
   th.el-table__cell {
+    height: 44px;
+    padding: 0;
     font-weight: 600;
-    background: $surface-color;
+    background: $surface-muted;
     border-bottom-color: $border-color;
   }
 
   td.el-table__cell {
+    height: 54px;
+    padding: 0;
     color: $text-regular;
     border-bottom-color: $border-color;
   }
@@ -491,20 +729,117 @@ async function autoSelectDefaultModelDataset() {
 
 .pagination-row {
   min-height: 64px;
-  padding: 12px 4px 0;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  border-top: 1px solid $border-color;
 
   > span { color: $text-secondary; font-size: 12px; }
 }
 
-@media (max-width: 720px) {
-  .page-header { margin-bottom: 16px; }
+.sample-preview {
+  min-height: 320px;
+  max-height: 68vh;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  background: $surface-muted;
+}
+
+.sample-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.sample-preview-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid $border-color;
+  border-radius: 11px;
+  background: $surface-color;
+}
+
+.sample-preview-image {
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: $bg-color;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  span {
+    color: $text-placeholder;
+    font-size: 13px;
+  }
+}
+
+.sample-preview-card-meta {
+  min-height: 42px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    color: $text-secondary;
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.dataset-split {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  color: $text-secondary;
+  font-size: 11px;
+  font-weight: 650;
+  border-radius: 999px;
+  background: $surface-muted;
+
+  &--train { color: $primary-color; background: $primary-soft; }
+  &--val { color: $success-color; background: var(--vp-success-bg); }
+  &--test { color: $warning-color; background: var(--vp-warning-bg); }
+}
+
+.sample-preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sample-preview-meta {
+  color: $text-secondary;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .price-management-page { padding: 16px; }
+  .page-header { align-items: flex-start; flex-direction: column; }
   .scope-copy,
   .selected-dataset-summary,
   .pagination-row { align-items: flex-start; flex-direction: column; }
+
+  .pagination-row { padding: 14px; }
+
+  .sample-preview { padding: 10px; }
+  .sample-preview-grid { grid-template-columns: 1fr; gap: 10px; }
+  .sample-preview-footer { align-items: flex-start; flex-direction: column; }
 
   .row-action {
     width: 32px;

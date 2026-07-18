@@ -340,6 +340,7 @@
       v-model="showCreateDialog"
       title="新建训练任务"
       width="620px"
+      append-to-body
       :close-on-click-modal="false"
     >
       <el-form :model="trainForm" label-width="120px">
@@ -451,6 +452,7 @@
       v-model="showImportDialog"
       title="导入离线训练结果"
       width="720px"
+      append-to-body
       :close-on-click-modal="false"
     >
       <el-form :model="importForm" label-width="130px">
@@ -518,6 +520,7 @@
       size="70%"
       :title="logDrawerTitle"
       direction="rtl"
+      append-to-body
       @closed="stopLogPolling"
     >
       <div class="log-toolbar">
@@ -542,6 +545,7 @@
       size="70%"
       title="模型评估报告"
       direction="rtl"
+      append-to-body
     >
       <div class="eval-toolbar">
         <div class="log-meta">
@@ -615,6 +619,7 @@
       v-model="showExportDialog"
       title="导出模型版本"
       width="520px"
+      append-to-body
       :close-on-click-modal="false"
     >
       <el-form :model="exportForm" label-width="100px">

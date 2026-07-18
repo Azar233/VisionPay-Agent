@@ -2,6 +2,7 @@
   <div class="dataset-page">
     <div class="page-header">
       <div>
+        <span class="vp-kicker">Dataset Operations</span>
         <h1 class="vp-page-title">数据集版本管理</h1>
         <p class="vp-page-subtitle">登记数据集元数据和类别映射，冻结后形成不可变版本，并记录训练与模型谱系。</p>
       </div>
@@ -61,7 +62,7 @@
             <el-option label="已发布" value="published" />
             <el-option label="已归档" value="archived" />
           </el-select>
-          <el-button type="primary" plain @click="fetchDatasets">查询</el-button>
+          <el-button @click="fetchDatasets">查询</el-button>
           <el-button @click="resetFilters">重置</el-button>
         </div>
         <div class="toolbar-actions">
@@ -147,6 +148,7 @@
       class="dataset-editor-dialog"
       width="960px"
       top="4vh"
+      append-to-body
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -211,7 +213,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="detailVisible" title="数据集版本详情" size="720px">
+    <el-drawer v-model="detailVisible" title="数据集版本详情" size="720px" append-to-body>
       <template v-if="detail">
         <div class="detail-heading">
           <div>
@@ -260,6 +262,7 @@
       v-model="modelImportVisible"
       title="导入可用模型"
       width="680px"
+      append-to-body
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -343,7 +346,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="baselineVisible" title="导入基线 dataset" width="640px" :close-on-click-modal="false">
+    <el-dialog v-model="baselineVisible" title="导入基线 dataset" width="640px" append-to-body :close-on-click-modal="false">
       <el-form :model="baselineForm" label-width="120px">
         <el-form-item label="场景 ID"><el-input-number v-model="baselineForm.scene_id" :min="1" /></el-form-item>
         <el-form-item label="源目录"><el-input v-model="baselineForm.source_path" placeholder="datasets/vision_pay 或集群绝对路径" /></el-form-item>
@@ -359,7 +362,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="deriveVisible" title="新建派生版本" width="560px">
+    <el-dialog v-model="deriveVisible" title="新建派生版本" width="560px" append-to-body>
       <el-form :model="deriveForm" label-width="100px">
         <el-form-item label="父版本"><el-input :model-value="deriveParent?.version || ''" disabled /></el-form-item>
         <el-form-item label="版本号"><el-input v-model="deriveForm.version" /></el-form-item>
@@ -378,6 +381,7 @@
       class="annotation-review-dialog"
       width="1180px"
       top="3vh"
+      append-to-body
       destroy-on-close
       :close-on-click-modal="false"
       @closed="handleAddProductClosed"
@@ -560,6 +564,7 @@
       v-model="deleteProductVisible"
       :title="`删除商品 · ${deleteProductDataset?.version || ''}`"
       width="820px"
+      append-to-body
     >
       <el-alert
         title="删除商品会移除其全部标注并自动重排后续 class_id；多商品场景仍有其他有效框时会保留图片。"
@@ -605,6 +610,7 @@
       :title="operationTask.title || '数据集操作进度'"
       width="540px"
       class="operation-progress-dialog"
+      append-to-body
       :close-on-click-modal="false"
       :close-on-press-escape="operationFinished"
       :show-close="operationFinished"
@@ -1517,22 +1523,29 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 20px;
+  min-height: 100%;
+  padding: 24px;
+  color: $text-primary;
+  background: $bg-color;
 }
 
 .page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 20px;
+  padding: 8px 0 14px;
+
+  .vp-kicker {
+    margin-bottom: 6px;
+  }
 }
 
 .page-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-shrink: 0;
+  gap: 10px;
 
   :deep(.el-button + .el-button) { margin-left: 0; }
 }
@@ -2325,13 +2338,20 @@ code {
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .dataset-page {
-    padding: 12px;
+    padding: 16px;
   }
 
   .page-header {
+    align-items: flex-start;
     flex-direction: column;
+  }
+
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .summary-grid,

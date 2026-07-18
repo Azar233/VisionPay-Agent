@@ -23,7 +23,7 @@
 
     <footer class="pagination-row"><span>共 {{ pagination.total }} 个模型版本</span><el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize" :page-sizes="[10,20,50]" :total="pagination.total" layout="sizes, prev, pager, next" @current-change="loadItems" @size-change="handleSizeChange" /></footer>
 
-    <el-drawer v-model="detailVisible" :title="detail?.model ? `模型 ${detail.model.version}` : '模型历史详情'" size="min(800px, 94vw)">
+    <el-drawer v-model="detailVisible" :title="detail?.model ? `模型 ${detail.model.version}` : '模型历史详情'" size="min(800px, 94vw)" append-to-body>
       <div v-loading="detailLoading" class="detail-content">
         <template v-if="detail?.model">
           <div class="model-hero"><span><el-icon><Cpu /></el-icon></span><div><small>{{ originLabel(detail.model.origin) }}</small><h3>{{ detail.model.version }}</h3><p>{{ detail.model.model_name }}</p></div><div class="hero-tags"><el-tag :type="detail.model.status === 'active' ? 'success' : 'info'" round>{{ detail.model.status === 'active' ? '活动' : '已归档' }}</el-tag><el-tag v-if="detail.model.is_default" type="primary" round>当前默认</el-tag></div></div>

@@ -21,7 +21,7 @@
 
     <footer class="pagination-row"><span>共 {{ pagination.total }} 次调用</span><el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize" :page-sizes="[10,20,50]" :total="pagination.total" layout="sizes, prev, pager, next" @current-change="loadItems" @size-change="handleSizeChange" /></footer>
 
-    <el-drawer v-model="detailVisible" title="Agent 调用详情" size="min(760px, 94vw)">
+    <el-drawer v-model="detailVisible" title="Agent 调用详情" size="min(760px, 94vw)" append-to-body>
       <div v-loading="detailLoading" class="detail-content">
         <template v-if="detail">
           <div class="detail-heading"><span :class="['agent-orb', detail.agent]">{{ agentInitial(detail.agent) }}</span><div><small>调用 #{{ detail.id }}</small><h3>{{ detail.agent_label }}</h3><p>{{ detail.action_label }}</p></div><el-tag :type="detail.status === 'completed' ? 'success' : 'danger'" round>{{ detail.status === 'completed' ? '已完成' : '失败' }}</el-tag></div>
