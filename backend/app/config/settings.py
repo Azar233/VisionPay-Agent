@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     # ── JWT 认证配置 ──────────────────────────────────
     JWT_SECRET_KEY: str = "your-super-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
 
     # ── 模拟支付配置 ──────────────────────────────────
     MOCK_PAYMENT_EXPIRE_MINUTES: int = 10

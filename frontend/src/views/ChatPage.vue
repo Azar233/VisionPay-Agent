@@ -25,7 +25,6 @@
           </button>
           <div v-if="!sessionLoading && !agentStore.sessions.length" class="session-empty">还没有对话记录</div>
         </div>
-        <div class="privacy-note"><el-icon><CircleCheckFilled /></el-icon><span>写操作必须经过影响预览与一次性确认</span></div>
       </aside>
 
       <main :class="['conversation-panel', { 'has-floating-controls': sessionsCollapsed || insightsCollapsed }]">
@@ -156,6 +155,7 @@ import {
 } from '@element-plus/icons-vue'
 import AgentConfirmationCard from '@/components/AgentConfirmationCard.vue'
 import AgentInputFormCard from '@/components/AgentInputFormCard.vue'
+import { handleAuthExpired } from '@/utils/authExpiry'
 import DetectionResultCard from '@/components/DetectionResultCard.vue'
 import KnowledgeSourcesCard from '@/components/KnowledgeSourcesCard.vue'
 import {
@@ -338,8 +338,7 @@ async function submitInputForm({ form, values }) {
 async function sendMessage() {
   if (!canSend.value || agentStore.isLoading) return
   if (!localStorage.getItem('vp_agent_token')) {
-    ElMessage.error('登录已过期，请重新登录')
-    router.push({ path: '/login', query: { redirect: '/chat' } })
+    handleAuthExpired({ redirectPath: '/chat' })
     return
   }
   const files = selectedFiles.value.map((item) => item.file)
@@ -610,22 +609,6 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   color: $text-placeholder;
   font-size: 13px;
   text-align: center;
-}
-
-.privacy-note {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  color: $success-color;
-  background: var(--vp-success-bg);
-  font-size: 11px;
-  font-weight: 500;
-
-  .el-icon { font-size: 14px; }
 }
 
 /* 右侧管理辅助 */
@@ -1322,8 +1305,8 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 :global(html.dark .agent-chat-page .agent-item.active),
 :global(html.dark .agent-chat-page .quick-grid button:hover),
 :global(html.dark .agent-chat-page .pending-list button:hover),
-:global(html.dark .agent-chat-page .message-content :deep(code)),
-:global(html.dark .agent-chat-page .message-content :deep(pre)),
+:global(html.dark .agent-chat-page) .message-content :deep(code),
+:global(html.dark .agent-chat-page) .message-content :deep(pre),
 :global(html.dark .agent-chat-page .message-files span),
 :global(html.dark .agent-chat-page .attachment-tray > span) { background: var(--vp-sidebar-active-bg); }
 :global(html.dark .agent-chat-page .composer-box:focus-within) { border-color: var(--vp-primary); box-shadow: var(--vp-ring); }

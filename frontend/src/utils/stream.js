@@ -1,22 +1,9 @@
-import { getActivePinia } from 'pinia'
-import router from '@/router'
-import { useAgentStore } from '@/stores/agent'
+import { handleAuthExpired } from '@/utils/authExpiry'
 import {
   beginVisionPetTask,
   isUnexpectedBackendError,
   updateVisionPetTaskFromWorkflow,
 } from '@/utils/visionPet'
-
-function expireLogin() {
-  const pinia = getActivePinia()
-  if (pinia) useAgentStore(pinia).clear()
-  localStorage.removeItem('vp_agent_token')
-  localStorage.removeItem('vp_agent_user')
-  const currentPath = router.currentRoute.value.fullPath
-  if (router.currentRoute.value.path !== '/login') {
-    router.replace({ path: '/login', query: { redirect: currentPath } })
-  }
-}
 
 /** Parse a POST-based SSE stream without losing frames split across network chunks. */
 export function streamChat(url, body, callbacks = {}) {
@@ -47,7 +34,7 @@ export function streamChat(url, body, callbacks = {}) {
     signal: controller.signal,
   })).then(async (response) => {
     if (response.status === 401) {
-      expireLogin()
+      handleAuthExpired()
       throw new Error('登录已过期，请重新登录')
     }
     if (!response.ok) {

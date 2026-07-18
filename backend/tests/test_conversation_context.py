@@ -321,4 +321,6 @@ def test_chat_persists_real_usage_across_multiple_model_runs(
         "output_tokens": 5,
         "total_tokens": 23,
     }
+    assert assistant.tool_calls["model_run_count"] == 2
+    assert assistant.tool_calls["model_name"]
     assert assistant.tool_calls["context_tokens"] > 0

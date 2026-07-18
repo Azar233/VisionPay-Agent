@@ -59,7 +59,11 @@
             <strong>{{ selectedModelVersion.version }}</strong>
           </div>
           <div class="model-version-actions">
-            <span class="vp-pill" :class="selectedModelVersion.is_default ? 'vp-pill--success' : 'vp-pill--primary'">
+            <span
+              :class="['model-use-status', { 'is-active': selectedModelVersion.is_default }]"
+              role="status"
+            >
+              <i aria-hidden="true"></i>
               {{ selectedModelVersion.is_default ? '检测使用中' : '可切换' }}
             </span>
             <el-button
@@ -138,9 +142,15 @@
         <el-table-column label="内容指纹" min-width="150">
           <template #default="{ row }"><code>{{ shortHash(row.content_hash) }}</code></template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="132" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" text @click="trainDataset(row)">训练此版本</el-button>
+            <div class="vp-table-action-safe-area">
+              <el-button
+                class="vp-table-action-button is-primary-action train-version-button"
+                size="small"
+                @click="trainDataset(row)"
+              >训练此版本</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -172,13 +182,26 @@
           </template>
         </el-table-column>
         <el-table-column prop="device" label="设备" width="170" />
-        <el-table-column label="进度" min-width="180">
+        <el-table-column
+          label="进度"
+          min-width="200"
+          class-name="task-progress-column"
+          label-class-name="task-progress-column-header"
+        >
           <template #default="{ row }">
-            <el-progress
-              :percentage="row.progress || 0"
-              :status="progressStatus(row.status)"
-              :stroke-width="14"
-            />
+            <div
+              :class="['task-progress', `is-${row.status || 'pending'}`]"
+              role="progressbar"
+              :aria-label="`训练进度 ${taskProgress(row)}%`"
+              :aria-valuenow="taskProgress(row)"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span class="task-progress-track">
+                <i :style="{ width: `${taskProgress(row)}%` }"></i>
+              </span>
+              <strong>{{ taskProgress(row) }}%</strong>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="Epoch" width="110">
@@ -845,6 +868,13 @@ function progressStatus(status) {
   return undefined
 }
 
+function taskProgress(task) {
+  if (task?.status === 'completed') return 100
+  const value = Number(task?.progress || 0)
+  if (!Number.isFinite(value)) return 0
+  return Math.round(Math.min(100, Math.max(0, value)))
+}
+
 function statusText(status) {
   return {
     pending: '等待中',
@@ -1480,6 +1510,30 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 
+.model-use-status {
+  --model-status-color: #8e8e93;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: $text-secondary;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+
+  i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--model-status-color);
+  }
+
+  &.is-active {
+    --model-status-color: #34c759;
+    color: $success-color;
+  }
+}
+
 .model-version-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1550,6 +1604,11 @@ onBeforeUnmount(() => {
     color: $text-secondary;
     font: 12px/1.4 Consolas, 'Courier New', monospace;
   }
+}
+
+.el-button.train-version-button {
+  min-width: 88px;
+  padding-inline: 12px;
 }
 
 .dataset-version-cell {
@@ -1713,6 +1772,57 @@ onBeforeUnmount(() => {
 
 .task-table {
   width: 100%;
+}
+
+.task-table :deep(td.task-progress-column .cell),
+.task-table :deep(th.task-progress-column-header .cell) {
+  padding-left: 2px;
+}
+
+.task-progress {
+  --task-progress-color: #8e8e93;
+  display: grid;
+  grid-template-columns: minmax(112px, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+
+  &.is-running { --task-progress-color: #0071e3; }
+  &.is-completed { --task-progress-color: #34c759; }
+  &.is-failed { --task-progress-color: #ff453a; }
+  &.is-cancelled { --task-progress-color: #8e8e93; }
+
+  strong {
+    color: $text-secondary;
+    font-size: 12px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  &.is-running strong { color: $primary-color; }
+  &.is-completed strong { color: $success-color; }
+  &.is-failed strong { color: $danger-color; }
+}
+
+.task-progress-track {
+  position: relative;
+  display: block;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--task-progress-color) 12%, $surface-muted);
+
+  i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: block;
+    min-width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--task-progress-color) 82%, #fff), var(--task-progress-color));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-progress-color) 12%, transparent);
+    transition: width .35s ease;
+  }
 }
 
 .task-row-actions {
@@ -1914,8 +2024,8 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, $primary-color 16%, $surface-color) !important;
 }
 
-:global(html.dark .task-table :deep(th.task-actions-column-header)),
-:global(html.dark .task-table :deep(td.task-actions-column)) {
+:global(html.dark) .task-table :deep(th.task-actions-column-header),
+:global(html.dark) .task-table :deep(td.task-actions-column) {
   box-shadow: -10px 0 18px -18px rgba(0, 0, 0, .85);
 }
 

@@ -64,6 +64,7 @@ def seed_task(db_session, owner, scene, **overrides):
 
 def test_day10_routes_require_auth(client):
     assert client.get("/api/dashboard/statistics").status_code == 401
+    assert client.get("/api/dashboard/model-usage").status_code == 401
     assert client.get("/api/history/tasks").status_code == 401
     assert client.put("/api/user/profile", json={"phone": "123"}).status_code == 401
 
@@ -98,6 +99,97 @@ def test_dashboard_aggregates_only_current_user(client, db_session):
     type_dist = client.get("/api/dashboard/type-dist?days=30", headers=headers).json()
     assert {item["name"] for item in type_dist["distribution"]} == {"单图识别", "视频识别"}
     assert len(client.get("/api/dashboard/trend?days=7", headers=headers).json()["trend"]) == 7
+    hourly = client.get("/api/dashboard/trend?hours=48", headers=headers).json()
+    assert hourly["granularity"] == "hour"
+    assert len(hourly["trend"]) == 48
+    two_hour = client.get(
+        "/api/dashboard/trend?hours=24&bucket_hours=2", headers=headers
+    ).json()
+    assert two_hour["bucket_hours"] == 2
+    assert len(two_hour["trend"]) == 12
+
+
+def test_dashboard_model_usage_is_aggregated_and_user_scoped(client, db_session):
+    headers = auth_headers(client)
+    owner = db_session.query(User).filter_by(username="day10_user").one()
+    session = ChatSession(user_id=owner.id, session_uuid="dashboard-agent-session", title="数据集操作")
+    db_session.add(session)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ChatMessage(
+                session_id=session.id,
+                role="assistant",
+                content="已完成查询",
+                agent_used="dataset",
+                tokens_used=100,
+                latency_ms=1200,
+                tool_calls={
+                    "model_name": "deepseek-chat",
+                    "model_run_count": 2,
+                    "model_usage": {"input_tokens": 80, "output_tokens": 20, "total_tokens": 100},
+                },
+                created_at=datetime.now() - timedelta(minutes=2),
+            ),
+            ChatMessage(
+                session_id=session.id,
+                role="assistant",
+                content="Agent 处理失败: timeout",
+                agent_used="knowledge",
+                tokens_used=20,
+                latency_ms=800,
+                tool_calls={
+                    "model_name": "deepseek-chat",
+                    "model_usage": {"input_tokens": 15, "output_tokens": 5, "total_tokens": 20},
+                },
+                created_at=datetime.now() - timedelta(minutes=1),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    other_headers = auth_headers(client, "day10_model_other")
+    other = db_session.query(User).filter_by(username="day10_model_other").one()
+    other_session = ChatSession(user_id=other.id, session_uuid="other-dashboard-agent-session")
+    db_session.add(other_session)
+    db_session.flush()
+    db_session.add(
+        ChatMessage(
+            session_id=other_session.id,
+            role="assistant",
+            content="不应出现在当前用户看板",
+            agent_used="training",
+            tokens_used=999,
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/dashboard/model-usage?days=30&limit=1", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"] == {
+        "total_calls": 3,
+        "total_turns": 2,
+        "total_tokens": 120,
+        "input_tokens": 95,
+        "output_tokens": 25,
+        "avg_latency_ms": 1000,
+        "success_rate": 50.0,
+    }
+    assert {item["agent"]: item["value"] for item in data["agent_distribution"]} == {
+        "dataset": 2,
+        "knowledge": 1,
+    }
+    assert len(data["recent"]) == 1
+    assert data["recent"][0]["agent"] == "knowledge"
+    assert len(data["trend"]) == 30
+    hourly = client.get(
+        "/api/dashboard/model-usage?hours=24&bucket_hours=2", headers=headers
+    ).json()
+    assert hourly["granularity"] == "hour"
+    assert hourly["bucket_hours"] == 2
+    assert len(hourly["trend"]) == 12
+    assert client.get("/api/dashboard/model-usage", headers=other_headers).json()["summary"]["total_tokens"] == 999
 
 
 def test_history_filters_details_deletes_and_isolates(client, db_session):

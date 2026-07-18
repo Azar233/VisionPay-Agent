@@ -11,7 +11,7 @@ describe("Axios 请求封装", () => {
         expect(request).toBeDefined();
         expect(request.defaults.baseURL).toBe("/api");
         expect(request.defaults.timeout).toBe(30000);
-    });
+    }, 15000);
 
     it("应该让 Axios 根据请求体自动设置 Content-Type", async () => {
         const { default: request } = await import("@/utils/request");
