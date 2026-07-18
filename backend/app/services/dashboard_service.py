@@ -5,7 +5,23 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.entity.db_models import DetectionResult, DetectionScene, DetectionTask
+from app.config.settings import settings
+from app.entity.db_models import (
+    ChatMessage,
+    ChatSession,
+    DetectionResult,
+    DetectionScene,
+    DetectionTask,
+)
+
+
+AGENT_LABELS = {
+    "detection": "Detection Agent",
+    "dataset": "Dataset Agent",
+    "training": "Training Agent",
+    "catalog": "Catalog Agent",
+    "knowledge": "Knowledge Agent",
+}
 
 
 class DashboardService:
@@ -66,8 +82,68 @@ class DashboardService:
         }
 
     @staticmethod
-    def get_trend(db: Session, user_id: int, days: int = 30) -> dict:
+    def get_trend(
+        db: Session,
+        user_id: int,
+        days: int = 30,
+        hours: int | None = None,
+        bucket_hours: int = 1,
+    ) -> dict:
         now = datetime.now()
+        if hours is not None:
+            bucket_hours = max(1, min(bucket_hours, hours))
+            bucket_count = (hours + bucket_hours - 1) // bucket_hours
+            last_bucket = now.replace(
+                hour=(now.hour // bucket_hours) * bucket_hours,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            first_hour = last_bucket - timedelta(hours=(bucket_count - 1) * bucket_hours)
+            rows = (
+                db.query(
+                    DetectionTask.created_at,
+                    DetectionTask.total_objects,
+                    DetectionTask.total_images,
+                )
+                .filter(
+                    DetectionTask.user_id == user_id,
+                    DetectionTask.created_at >= first_hour,
+                )
+                .all()
+            )
+            by_hour: dict[str, dict] = {}
+            for row in rows:
+                bucket_time = row.created_at.replace(
+                    hour=(row.created_at.hour // bucket_hours) * bucket_hours,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                key = bucket_time.strftime("%Y-%m-%dT%H:00:00")
+                bucket = by_hour.setdefault(
+                    key,
+                    {"date": key, "task_count": 0, "object_count": 0, "image_count": 0},
+                )
+                bucket["task_count"] += 1
+                bucket["object_count"] += int(row.total_objects or 0)
+                bucket["image_count"] += int(row.total_images or 0)
+            trend = []
+            for offset in range(bucket_count):
+                key = (first_hour + timedelta(hours=offset * bucket_hours)).strftime("%Y-%m-%dT%H:00:00")
+                trend.append(
+                    by_hour.get(
+                        key,
+                        {"date": key, "task_count": 0, "object_count": 0, "image_count": 0},
+                    )
+                )
+            return {
+                "trend": trend,
+                "period_hours": hours,
+                "bucket_hours": bucket_hours,
+                "granularity": "hour",
+            }
+
         first_day = (now - timedelta(days=days - 1)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -105,7 +181,150 @@ class DashboardService:
                     {"date": key, "task_count": 0, "object_count": 0, "image_count": 0},
                 )
             )
-        return {"trend": trend, "period_days": days}
+        return {"trend": trend, "period_days": days, "granularity": "day"}
+
+    @staticmethod
+    def get_model_usage(
+        db: Session,
+        user_id: int,
+        days: int = 30,
+        limit: int = 8,
+        hours: int | None = None,
+        bucket_hours: int = 1,
+    ) -> dict:
+        """Aggregate persisted LLM activity for one user without exposing prompts."""
+        now = datetime.now()
+        if hours is not None:
+            bucket_hours = max(1, min(bucket_hours, hours))
+            bucket_count = (hours + bucket_hours - 1) // bucket_hours
+            last_bucket = now.replace(
+                hour=(now.hour // bucket_hours) * bucket_hours,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            period_start = last_bucket - timedelta(hours=(bucket_count - 1) * bucket_hours)
+        else:
+            bucket_count = days
+            period_start = (now - timedelta(days=days - 1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+        messages = (
+            db.query(ChatMessage)
+            .join(ChatSession, ChatMessage.session_id == ChatSession.id)
+            .filter(
+                ChatSession.user_id == user_id,
+                ChatMessage.role == "assistant",
+                ChatMessage.agent_used.isnot(None),
+                ChatMessage.created_at >= period_start,
+            )
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+            .all()
+        )
+
+        agent_counts: dict[str, int] = {}
+        daily_counts: dict[str, dict] = {}
+        recent = []
+        total_calls = 0
+        total_tokens = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        latency_values = []
+        successful_turns = 0
+
+        for message in messages:
+            metadata = message.tool_calls if isinstance(message.tool_calls, dict) else {}
+            usage = metadata.get("model_usage") if isinstance(metadata.get("model_usage"), dict) else {}
+            try:
+                call_count = max(1, int(metadata.get("model_run_count") or 1))
+            except (TypeError, ValueError):
+                call_count = 1
+            input_tokens = int(usage.get("input_tokens") or 0)
+            output_tokens = int(usage.get("output_tokens") or 0)
+            tokens = int(message.tokens_used or usage.get("total_tokens") or 0)
+            failed = (message.content or "").startswith(("Agent 处理失败", "请求失败"))
+            agent = str(message.agent_used or "unknown")
+            model_name = str(metadata.get("model_name") or settings.DEEPSEEK_MODEL)
+
+            total_calls += call_count
+            total_tokens += tokens
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+            successful_turns += 0 if failed else 1
+            if message.latency_ms is not None:
+                latency_values.append(int(message.latency_ms))
+            agent_counts[agent] = agent_counts.get(agent, 0) + call_count
+
+            if hours is not None:
+                bucket_time = message.created_at.replace(
+                    hour=(message.created_at.hour // bucket_hours) * bucket_hours,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
+                bucket_key = bucket_time.strftime("%Y-%m-%dT%H:00:00")
+            else:
+                bucket_key = message.created_at.strftime("%Y-%m-%d")
+            bucket = daily_counts.setdefault(
+                bucket_key,
+                {"date": bucket_key, "calls": 0, "tokens": 0},
+            )
+            bucket["calls"] += call_count
+            bucket["tokens"] += tokens
+
+            if len(recent) < limit:
+                recent.append(
+                    {
+                        "id": message.id,
+                        "created_at": message.created_at.isoformat(),
+                        "model_name": model_name,
+                        "agent": agent,
+                        "agent_label": AGENT_LABELS.get(agent, agent),
+                        "call_count": call_count,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": tokens,
+                        "latency_ms": message.latency_ms,
+                        "status": "failed" if failed else "completed",
+                    }
+                )
+
+        trend = []
+        for offset in range(bucket_count):
+            if hours is not None:
+                key = (period_start + timedelta(hours=offset * bucket_hours)).strftime(
+                    "%Y-%m-%dT%H:00:00"
+                )
+            else:
+                key = (period_start + timedelta(days=offset)).strftime("%Y-%m-%d")
+            trend.append(daily_counts.get(key, {"date": key, "calls": 0, "tokens": 0}))
+
+        turn_count = len(messages)
+        return {
+            "summary": {
+                "total_calls": total_calls,
+                "total_turns": turn_count,
+                "total_tokens": total_tokens,
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+                "avg_latency_ms": round(sum(latency_values) / len(latency_values)) if latency_values else 0,
+                "success_rate": round(successful_turns / turn_count * 100, 1) if turn_count else 0.0,
+            },
+            "agent_distribution": [
+                {
+                    "name": AGENT_LABELS.get(agent, agent),
+                    "agent": agent,
+                    "value": count,
+                }
+                for agent, count in sorted(agent_counts.items(), key=lambda item: (-item[1], item[0]))
+            ],
+            "trend": trend,
+            "recent": recent,
+            "period_days": days,
+            "period_hours": hours,
+            "bucket_hours": bucket_hours if hours is not None else None,
+            "granularity": "hour" if hours is not None else "day",
+        }
 
     @staticmethod
     def get_class_distribution(db: Session, user_id: int, days: int = 30) -> dict:

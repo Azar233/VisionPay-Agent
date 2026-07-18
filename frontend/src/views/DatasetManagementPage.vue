@@ -74,7 +74,7 @@
       </div>
 
       <el-table v-loading="loading" :data="rows" stripe class="dataset-table" empty-text="暂无数据集版本">
-        <el-table-column label="版本" min-width="220">
+        <el-table-column label="版本" min-width="300">
           <template #default="{ row }">
             <button
               type="button"
@@ -95,12 +95,12 @@
             </button>
           </template>
         </el-table-column>
-        <el-table-column prop="scene_id" label="场景" width="130">
+        <el-table-column prop="scene_id" label="场景" min-width="130">
           <template #default="{ row }">
             <span>{{ row.scene_name || `#${row.scene_id}` }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="150">
+        <el-table-column label="状态" min-width="150">
           <template #default="{ row }">
             <div class="status-tags">
               <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
@@ -108,7 +108,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="图片" width="170">
+        <el-table-column label="图片" min-width="180">
           <template #default="{ row }">
             <div v-if="row.extra_metadata?.catalog_only" class="split-cell">
               <strong>无需训练集</strong>
@@ -120,11 +120,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="class_count" label="类别" width="82" align="center" />
-        <el-table-column label="更新时间" width="170">
+        <el-table-column prop="class_count" label="类别" min-width="80" align="center" />
+        <el-table-column label="更新时间" min-width="170">
           <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="276" fixed="right">
+        <el-table-column label="操作" width="350" fixed="right">
           <template #default="{ row }">
             <div class="row-actions vp-table-action-safe-area">
               <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
@@ -1522,8 +1522,8 @@ onMounted(async () => {
 .page-header { padding: 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .page-header h2 { margin: 10px 0 0; color: $text-primary; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 40px; line-height: 1.08; letter-spacing: 0; }
 .page-header p { max-width: 560px; margin: 12px 0 0; color: $text-secondary; font-size: 16px; line-height: 1.6; }
-.header-actions { display: flex; align-items: center; gap: 10px; }
-.summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.header-actions { display: flex; align-items: center; gap: 10px; }.header-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.summary-grid { display: grid; grid-template-columns: minmax(260px, 1.45fr) repeat(5, minmax(150px, 1fr)); gap: 14px; }
 .summary-card { min-width: 0; padding: 18px 20px; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }
 .summary-card span, .summary-card small { display: block; color: $text-secondary; }
 .summary-card strong { display: block; overflow: hidden; margin: 8px 0 6px; color: $text-primary; font-size: 25px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1531,9 +1531,9 @@ onMounted(async () => {
 .current-card { border-color: $primary-color; background: linear-gradient(145deg, $surface-color, $primary-soft); }
 .panel { overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-lg; background: $surface-color; box-shadow: $shadow-sm; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 18px; border-bottom: 1px solid $border-color; }
-.filters, .toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.filters, .toolbar-actions { display: flex; align-items: center; gap: 10px; }.filters :deep(.el-button + .el-button),.toolbar-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .filters .el-input-number { width: 130px; }.filters .el-select { width: 135px; }
-.dataset-table { width: 100%; }
+.dataset-table { width: 100%; }.dataset-table :deep(.el-table__body td.el-table__cell) { height: 116px; padding-top: 14px; padding-bottom: 14px; }
 .model-import-form { margin-top: 18px; }
 .model-import-upload { width: 100%; }
 .model-import-upload :deep(.el-upload), .model-import-upload :deep(.el-upload-dragger) { width: 100%; }
@@ -1545,7 +1545,7 @@ onMounted(async () => {
 .version-title { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }.version-title strong { flex: 1 0 100%; min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }.current-version-tag { flex: 0 0 auto; margin-top: 1px; border-radius: 999px; font-weight: 600; }.version-name { display: block; margin-top: 5px; color: $text-secondary; font-size: 12px; line-height: 1.45; }
 .split-cell strong, .split-cell span { display: block; }.split-cell span { margin-top: 3px; color: $text-secondary; font-size: 11px; }
 code { color: $text-secondary; font-size: 11px; }
-.row-actions { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px; width: max-content; max-width: 100%; }
+.row-actions { display: grid; grid-template-columns: repeat(3, max-content); gap: 8px; width: max-content; max-width: 100%; }.row-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }.form-grid .el-input-number { width: 100%; }
 .count-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 16px; }.count-grid :deep(.el-form-item) { min-width: 0; margin-bottom: 14px; }.count-grid .el-input-number { width: 100%; min-width: 0; }
 :global(.dataset-editor-dialog) { display: flex; flex-direction: column; box-sizing: border-box; max-width: calc(100vw - 32px); max-height: calc(100% - 8vh); margin: 4vh auto 0 !important; overflow: hidden; }
@@ -1566,7 +1566,8 @@ code { color: $text-secondary; font-size: 11px; }
 .detail-heading { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }.detail-heading span { color: $text-secondary; font-size: 12px; }.detail-heading h3 { margin: 5px 0 0; font-size: 21px; }
 .validation-box { margin: 18px 0; padding: 13px 15px; border: 1px solid $success-color; border-radius: 9px; color: $success-color; background: color-mix(in srgb, $success-color 12%, transparent); }.validation-box.invalid { border-color: $danger-color; color: $danger-color; background: color-mix(in srgb, $danger-color 10%, transparent); }.validation-box strong, .validation-box span { display: block; }.validation-box span { margin-top: 3px; font-size: 11px; }.validation-box ul { margin: 8px 0 0; padding-left: 18px; }
 .mapping-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }.mapping-header h4 { margin: 0; }.mapping-header span { color: $text-secondary; font-size: 12px; }
-@media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(3, 1fr); }.toolbar { align-items: flex-start; flex-direction: column; }.count-grid { grid-template-columns: repeat(2, 1fr); }.product-setup-grid { grid-template-columns: repeat(2, 1fr); }.split-folder-grid { grid-template-columns: 1fr; }.review-workspace { grid-template-columns: 220px minmax(0, 1fr); } }
+@media (max-width: 1200px) { .summary-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1100px) { .toolbar { align-items: flex-start; flex-direction: column; }.count-grid { grid-template-columns: repeat(2, 1fr); }.product-setup-grid { grid-template-columns: repeat(2, 1fr); }.split-folder-grid { grid-template-columns: 1fr; }.review-workspace { grid-template-columns: 220px minmax(0, 1fr); } }
 @media (max-width: 760px) { .dataset-page { padding: 20px; }.page-header { align-items: flex-start; flex-direction: column; }.page-header h2 { font-size: 30px; }.header-actions { flex-wrap: wrap; } }
 @media (max-width: 700px) { .summary-grid, .form-grid, .count-grid, .product-setup-grid { grid-template-columns: 1fr; }.filters { align-items: stretch; flex-direction: column; width: 100%; }.filters .el-input-number, .filters .el-select { width: 100%; }.review-heading, .active-review-actions { align-items: stretch; flex-direction: column; }.review-summary { justify-content: flex-start; }.review-workspace { display: block; }.annotation-thumbnails { display: flex; max-height: none; overflow-x: auto; border-right: 0; border-bottom: 1px solid $border-color; }.annotation-thumbnail { flex: 0 0 250px; }.annotation-editor-panel { padding: 10px; } }
 </style>

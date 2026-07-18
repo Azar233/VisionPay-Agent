@@ -5,6 +5,7 @@
 import { defineStore } from 'pinia'
 import { loginApi, getUserInfoApi } from '@/api/auth'
 import { useAgentStore } from '@/stores/agent'
+import { resetAuthExpiryState } from '@/utils/authExpiry'
 
 const TOKEN_KEY = 'vp_agent_token'
 const USER_KEY = 'vp_agent_user'
@@ -46,6 +47,7 @@ export const useUserStore = defineStore('user', {
       // 保存 Token
       this.token = res.access_token
       localStorage.setItem(TOKEN_KEY, res.access_token)
+      resetAuthExpiryState()
       // 保存用户信息
       this.setUser(res.user)
       return res

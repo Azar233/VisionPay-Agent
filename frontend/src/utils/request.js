@@ -7,7 +7,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import router from '@/router'
+import { handleAuthExpired } from '@/utils/authExpiry'
 import { getBackendErrorMessage, notifyVisionPetBackendError } from '@/utils/visionPet'
 
 // ── 创建 Axios 实例 ──────────────────────────────────
@@ -41,6 +41,11 @@ request.interceptors.response.use(
   },
   (error) => {
     const { response } = error
+    const isLoginRequest = error.config?.url?.includes('/auth/login')
+    if (response?.status === 401 && !isLoginRequest) {
+      handleAuthExpired({ clearSession: () => useUserStore().logout() })
+      return Promise.reject(error)
+    }
     if (error.config?.skipGlobalError) {
       return Promise.reject(error)
     }
@@ -48,13 +53,6 @@ request.interceptors.response.use(
     if (response) {
       const detail = getBackendErrorMessage(error, `请求失败 (${response.status})`)
       switch (response.status) {
-        case 401:
-          // Token 过期或无效，清除用户信息并跳转登录页
-          ElMessage.error('登录已过期，请重新登录')
-          const userStore = useUserStore()
-          userStore.logout()
-          router.push('/login')
-          break
         case 403:
           ElMessage.error('没有权限执行此操作')
           break
