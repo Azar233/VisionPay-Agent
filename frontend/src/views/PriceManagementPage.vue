@@ -1,57 +1,61 @@
 <template>
   <div class="price-management-page">
-    <el-card shadow="never" class="page-card">
-      <div class="page-header">
-        <div>
-          <h2>价目表管理</h2>
-          <p class="subtitle">选择数据集版本后，只管理该版本中已有商品的价格</p>
-        </div>
+    <div class="page-header">
+      <div>
+        <h1 class="vp-page-title">价目表管理</h1>
+        <p class="vp-page-subtitle">选择数据集版本后，只管理该版本中已有商品的价格</p>
       </div>
+    </div>
 
-      <section class="dataset-scope-panel">
-        <div class="scope-copy">
-          <strong><span class="required-star">*</span>数据集版本</strong>
-          <span>价格按稳定 product_id 关联，同一商品在其他数据集版本中会同步使用新价格。</span>
-        </div>
-        <el-select
-          v-model="selectedDatasetId"
-          filterable
-          clearable
-          :loading="datasetLoading"
-          placeholder="请先搜索并选择要管理的数据集版本"
-          class="dataset-selector"
-          @change="handleDatasetChange"
+    <section class="card-container dataset-scope-panel">
+      <div class="scope-copy">
+        <strong><span class="required-star">*</span>数据集版本</strong>
+        <span>价格按稳定 product_id 关联，同一商品在其他数据集版本中会同步使用新价格。</span>
+      </div>
+      <el-select
+        v-model="selectedDatasetId"
+        filterable
+        clearable
+        :loading="datasetLoading"
+        placeholder="请先搜索并选择要管理的数据集版本"
+        class="dataset-selector"
+        @change="handleDatasetChange"
+      >
+        <el-option
+          v-for="dataset in datasetVersions"
+          :key="dataset.id"
+          :label="datasetOptionLabel(dataset)"
+          :value="dataset.id"
         >
-          <el-option
-            v-for="dataset in datasetVersions"
-            :key="dataset.id"
-            :label="datasetOptionLabel(dataset)"
-            :value="dataset.id"
-          >
-            <div class="dataset-option">
-              <span>{{ datasetOptionLabel(dataset) }}</span>
-              <el-tag v-if="dataset.is_current" size="small" type="success">当前</el-tag>
-              <el-tag v-else size="small" :type="datasetStatusType(dataset.status)">
-                {{ datasetStatusText(dataset.status) }}
-              </el-tag>
-            </div>
-          </el-option>
-        </el-select>
-        <div v-if="selectedDataset" class="selected-dataset-summary">
-          <el-tag type="primary">{{ selectedDataset.scene_name || `场景 #${selectedDataset.scene_id}` }}</el-tag>
-          <strong>{{ selectedDataset.version }}</strong>
-          <span>{{ selectedDataset.name }}</span>
-          <span>{{ selectedDataset.class_count }} 种商品</span>
-        </div>
-      </section>
+          <div class="dataset-option">
+            <span>{{ datasetOptionLabel(dataset) }}</span>
+            <span v-if="dataset.is_current" class="vp-pill vp-pill--success">当前</span>
+            <span
+              v-else
+              :class="['vp-pill', `vp-pill--${datasetStatusType(dataset.status)}` ]"
+            >
+              {{ datasetStatusText(dataset.status) }}
+            </span>
+          </div>
+        </el-option>
+      </el-select>
+      <div v-if="selectedDataset" class="selected-dataset-summary">
+        <span class="vp-pill vp-pill--primary">{{ selectedDataset.scene_name || `场景 #${selectedDataset.scene_id}` }}</span>
+        <strong>{{ selectedDataset.version }}</strong>
+        <span>{{ selectedDataset.name }}</span>
+        <span class="summary-count">{{ selectedDataset.class_count }} 种商品</span>
+      </div>
+    </section>
 
+    <section v-if="!selectedDatasetId" class="card-container empty-card">
       <el-empty
-        v-if="!selectedDatasetId"
         description="请选择数据集版本后再管理价目表"
         :image-size="120"
       />
+    </section>
 
-      <template v-else>
+    <template v-else>
+      <section class="card-container table-card">
         <div class="table-toolbar">
           <el-input
             v-model="searchKeyword"
@@ -90,8 +94,8 @@
           </el-table-column>
           <el-table-column prop="unit_price" label="单价" sortable="custom" width="120">
             <template #default="{ row }">
-              <span v-if="row.has_price">{{ formatPrice(row.unit_price) }}</span>
-              <el-tag v-else type="warning" size="small">未配置</el-tag>
+              <span v-if="row.has_price" class="price-value">{{ formatPrice(row.unit_price) }}</span>
+              <span v-else class="vp-pill vp-pill--warning">未配置</span>
             </template>
           </el-table-column>
           <el-table-column prop="currency" label="货币" width="80" />
@@ -125,8 +129,8 @@
             layout="prev, pager, next"
           />
         </footer>
-      </template>
-    </el-card>
+      </section>
+    </template>
 
     <el-dialog
       v-model="dialogVisible"
@@ -374,19 +378,14 @@ async function autoSelectDefaultModelDataset() {
 <style lang="scss" scoped>
 .price-management-page {
   padding: 20px;
+}
 
-  .page-card { border-radius: 12px; }
-  .page-header { margin-bottom: 18px; }
-  h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
-  .subtitle { margin: 0; color: var(--vp-muted); font-size: 13px; }
+.page-header {
+  margin-bottom: 24px;
 }
 
 .dataset-scope-panel {
-  padding: 18px;
-  margin-bottom: 20px;
-  border: 1px solid var(--vp-border);
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--vp-surface), var(--vp-primary-soft));
+  margin-bottom: 16px;
 }
 
 .scope-copy {
@@ -394,16 +393,44 @@ async function autoSelectDefaultModelDataset() {
   align-items: baseline;
   gap: 12px;
   margin-bottom: 12px;
-  color: var(--vp-muted);
+  color: $text-secondary;
   font-size: 13px;
 
-  strong { color: var(--vp-text); font-size: 14px; }
+  strong { color: $text-primary; font-size: 14px; }
 }
 
-.required-star { margin-right: 3px; color: var(--vp-danger); }
+.required-star { margin-right: 3px; color: $danger-color; }
 .dataset-selector { width: min(720px, 100%); }
-.dataset-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.selected-dataset-summary { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--vp-muted); font-size: 13px; }
+.dataset-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 8px;
+}
+.selected-dataset-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  color: $text-secondary;
+  font-size: 13px;
+
+  strong { color: $text-primary; font-size: 14px; }
+  .summary-count { color: $text-secondary; }
+}
+
+.empty-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+.table-card {
+  padding: 20px;
+}
 
 .table-toolbar {
   display: flex;
@@ -414,13 +441,52 @@ async function autoSelectDefaultModelDataset() {
   flex-wrap: wrap;
 }
 
-.scope-hint { color: var(--vp-muted); font-size: 13px; }
+.scope-hint { color: $text-secondary; font-size: 13px; }
 .table-actions { display: flex; align-items: center; justify-content: center; }
 .row-action {
   min-width: 88px;
   max-width: 100%;
+  margin-left: 0;
+  padding-inline: 12px;
+  border-radius: $border-radius-sm;
+  font-weight: 500;
 
   :deep(.el-icon) { flex: 0 0 auto; }
+}
+.edit-action {
+  color: $primary-color;
+  border-color: $primary-color;
+  background: $primary-soft;
+
+  &:hover,
+  &:focus-visible {
+    color: $primary-hover;
+    border-color: $primary-hover;
+    background: $primary-soft;
+  }
+}
+
+.price-value { color: $text-primary; font-weight: 600; }
+
+:deep(.el-table) {
+  --el-table-header-bg-color: #{$surface-color};
+  --el-table-header-text-color: #{$text-secondary};
+
+  th.el-table__cell {
+    font-weight: 600;
+    background: $surface-color;
+    border-bottom-color: $border-color;
+  }
+
+  td.el-table__cell {
+    color: $text-regular;
+    border-bottom-color: $border-color;
+  }
+
+  tr:hover > td.el-table__cell,
+  .el-table__body tr.hover-row > td.el-table__cell {
+    background: $surface-muted;
+  }
 }
 
 .pagination-row {
@@ -431,10 +497,11 @@ async function autoSelectDefaultModelDataset() {
   justify-content: space-between;
   gap: 16px;
 
-  > span { color: var(--vp-muted); font-size: 12px; }
+  > span { color: $text-secondary; font-size: 12px; }
 }
 
 @media (max-width: 720px) {
+  .page-header { margin-bottom: 16px; }
   .scope-copy,
   .selected-dataset-summary,
   .pagination-row { align-items: flex-start; flex-direction: column; }

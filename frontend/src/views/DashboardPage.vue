@@ -3,8 +3,8 @@
     <header class="page-header">
       <div>
         <span class="vp-kicker">Retail Intelligence</span>
-        <h1>数据看板</h1>
-        <p>汇总当前账号的商品识别任务、处理规模与模型推理表现。</p>
+        <h1 class="vp-page-title">数据看板</h1>
+        <p class="vp-page-subtitle">汇总当前账号的商品识别任务、处理规模与模型推理表现。</p>
       </div>
       <el-radio-group v-model="periodDays" @change="loadDashboard">
         <el-radio-button :value="7">7 天</el-radio-button>
@@ -20,7 +20,13 @@
           <span>{{ card.label }}</span>
           <strong>{{ card.value }}<small v-if="card.unit">{{ card.unit }}</small></strong>
         </div>
-        <span :class="['growth', growthTone(card.key, card.inverse)]">
+        <span
+          :class="[
+            'vp-pill',
+            growthTone(card.key, card.inverse) === 'positive' ? 'vp-pill--success' :
+            growthTone(card.key, card.inverse) === 'negative' ? 'vp-pill--danger' : ''
+          ]"
+        >
           {{ growthText(card.key) }}
         </span>
       </article>
@@ -112,10 +118,10 @@ function growthTone(key, inverse = false) {
 function palette() {
   const style = getComputedStyle(document.documentElement)
   return {
-    text: style.getPropertyValue('--vp-text').trim() || '#1d1d1f',
-    muted: style.getPropertyValue('--vp-muted').trim() || '#6e6e73',
-    border: style.getPropertyValue('--vp-border').trim() || '#e5e5e7',
-    surface: style.getPropertyValue('--vp-surface').trim() || '#fff',
+    text: style.getPropertyValue('--vp-text').trim() || '#111827',
+    muted: style.getPropertyValue('--vp-muted').trim() || '#6b7280',
+    border: style.getPropertyValue('--vp-border').trim() || '#e8eaef',
+    surface: style.getPropertyValue('--vp-surface').trim() || '#ffffff',
   }
 }
 
@@ -145,7 +151,7 @@ function renderCharts() {
   const axis = { axisLine: { lineStyle: { color: colors.border } }, axisLabel: { color: colors.muted }, splitLine: { lineStyle: { color: colors.border } } }
   const trendChart = baseChart(trendChartRef.value)
   trendChart.setOption({
-    color: ['#0071e3', '#34c759', '#ff9f0a'],
+    color: ['#2b7fff', '#34d399', '#f59e0b'],
     tooltip: { trigger: 'axis', backgroundColor: colors.surface, borderColor: colors.border, textStyle: { color: colors.text } },
     legend: { top: 0, right: 4, textStyle: { color: colors.muted } },
     grid: { left: 44, right: 18, top: 46, bottom: 30 },
@@ -158,7 +164,7 @@ function renderCharts() {
     ],
   }, true)
 
-  const pieColors = ['#0071e3', '#34c759', '#ff9f0a', '#af52de', '#5ac8fa', '#ff375f', '#64d2ff', '#bf5af2', '#8e8e93']
+  const pieColors = ['#2b7fff', '#34d399', '#f59e0b', '#af52de', '#5ac8fa', '#f87171', '#64d2ff', '#bf5af2', '#9ca3af']
   for (const [element, source, emptyText] of [
     [classChartRef.value, compactDistribution(classDistribution.value), '暂无商品类别数据'],
     [typeChartRef.value, typeDistribution.value, '暂无识别方式数据'],
@@ -175,7 +181,7 @@ function renderCharts() {
 
   const sceneChart = baseChart(sceneChartRef.value)
   sceneChart.setOption({
-    color: ['#0071e3'],
+    color: ['#2b7fff'],
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: colors.surface, borderColor: colors.border, textStyle: { color: colors.text } },
     grid: { left: 24, right: 24, top: 18, bottom: 52, containLabel: true },
     xAxis: { type: 'category', data: sceneDistribution.value.map((item) => item.name), axisLabel: { color: colors.muted, interval: 0, rotate: sceneDistribution.value.length > 4 ? 25 : 0 }, axisLine: axis.axisLine },
@@ -220,16 +226,28 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.dashboard-page { min-height: 100%; padding: 32px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
-.page-header { padding: 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.page-header h1 { margin: 10px 0 0; color: $text-primary; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 40px; line-height: 1.08; letter-spacing: 0; }
-.page-header p { max-width: 560px; margin: 12px 0 0; color: $text-secondary; font-size: 16px; line-height: 1.6; }
+.dashboard-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-.metric-card { min-width: 0; padding: 22px; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 14px; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }
-.metric-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; font-size: 20px; }.metric-icon.blue { color: #0071e3; background: rgba(0,113,227,.1); }.metric-icon.green { color: #248a3d; background: rgba(52,199,89,.12); }.metric-icon.orange { color: #c93400; background: rgba(255,159,10,.13); }.metric-icon.purple { color: #8944ab; background: rgba(175,82,222,.12); }
-.metric-copy { min-width: 0; display: flex; flex-direction: column; gap: 5px; }.metric-copy > span { color: $text-secondary; font-size: 12px; }.metric-copy strong { overflow: hidden; color: $text-primary; font-size: 30px; font-weight: 600; letter-spacing: -.04em; text-overflow: ellipsis; }.metric-copy small { margin-left: 4px; color: $text-secondary; font-size: 12px; font-weight: 500; }
-.growth { grid-column: 1 / -1; width: fit-content; padding: 5px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }.growth.positive { color: $success-color; background: color-mix(in srgb, $success-color 12%, transparent); }.growth.negative { color: $danger-color; background: color-mix(in srgb, $danger-color 10%, transparent); }.growth.neutral { color: $text-secondary; background: $surface-muted; }
-.chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }.chart-card { min-width: 0; overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }.chart-card.chart-wide { grid-column: 1 / -1; }.chart-card header { min-height: 70px; padding: 0 22px; display: flex; align-items: center; border-bottom: 1px solid $border-color; }.chart-card header div { display: flex; flex-direction: column; gap: 4px; }.chart-card header span { color: $text-primary; font-weight: 600; }.chart-card header small { color: $text-secondary; }.chart { width: 100%; height: 330px; }.chart-wide .chart { height: 360px; }
+.metric-card { min-width: 0; padding: 22px; display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 14px; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
+.metric-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; font-size: 20px; }
+.metric-icon.blue { color: $primary-color; background: $primary-soft; }
+.metric-icon.green { color: $success-color; background: var(--vp-success-bg); }
+.metric-icon.orange { color: $warning-color; background: var(--vp-warning-bg); }
+.metric-icon.purple { color: $secondary-color; background: color-mix(in srgb, $secondary-color 12%, transparent); }
+.metric-copy { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.metric-copy > span { color: $text-secondary; font-size: 12px; }
+.metric-copy strong { overflow: hidden; color: $text-primary; font-size: 30px; font-weight: 600; letter-spacing: -.04em; text-overflow: ellipsis; }
+.metric-copy small { margin-left: 4px; color: $text-secondary; font-size: 12px; font-weight: 500; }
+.chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.chart-card { min-width: 0; overflow: hidden; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
+.chart-card.chart-wide { grid-column: 1 / -1; }
+.chart-card header { min-height: 56px; padding: 0 22px; display: flex; align-items: center; border-bottom: 1px solid $border-color; }
+.chart-card header div { display: flex; flex-direction: column; gap: 4px; }
+.chart-card header span { color: $text-primary; font-weight: 600; }
+.chart-card header small { color: $text-secondary; }
+.chart { width: 100%; height: 330px; }
+.chart-wide .chart { height: 360px; }
 @media (max-width: 1100px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 760px) { .dashboard-page { padding: 20px; }.page-header { align-items: flex-start; flex-direction: column; }.page-header h1 { font-size: 30px; }.metric-grid, .chart-grid { grid-template-columns: 1fr; }.chart-card.chart-wide { grid-column: auto; }.chart { height: 300px; } }
+@media (max-width: 760px) { .dashboard-page { padding: 16px; }.page-header { align-items: flex-start; flex-direction: column; }.metric-grid, .chart-grid { grid-template-columns: 1fr; }.chart-card.chart-wide { grid-column: auto; }.chart { height: 300px; } }
 </style>

@@ -166,8 +166,8 @@ def test_chat_passes_saved_instructions_to_orchestrator(client, monkeypatch):
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-        def route(self, message, **kwargs):
-            return RouteDecision("knowledge", "test", 1.0, "custom instruction test")
+        async def aroute(self, message, **kwargs):
+            return RouteDecision.single("knowledge", "test", 1.0, "custom instruction test")
 
         async def stream(self, message, attachment_paths, history, decision=None):
             yield decision.event()

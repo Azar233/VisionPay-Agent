@@ -203,7 +203,7 @@ async function handleLogin() {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(145deg, #1688f8, #0068d4);
+  background: linear-gradient(145deg, $primary-color, color-mix(in srgb, $primary-color 70%, #1f6fe0));
 
   img {
     width: 24px;

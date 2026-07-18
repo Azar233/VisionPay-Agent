@@ -3,8 +3,8 @@
     <header class="page-header">
       <div>
         <span class="vp-kicker">Account</span>
-        <h1>账号设置</h1>
-        <p>维护个人资料、Agent 响应偏好与登录安全。用户名和角色由管理员统一管理。</p>
+        <h1 class="vp-page-title">账号设置</h1>
+        <p class="vp-page-subtitle">维护个人资料、Agent 响应偏好与登录安全。用户名和角色由管理员统一管理。</p>
       </div>
     </header>
 
@@ -879,4 +879,25 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   .instructions-editor { padding: 16px; }
   .instructions-boundary { align-items: flex-start; flex-direction: column; }
 }
+
+.settings-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.settings-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr); gap: 16px; align-items: start; }
+.settings-card { padding: 26px; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
+.settings-card > header { margin-bottom: 24px; display: flex; align-items: center; gap: 13px; }
+.settings-card h2 { margin: 0; color: $text-primary; font-size: 19px; font-weight: 600; }
+.settings-card header p { margin: 4px 0 0; color: $text-secondary; font-size: 12px; }
+.card-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: $primary-color; background: $primary-soft; font-size: 19px; }
+.card-icon.security { color: $secondary-color; background: color-mix(in srgb, $secondary-color 12%, transparent); }
+.avatar-editor { margin-bottom: 22px; padding: 16px; display: flex; align-items: center; gap: 16px; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-muted; }
+.profile-avatar { flex: 0 0 auto; color: #fff; background: linear-gradient(145deg, $primary-color, $primary-hover); font-size: 28px; font-weight: 700; box-shadow: 0 10px 28px color-mix(in srgb, $primary-color 20%, transparent); }
+.avatar-meta { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.avatar-meta strong { color: $text-primary; font-size: 15px; }
+.avatar-meta span { color: $text-secondary; font-size: 12px; }
+.avatar-actions { margin-top: 4px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); column-gap: 16px; }
+.form-actions { padding-top: 4px; display: flex; justify-content: flex-end; }
+.password-card .el-alert { margin-bottom: 20px; }
+@media (max-width: 1000px) { .settings-grid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .settings-page { padding: 16px; }.settings-card { padding: 24px; }.avatar-editor { align-items: flex-start; flex-direction: column; }.form-grid { grid-template-columns: 1fr; } }
 </style>

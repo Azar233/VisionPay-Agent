@@ -78,6 +78,52 @@ def test_agent_cannot_request_another_domain_form():
         tool.invoke({"purpose": "training.start"})
 
 
+def test_dynamic_dataset_version_options_filled_server_side(monkeypatch):
+    """LLM 未提供 option_overrides 时，表单构建器应自行填充数据集版本下拉。"""
+    from app.services import dataset_service as dataset_service_module
+
+    expected = {
+        "total": 2,
+        "items": [
+            {"id": 5, "version": "v5", "status": "published", "is_current": True},
+            {"id": 3, "version": "v3", "status": "draft", "is_current": False},
+        ],
+    }
+
+    class _FakeDb:
+        def close(self):
+            pass
+
+    monkeypatch.setattr("app.database.session.SessionLocal", lambda: _FakeDb())
+    monkeypatch.setattr(
+        dataset_service_module.dataset_service,
+        "list",
+        lambda session, **kwargs: expected,
+    )
+
+    tool = build_interaction_tools("catalog")[0]
+    form = json.loads(tool.invoke({"purpose": "catalog.list_prices"}))
+
+    field = next(f for f in form["fields"] if f["name"] == "dataset_version_id")
+    assert [option["value"] for option in field["options"]] == [5, 3]
+    assert "v5" in field["options"][0]["label"]
+    assert "当前" in field["options"][0]["label"]
+
+
+def test_dynamic_option_resolver_failure_does_not_break_form(monkeypatch):
+    """选项解析失败时表单仍应生成，下拉留空而不是整体报错。"""
+    monkeypatch.setattr(
+        "app.agent.tools.interaction_tools._DYNAMIC_OPTION_RESOLVERS",
+        {"dataset_version_id": lambda: (_ for _ in ()).throw(RuntimeError("db down"))},
+    )
+
+    tool = build_interaction_tools("catalog")[0]
+    form = json.loads(tool.invoke({"purpose": "catalog.list_prices"}))
+
+    field = next(f for f in form["fields"] if f["name"] == "dataset_version_id")
+    assert field["options"] == []
+
+
 def test_submission_validation_normalizes_numbers_and_rejects_options():
     form = _training_form()
 

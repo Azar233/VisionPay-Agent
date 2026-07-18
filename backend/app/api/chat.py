@@ -346,14 +346,14 @@ async def chat_stream(
             },
             ensure_ascii=False,
         )
-        decision = RouteDecision(
+        decision = RouteDecision.single(
             form_submission["agent"],
             "form_submission",
             1.0,
             "继续处理当前会话中已校验的结构化表单",
         )
     else:
-        decision = orchestrator.route(
+        decision = await orchestrator.aroute(
             message,
             has_attachments=bool(attachment_paths),
             preferred_agent=context_state.get("active_agent") or last_agent,
@@ -366,7 +366,7 @@ async def chat_stream(
             session_id=session.id,
             role="user",
             content=message,
-            agent_used=decision.agent,
+            agent_used=decision.parallel_key,
             tool_calls={
                 "attachments": attachment_names,
                 "attachment_paths": attachment_paths,
@@ -485,7 +485,7 @@ async def chat_stream(
                         session_id=persist_session.id,
                         role="assistant",
                         content=final_content,
-                        agent_used=decision.agent,
+                        agent_used=decision.parallel_key,
                         tool_calls=(
                             {
                                 **({"tool": tool_name} if tool_name else {}),

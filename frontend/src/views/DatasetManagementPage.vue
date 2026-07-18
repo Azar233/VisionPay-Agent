@@ -1,19 +1,18 @@
 <template>
   <div class="dataset-page">
-    <header class="page-header">
+    <div class="page-header">
       <div>
-        <span class="vp-kicker">Dataset Registry</span>
-        <h2>数据集版本管理</h2>
-        <p>登记数据集元数据和类别映射，冻结后形成不可变版本，并记录训练与模型谱系。</p>
+        <h1 class="vp-page-title">数据集版本管理</h1>
+        <p class="vp-page-subtitle">登记数据集元数据和类别映射，冻结后形成不可变版本，并记录训练与模型谱系。</p>
       </div>
-      <div class="header-actions">
+      <div class="page-actions">
         <el-button :icon="UploadFilled" @click="openModelImportDialog">导入可用模型</el-button>
         <el-button @click="openBaselineDialog">导入基线 dataset</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建数据集草稿</el-button>
       </div>
-    </header>
+    </div>
 
-    <section class="summary-grid">
+    <section class="summary-grid card-container">
       <article class="summary-card current-card">
         <span>当前版本</span>
         <strong>{{ currentDataset?.version || '未设置' }}</strong>
@@ -46,7 +45,7 @@
       </article>
     </section>
 
-    <section class="panel">
+    <section class="panel card-container">
       <div class="toolbar">
         <div class="filters">
           <el-input-number
@@ -84,12 +83,8 @@
             >
               <div class="version-title">
                 <strong>{{ row.version }}</strong>
-                <el-tag v-if="row.extra_metadata?.catalog_only" type="primary" size="small" effect="plain" round>
-                  模型目录
-                </el-tag>
-                <el-tag v-if="row.is_current" class="current-version-tag" type="success" size="small" effect="plain" round>
-                  当前版本
-                </el-tag>
+                <span v-if="row.extra_metadata?.catalog_only" class="vp-pill vp-pill--primary vp-pill--plain">模型目录</span>
+                <span v-if="row.is_current" class="vp-pill vp-pill--success vp-pill--plain">当前版本</span>
               </div>
               <span class="version-name">{{ row.name }}</span>
             </button>
@@ -103,8 +98,8 @@
         <el-table-column label="状态" width="150">
           <template #default="{ row }">
             <div class="status-tags">
-              <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
-              <el-tag v-if="row.is_in_use" type="success" size="small">使用中</el-tag>
+              <span class="vp-pill" :class="`vp-pill--${statusType(row.status)}`">{{ statusText(row.status) }}</span>
+              <span v-if="row.is_in_use" class="vp-pill vp-pill--success">使用中</span>
             </div>
           </template>
         </el-table-column>
@@ -223,7 +218,7 @@
             <span>{{ detail.scene_name || `场景 #${detail.scene_id}` }}</span>
             <h3>{{ detail.version }} · {{ detail.name }}</h3>
           </div>
-          <el-tag :type="statusType(detail.status)">{{ statusText(detail.status) }}</el-tag>
+          <span class="vp-pill" :class="`vp-pill--${statusType(detail.status)}`">{{ statusText(detail.status) }}</span>
         </div>
         <el-descriptions :column="2" border>
           <el-descriptions-item label="当前版本">{{ detail.is_current ? '是' : '否' }}</el-descriptions-item>
@@ -1518,55 +1513,867 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.dataset-page { min-height: 100%; padding: 32px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
-.page-header { padding: 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.page-header h2 { margin: 10px 0 0; color: $text-primary; font-family: 'Space Grotesk', 'DM Sans', sans-serif; font-size: 40px; line-height: 1.08; letter-spacing: 0; }
-.page-header p { max-width: 560px; margin: 12px 0 0; color: $text-secondary; font-size: 16px; line-height: 1.6; }
-.header-actions { display: flex; align-items: center; gap: 10px; }
-.summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
-.summary-card { min-width: 0; padding: 18px 20px; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }
-.summary-card span, .summary-card small { display: block; color: $text-secondary; }
-.summary-card strong { display: block; overflow: hidden; margin: 8px 0 6px; color: $text-primary; font-size: 25px; text-overflow: ellipsis; white-space: nowrap; }
-.summary-card small { font-size: 11px; }
-.current-card { border-color: $primary-color; background: linear-gradient(145deg, $surface-color, $primary-soft); }
-.panel { overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-lg; background: $surface-color; box-shadow: $shadow-sm; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 18px; border-bottom: 1px solid $border-color; }
-.filters, .toolbar-actions { display: flex; align-items: center; gap: 8px; }
-.filters .el-input-number { width: 130px; }.filters .el-select { width: 135px; }
-.dataset-table { width: 100%; }
-.model-import-form { margin-top: 18px; }
-.model-import-upload { width: 100%; }
-.model-import-upload :deep(.el-upload), .model-import-upload :deep(.el-upload-dragger) { width: 100%; }
-.model-import-switches { display: flex; flex-wrap: wrap; gap: 8px 22px; }
-.status-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.version-detail-trigger { display: block; width: 100%; margin: 0; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
-.version-detail-trigger:hover .version-title strong { color: $primary-color; }
-.version-detail-trigger:focus-visible { border-radius: 6px; outline: 2px solid $primary-color; outline-offset: 4px; }
-.version-title { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }.version-title strong { flex: 1 0 100%; min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }.current-version-tag { flex: 0 0 auto; margin-top: 1px; border-radius: 999px; font-weight: 600; }.version-name { display: block; margin-top: 5px; color: $text-secondary; font-size: 12px; line-height: 1.45; }
-.split-cell strong, .split-cell span { display: block; }.split-cell span { margin-top: 3px; color: $text-secondary; font-size: 11px; }
-code { color: $text-secondary; font-size: 11px; }
-.row-actions { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px; width: max-content; max-width: 100%; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }.form-grid .el-input-number { width: 100%; }
-.count-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 16px; }.count-grid :deep(.el-form-item) { min-width: 0; margin-bottom: 14px; }.count-grid .el-input-number { width: 100%; min-width: 0; }
-:global(.dataset-editor-dialog) { display: flex; flex-direction: column; box-sizing: border-box; max-width: calc(100vw - 32px); max-height: calc(100% - 8vh); margin: 4vh auto 0 !important; overflow: hidden; }
-:global(.dataset-editor-dialog .el-dialog__header), :global(.dataset-editor-dialog .el-dialog__footer) { flex: 0 0 auto; }
-:global(.dataset-editor-dialog .el-dialog__body) { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
-.mapping-field :deep(textarea) { font-family: Consolas, monospace; font-size: 12px; }.form-tip { margin: 7px 0 0; color: $text-secondary; font-size: 11px; line-height: 1.6; }
-.folder-select-button { display: inline-flex; align-items: center; justify-content: center; padding: 8px 15px; border: 1px solid $primary-color; border-radius: 8px; color: $primary-color; background: $primary-soft; cursor: pointer; transition: 0.2s ease; }.folder-select-button:hover { border-color: $primary-hover; color: $primary-hover; background: $primary-soft; }.folder-select-button.disabled { border-color: $border-color; color: $text-placeholder; background: $surface-muted; cursor: not-allowed; }.folder-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
-:global(.annotation-review-dialog) { display: flex; flex-direction: column; max-width: calc(100vw - 28px); max-height: 94vh; overflow: hidden; }
-:global(.annotation-review-dialog .el-dialog__header), :global(.annotation-review-dialog .el-dialog__footer) { flex: 0 0 auto; }
-:global(.annotation-review-dialog .el-dialog__body) { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.product-setup-form { padding-right: 4px; }.product-setup-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 14px; }.product-setup-grid :deep(.el-input-number) { width: 100%; }
-.split-folder-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 2px 0 16px; }.split-folder-card { min-width: 0; padding: 13px; border: 1px solid $border-color; border-radius: 10px; background: $surface-color; transition: border-color .2s ease, box-shadow .2s ease; }.split-folder-card.invalid { border-color: $danger-color; box-shadow: 0 0 0 2px color-mix(in srgb, $danger-color 12%, transparent); }.split-folder-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }.split-folder-heading strong { color: $text-primary; font-size: 13px; }.split-folder-heading > span { color: $text-secondary; font-size: 11px; }.required-star { margin-right: 3px; color: $danger-color; }.split-folder-summary { margin-top: 10px; padding: 9px 10px; border-radius: 7px; background: $surface-muted; }.split-folder-summary strong, .split-folder-summary span { display: block; overflow-wrap: anywhere; }.split-folder-summary strong { color: $text-primary; font-size: 12px; }.split-folder-summary span { margin-top: 3px; color: $text-secondary; font-size: 11px; }.folder-error { margin-top: 7px; color: $danger-color; font-size: 12px; line-height: 1.3; }
-.annotation-review { margin-top: 18px; padding-top: 18px; border-top: 1px solid $border-color; }.review-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 12px; }.review-heading h3 { margin: 0; color: $text-primary; font-size: 18px; }.review-heading p { margin: 5px 0 0; color: $text-secondary; font-size: 12px; }.review-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.review-workspace { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 460px; overflow: hidden; border: 1px solid $border-color; border-radius: 12px; background: $surface-muted; }.annotation-thumbnails { max-height: min(60vh, 620px); overflow-y: auto; padding: 9px; border-right: 1px solid $border-color; background: $surface-color; }.annotation-thumbnail { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; margin: 0 0 7px; padding: 7px; border: 1px solid $border-color; border-radius: 9px; color: inherit; background: $surface-color; text-align: left; cursor: pointer; }.annotation-thumbnail:hover { border-color: $primary-color; background: $primary-soft; }.annotation-thumbnail.active { border-color: $primary-color; box-shadow: 0 0 0 2px $primary-soft; }.annotation-thumbnail.pending { border-left: 3px solid $warning-color; }.annotation-thumbnail.missing { border-left-color: $danger-color; }.annotation-thumbnail img { width: 56px; height: 48px; object-fit: cover; border-radius: 6px; background: $surface-muted; }.thumbnail-copy { min-width: 0; }.thumbnail-copy strong, .thumbnail-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.thumbnail-copy strong { color: $text-primary; font-size: 12px; }.thumbnail-copy small { margin-top: 4px; color: $text-secondary; font-size: 10px; }.annotation-editor-panel { min-width: 0; padding: 14px; }.active-image-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }.active-image-heading strong, .active-image-heading span { display: block; }.active-image-heading strong { color: $text-primary; }.active-image-heading span { margin-top: 4px; color: $text-secondary; font-size: 11px; }.active-review-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; }.active-review-actions span { color: $text-secondary; font-size: 12px; }
-.box-product-assignments { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid $border-color; border-radius: 9px; background: $surface-color; }.box-product-row { display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: center; gap: 10px; }.box-product-row > span { color: $text-secondary; font-size: 12px; }
-.product-search { margin: 16px 0 8px; }.search-result-count { margin-bottom: 8px; color: $text-secondary; font-size: 12px; }
-.operation-progress-content { padding: 6px 2px 4px; }.operation-progress-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }.operation-progress-heading strong { color: $text-primary; font-size: 15px; }.operation-progress-heading span { color: $primary-color; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }.operation-progress-content p { min-height: 22px; margin: 14px 0 7px; color: $text-secondary; line-height: 1.6; }.operation-progress-content code { display: block; overflow: hidden; color: $text-placeholder; text-overflow: ellipsis; white-space: nowrap; }.operation-error { margin-top: 16px; }
-.detail-heading { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }.detail-heading span { color: $text-secondary; font-size: 12px; }.detail-heading h3 { margin: 5px 0 0; font-size: 21px; }
-.validation-box { margin: 18px 0; padding: 13px 15px; border: 1px solid $success-color; border-radius: 9px; color: $success-color; background: color-mix(in srgb, $success-color 12%, transparent); }.validation-box.invalid { border-color: $danger-color; color: $danger-color; background: color-mix(in srgb, $danger-color 10%, transparent); }.validation-box strong, .validation-box span { display: block; }.validation-box span { margin-top: 3px; font-size: 11px; }.validation-box ul { margin: 8px 0 0; padding-left: 18px; }
-.mapping-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 10px; }.mapping-header h4 { margin: 0; }.mapping-header span { color: $text-secondary; font-size: 12px; }
-@media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(3, 1fr); }.toolbar { align-items: flex-start; flex-direction: column; }.count-grid { grid-template-columns: repeat(2, 1fr); }.product-setup-grid { grid-template-columns: repeat(2, 1fr); }.split-folder-grid { grid-template-columns: 1fr; }.review-workspace { grid-template-columns: 220px minmax(0, 1fr); } }
-@media (max-width: 760px) { .dataset-page { padding: 20px; }.page-header { align-items: flex-start; flex-direction: column; }.page-header h2 { font-size: 30px; }.header-actions { flex-wrap: wrap; } }
-@media (max-width: 700px) { .summary-grid, .form-grid, .count-grid, .product-setup-grid { grid-template-columns: 1fr; }.filters { align-items: stretch; flex-direction: column; width: 100%; }.filters .el-input-number, .filters .el-select { width: 100%; }.review-heading, .active-review-actions { align-items: stretch; flex-direction: column; }.review-summary { justify-content: flex-start; }.review-workspace { display: block; }.annotation-thumbnails { display: flex; max-height: none; overflow-x: auto; border-right: 0; border-bottom: 1px solid $border-color; }.annotation-thumbnail { flex: 0 0 250px; }.annotation-editor-panel { padding: 10px; } }
+.dataset-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summary-card {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  background: $surface-color;
+  box-shadow: $shadow-sm;
+
+  span, small {
+    display: block;
+    color: $text-secondary;
+  }
+
+  strong {
+    display: block;
+    overflow: hidden;
+    margin: 8px 0 6px;
+    color: $text-primary;
+    font-size: 25px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    font-size: 11px;
+  }
+}
+
+.current-card {
+  border-color: $primary-color;
+  background: linear-gradient(145deg, $surface-color, $primary-soft);
+}
+
+.panel.card-container {
+  padding: 0;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 18px;
+  border-bottom: 1px solid $border-color;
+}
+
+.filters,
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filters {
+  .el-input-number {
+    width: 130px;
+  }
+
+  .el-select {
+    width: 135px;
+  }
+}
+
+.dataset-table {
+  width: 100%;
+
+  :deep(.el-table__header th.el-table__cell) {
+    color: $text-secondary;
+    font-weight: 600;
+    background: $surface-muted;
+  }
+
+  :deep(.el-table__row td.el-table__cell) {
+    border-bottom: 1px solid $border-color;
+  }
+
+  :deep(.el-table__body tr:last-child td.el-table__cell) {
+    border-bottom: 0;
+  }
+}
+
+.status-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vp-pill--info {
+  color: $info-color;
+  background: var(--vp-info-bg);
+
+  &::before {
+    background: currentColor;
+  }
+}
+
+.version-detail-trigger {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover .version-title strong {
+    color: $primary-color;
+  }
+
+  &:focus-visible {
+    border-radius: 6px;
+    outline: 2px solid $primary-color;
+    outline-offset: 4px;
+  }
+}
+
+.version-title {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+
+  strong {
+    flex: 1 0 100%;
+    min-width: 0;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+}
+
+.version-name {
+  display: block;
+  margin-top: 5px;
+  color: $text-secondary;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.split-cell {
+  strong, span {
+    display: block;
+  }
+
+  span {
+    margin-top: 3px;
+    color: $text-secondary;
+    font-size: 11px;
+  }
+}
+
+.row-actions {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.row-action-button {
+  width: max-content;
+  min-width: 74px;
+  height: 30px;
+  min-height: 30px;
+  margin: 0 !important;
+  padding: 0 6px;
+  border: 1px solid $border-strong;
+  border-radius: 7px;
+  color: $text-regular;
+  background: $surface-color;
+  box-shadow: none !important;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: $text-secondary;
+    color: $text-primary;
+    background: $surface-muted;
+    transform: none;
+  }
+
+  &:active {
+    transform: none;
+  }
+
+  &.is-primary-action {
+    border-color: $primary-color;
+    color: $primary-color;
+    background: $primary-soft;
+
+    &:hover,
+    &:focus-visible {
+      border-color: $primary-hover;
+      color: $primary-hover;
+      background: $primary-soft;
+    }
+  }
+
+  &.is-success-action {
+    border-color: $success-color;
+    color: $success-color;
+    background: color-mix(in srgb, $success-color 12%, transparent);
+
+    &:hover,
+    &:focus-visible {
+      background: color-mix(in srgb, $success-color 20%, transparent);
+    }
+  }
+
+  &.is-danger-action {
+    border-color: $danger-color;
+    color: $danger-color;
+    background: color-mix(in srgb, $danger-color 10%, transparent);
+
+    &:hover,
+    &:focus-visible {
+      background: color-mix(in srgb, $danger-color 18%, transparent);
+    }
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+
+  .el-input-number {
+    width: 100%;
+  }
+}
+
+.count-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 16px;
+
+  :deep(.el-form-item) {
+    min-width: 0;
+    margin-bottom: 14px;
+  }
+
+  .el-input-number {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+:global(.dataset-editor-dialog) {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100% - 8vh);
+  margin: 4vh auto 0 !important;
+  overflow: hidden;
+
+  .el-dialog__header,
+  .el-dialog__footer {
+    flex: 0 0 auto;
+  }
+
+  .el-dialog__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+.mapping-field :deep(textarea) {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.form-tip {
+  margin: 7px 0 0;
+  color: $text-secondary;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.model-import-form {
+  margin-top: 18px;
+}
+
+.model-import-upload {
+  width: 100%;
+
+  :deep(.el-upload),
+  :deep(.el-upload-dragger) {
+    width: 100%;
+  }
+}
+
+.model-import-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+}
+
+.folder-select-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 15px;
+  border: 1px solid $primary-color;
+  border-radius: 8px;
+  color: $primary-color;
+  background: $primary-soft;
+  cursor: pointer;
+  transition: .2s ease;
+
+  &:hover {
+    border-color: $primary-hover;
+    color: $primary-hover;
+    background: $primary-soft;
+  }
+
+  &.disabled {
+    border-color: $border-color;
+    color: $text-placeholder;
+    background: $surface-muted;
+    cursor: not-allowed;
+  }
+}
+
+.folder-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:global(.annotation-review-dialog) {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 28px);
+  max-height: 94vh;
+  overflow: hidden;
+
+  .el-dialog__header,
+  .el-dialog__footer {
+    flex: 0 0 auto;
+  }
+
+  .el-dialog__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+.product-setup-form {
+  padding-right: 4px;
+}
+
+.product-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 14px;
+
+  :deep(.el-input-number) {
+    width: 100%;
+  }
+}
+
+.split-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 2px 0 16px;
+}
+
+.split-folder-card {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid $border-color;
+  border-radius: 10px;
+  background: $surface-color;
+  transition: border-color .2s ease, box-shadow .2s ease;
+
+  &.invalid {
+    border-color: $danger-color;
+    box-shadow: 0 0 0 2px color-mix(in srgb, $danger-color 12%, transparent);
+  }
+}
+
+.split-folder-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  strong {
+    color: $text-primary;
+    font-size: 13px;
+  }
+
+  > span {
+    color: $text-secondary;
+    font-size: 11px;
+  }
+}
+
+.required-star {
+  margin-right: 3px;
+  color: $danger-color;
+}
+
+.split-folder-summary {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: $surface-muted;
+
+  strong, span {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: $text-primary;
+    font-size: 12px;
+  }
+
+  span {
+    margin-top: 3px;
+    color: $text-secondary;
+    font-size: 11px;
+  }
+}
+
+.folder-error {
+  margin-top: 7px;
+  color: $danger-color;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.annotation-review {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid $border-color;
+}
+
+.review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+
+  h3 {
+    margin: 0;
+    color: $text-primary;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 5px 0 0;
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+.review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.review-workspace {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  min-height: 460px;
+  overflow: hidden;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  background: $surface-muted;
+}
+
+.annotation-thumbnails {
+  max-height: min(60vh, 620px);
+  overflow-y: auto;
+  padding: 9px;
+  border-right: 1px solid $border-color;
+  background: $surface-color;
+}
+
+.annotation-thumbnail {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin: 0 0 7px;
+  padding: 7px;
+  border: 1px solid $border-color;
+  border-radius: 9px;
+  color: inherit;
+  background: $surface-color;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $primary-color;
+    background: $primary-soft;
+  }
+
+  &.active {
+    border-color: $primary-color;
+    box-shadow: 0 0 0 2px $primary-soft;
+  }
+
+  &.pending {
+    border-left: 3px solid $warning-color;
+  }
+
+  &.missing {
+    border-left-color: $danger-color;
+  }
+
+  img {
+    width: 56px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: $surface-muted;
+  }
+}
+
+.thumbnail-copy {
+  min-width: 0;
+
+  strong, small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: $text-primary;
+    font-size: 12px;
+  }
+
+  small {
+    margin-top: 4px;
+    color: $text-secondary;
+    font-size: 10px;
+  }
+}
+
+.annotation-editor-panel {
+  min-width: 0;
+  padding: 14px;
+}
+
+.active-image-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+
+  strong, span {
+    display: block;
+  }
+
+  strong {
+    color: $text-primary;
+  }
+
+  span {
+    margin-top: 4px;
+    color: $text-secondary;
+    font-size: 11px;
+  }
+}
+
+.active-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 10px;
+
+  span {
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+.box-product-assignments {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid $border-color;
+  border-radius: 9px;
+  background: $surface-color;
+}
+
+.box-product-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+
+  > span {
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+.product-search {
+  margin: 16px 0 8px;
+}
+
+.search-result-count {
+  margin-bottom: 8px;
+  color: $text-secondary;
+  font-size: 12px;
+}
+
+.operation-progress-content {
+  padding: 6px 2px 4px;
+
+  p {
+    min-height: 22px;
+    margin: 14px 0 7px;
+    color: $text-secondary;
+    line-height: 1.6;
+  }
+
+  code {
+    display: block;
+    overflow: hidden;
+    color: $text-placeholder;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.operation-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+
+  strong {
+    color: $text-primary;
+    font-size: 15px;
+  }
+
+  span {
+    color: $primary-color;
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.operation-error {
+  margin-top: 16px;
+}
+
+.detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+
+  span {
+    color: $text-secondary;
+    font-size: 12px;
+  }
+
+  h3 {
+    margin: 5px 0 0;
+    color: $text-primary;
+    font-size: 21px;
+  }
+}
+
+.validation-box {
+  margin: 18px 0;
+  padding: 13px 15px;
+  border: 1px solid $success-color;
+  border-radius: 9px;
+  color: $success-color;
+  background: color-mix(in srgb, $success-color 12%, transparent);
+
+  &.invalid {
+    border-color: $danger-color;
+    color: $danger-color;
+    background: color-mix(in srgb, $danger-color 10%, transparent);
+  }
+
+  strong, span {
+    display: block;
+  }
+
+  span {
+    margin-top: 3px;
+    font-size: 11px;
+  }
+
+  ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+  }
+}
+
+.mapping-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0 10px;
+
+  h4 {
+    margin: 0;
+    color: $text-primary;
+  }
+
+  span {
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+code {
+  color: $text-secondary;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .count-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .product-setup-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .split-folder-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .dataset-page {
+    padding: 12px;
+  }
+
+  .page-header {
+    flex-direction: column;
+  }
+
+  .summary-grid,
+  .form-grid,
+  .count-grid,
+  .product-setup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filters {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+
+    .el-input-number,
+    .el-select {
+      width: 100%;
+    }
+  }
+
+  .review-heading,
+  .active-review-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-summary {
+    justify-content: flex-start;
+  }
+
+  .review-workspace {
+    display: block;
+  }
+
+  .annotation-thumbnails {
+    display: flex;
+    max-height: none;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid $border-color;
+  }
+
+  .annotation-thumbnail {
+    flex: 0 0 250px;
+  }
+
+  .annotation-editor-panel {
+    padding: 10px;
+  }
+}
 </style>
+

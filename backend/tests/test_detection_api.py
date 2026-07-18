@@ -598,6 +598,9 @@ def test_chat_form_submission_is_validated_and_returns_to_source_agent(
         def route(self, *args, **kwargs):
             raise AssertionError("结构化表单提交不应重新执行普通路由")
 
+        async def aroute(self, *args, **kwargs):
+            raise AssertionError("结构化表单提交不应重新执行普通路由")
+
         async def stream(self, message, attachment_paths, history, decision=None):
             captured["message"] = message
             captured["decision"] = decision

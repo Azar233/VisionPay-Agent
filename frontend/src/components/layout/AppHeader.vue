@@ -1,23 +1,6 @@
 <template>
   <header class="app-header">
-    <div class="header-left">
-      <el-tooltip :content="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'" placement="bottom" :show-arrow="false">
-        <el-button
-          class="sidebar-toggle"
-          :icon="sidebarCollapsed ? Expand : Fold"
-          circle
-          :aria-label="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
-          @click="$emit('toggle-sidebar')"
-        />
-      </el-tooltip>
-      <router-link to="/chat" class="brand-mark" aria-label="返回智能对话">
-        <img src="/favicon.svg" alt="" class="header-logo" />
-      </router-link>
-      <div class="brand-copy">
-        <span class="header-title">VisionPay</span>
-        <small>Retail Intelligence</small>
-      </div>
-    </div>
+    <h1 class="page-title">{{ pageTitle }}</h1>
 
     <div class="header-right">
       <el-dropdown
@@ -29,7 +12,7 @@
         @command="handleCommand"
       >
         <div class="user-info" aria-label="打开用户菜单">
-          <el-avatar :size="34" :src="userStore.avatar || undefined">
+          <el-avatar :size="32" :src="userStore.avatar || undefined">
             {{ userStore.username?.charAt(0)?.toUpperCase() }}
           </el-avatar>
           <span class="username">{{ userStore.username }}</span>
@@ -52,17 +35,19 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-import { ArrowDown, Expand, Fold, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowDown, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
 
-defineProps({ sidebarCollapsed: { type: Boolean, default: false } })
-defineEmits(['toggle-sidebar'])
+const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const { isDark, themeLabel, toggleTheme } = useTheme()
+
+const pageTitle = computed(() => route.meta?.title || 'VisionPay')
 
 function handleCommand(command) {
   if (command === 'theme') {
@@ -84,63 +69,36 @@ function handleCommand(command) {
 
 <style lang="scss" scoped>
 .app-header {
-  z-index: 100;
+  z-index: 90;
   height: $header-height;
-  padding: 0 28px;
+  flex-shrink: 0;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(245, 245, 247, .78);
+  background: $surface-color;
   border-bottom: 1px solid $border-color;
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
 }
 
-.header-left, .header-right, .user-info { display: flex; align-items: center; }
-.header-left { gap: 10px; }
-
-.sidebar-toggle {
-  width: 40px;
-  height: 40px;
-  color: $text-secondary;
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-
-  &:hover, &:focus-visible {
-    color: $text-primary;
-    background: rgba(255, 255, 255, .82);
-    border-color: $border-color;
-    box-shadow: $shadow-sm;
-  }
+.page-title {
+  margin: 0;
+  color: $text-primary;
+  font-size: 17px;
+  font-weight: 600;
 }
 
-.brand-mark {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: linear-gradient(145deg, #1688f8, #0068d4);
-  box-shadow: 0 8px 22px rgba(0, 113, 227, .22), inset 0 1px rgba(255, 255, 255, .35);
-}
-.header-logo { width: 24px; height: 24px; }
-.brand-copy { display: flex; flex-direction: column; gap: 2px; }
-.header-title { color: $text-primary; font-size: 17px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
-.brand-copy small { color: $text-secondary; font-size: 10px; font-weight: 400; }
+.header-right, .user-info { display: flex; align-items: center; }
 
 .user-info {
   gap: 8px;
-  min-height: 44px;
-  padding: 4px 12px 4px 4px;
+  min-height: 40px;
+  padding: 4px 8px 4px 4px;
   color: $text-secondary;
   cursor: pointer;
-  background: rgba(255, 255, 255, .68);
-  border: 1px solid $border-color;
   border-radius: 999px;
-  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  transition: background .2s ease;
 
-  &:hover { background: #fff; border-color: $border-strong; box-shadow: $shadow-sm; }
+  &:hover { background: var(--vp-sidebar-active-bg); }
 }
 .username { color: $text-primary; font-size: 14px; font-weight: 500; }
 
@@ -151,10 +109,9 @@ function handleCommand(command) {
   padding: 0 !important;
   overflow: hidden;
   border: 1px solid var(--vp-border) !important;
-  border-radius: 16px !important;
+  border-radius: 14px !important;
   background: var(--vp-surface) !important;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, .18) !important;
-  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: var(--vp-shadow-lg) !important;
 }
 :global(.user-menu-popper .el-popper__arrow) { display: none !important; }
 :global(.user-menu-popper .el-dropdown-menu) {
@@ -168,7 +125,7 @@ function handleCommand(command) {
   min-height: 38px;
   padding: 0 10px;
   gap: 8px;
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--vp-text);
   font-size: 14px;
 }
@@ -205,11 +162,11 @@ function handleCommand(command) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
   transition: transform .25s cubic-bezier(.2, .8, .2, 1);
 }
-:global(.user-menu-popper .theme-switch.active) { background: #0a84ff; }
+:global(.user-menu-popper .theme-switch.active) { background: var(--vp-primary); }
 :global(.user-menu-popper .theme-switch.active i) { transform: translateX(14px); }
 
 @media (max-width: 720px) {
   .app-header { padding: 0 16px; }
-  .brand-copy small, .username { display: none; }
+  .username { display: none; }
 }
 </style>
