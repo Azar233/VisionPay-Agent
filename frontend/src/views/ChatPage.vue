@@ -80,16 +80,16 @@
               <DetectionResultCard v-if="message.result" class="detection-result" :result="message.result" />
             </div>
           </article>
+          <button
+            v-if="showScrollToBottom"
+            class="scroll-bottom-button"
+            type="button"
+            aria-label="回到底部"
+            @click="scrollToBottomForce"
+          >
+            <el-icon><Bottom /></el-icon>
+          </button>
         </div>
-        <button
-          v-if="showScrollToBottom"
-          class="scroll-bottom-button"
-          type="button"
-          aria-label="回到底部"
-          @click="scrollToBottomForce"
-        >
-          <el-icon><Bottom /></el-icon><span>回到底部</span>
-        </button>
 
         <footer class="composer" @paste="handlePaste">
           <div v-if="selectedFiles.length" class="attachment-tray">
@@ -924,21 +924,22 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   scroll-behavior: smooth;
 }
 
+// sticky 吸附在消息滚动区可视底部，不遮挡输入框；纯箭头圆形按钮。
 .scroll-bottom-button {
-  position: absolute;
-  right: 24px;
-  bottom: 96px;
+  position: sticky;
+  bottom: 12px;
   z-index: 30;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: -48px 8px 0 auto;
   border: 1px solid $border-color;
-  border-radius: 999px;
+  border-radius: 50%;
   color: $text-secondary;
   background: $surface-color;
   box-shadow: $shadow-md;
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   transition: color .2s ease, border-color .2s ease, background-color .2s ease;
 
