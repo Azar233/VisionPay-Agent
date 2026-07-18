@@ -127,12 +127,12 @@
         </div>
         <div class="insight-content">
         <section>
-          <div class="panel-title"><span>Agent 团队</span><em>{{ activeAgents.length ? '正在协作' : '自动路由' }}</em></div>
+          <div class="panel-title agent-team-title"><span>Agent 团队</span></div>
           <div class="agent-list">
             <div v-for="agent in agents" :key="agent.name" :class="['agent-item', { active: activeAgents.includes(agent.name) }]">
               <span :class="agent.name"><el-icon><component :is="agent.icon" /></el-icon></span>
               <div><strong>{{ agent.label }}</strong><small>{{ agent.description }}</small></div>
-              <i></i>
+              <i class="agent-status-dot" aria-hidden="true"></i>
             </div>
           </div>
         </section>
@@ -206,8 +206,11 @@ const pendingOperations = ref([])
 const pendingFormSubmission = ref(null)
 const canSend = computed(() => Boolean(inputText.value.trim() || selectedFiles.value.length))
 const activeAgents = computed(() => {
-  const last = [...agentStore.messages].reverse().find((message) => message.role === 'assistant' && message.agent)
-  if (!last) return []
+  const last = agentStore.messages.at(-1)
+  // The indicator represents live execution, not the agent that answered last.
+  // Restrict it to the currently streaming assistant message so completion,
+  // failure and manual cancellation all turn the light off immediately.
+  if (last?.role !== 'assistant' || !last.loading || !last.agent) return []
   // When multiple agents collaborate, highlight all of them in the team panel.
   if (Array.isArray(last.parallelAgents) && last.parallelAgents.length > 1) {
     return last.parallelAgents
@@ -747,18 +750,26 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .agent-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+}
+
+.agent-team-title {
+  min-height: 28px;
+  margin-bottom: 10px;
+  color: $text-primary;
+
+  span { font-size: 14px; font-weight: 700; }
 }
 
 .agent-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 7px;
+  grid-template-columns: 36px minmax(0, 1fr) 7px;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
+  gap: 9px;
+  padding: 6px;
   border-radius: 10px;
   cursor: default;
-  transition: background .15s ease;
+  transition: background .18s ease;
 
   &.active { background: var(--vp-sidebar-active-bg); }
 
@@ -767,15 +778,16 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
     height: 34px;
     display: grid;
     place-items: center;
+    border: 1px solid $border-color;
     border-radius: 10px;
-    color: #fff;
-    background: $primary-color;
-    font-size: 16px;
+    color: $primary-color;
+    background: transparent;
+    font-size: 17px;
 
-    &.dataset { background: #8b5cf6; }
-    &.training { background: #0ea5e9; }
-    &.catalog { background: #f59e0b; }
-    &.knowledge { background: #10b981; }
+    &.dataset { color: #8b5cf6; }
+    &.training { color: #0ea5e9; }
+    &.catalog { color: #f59e0b; }
+    &.knowledge { color: #10b981; }
   }
 
   div {
@@ -785,23 +797,28 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
     gap: 2px;
   }
 
-  strong { font-size: 13px; font-weight: 600; }
+  strong { font-size: 13px; font-weight: 700; line-height: 1.25; }
   small {
     overflow: hidden;
     color: $text-placeholder;
     font-size: 11px;
+    line-height: 1.35;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
 
-  > i {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: $border-strong;
-  }
+.agent-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: $border-strong;
+  transition: background .18s ease, box-shadow .18s ease;
+}
 
-  &.active > i { background: $success-color; }
+.agent-item.active .agent-status-dot {
+  background: $success-color;
+  box-shadow: 0 0 0 3px var(--vp-success-bg);
 }
 
 .pending-list {
@@ -1001,102 +1018,128 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 }
 
 .welcome-state {
-  max-width: 720px;
+  width: 100%;
+  max-width: 1180px;
+  min-height: 100%;
   margin: 0 auto;
-  padding: 48px 0;
+  padding: clamp(36px, 6vh, 68px) 12px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
   animation: new-conversation-in .34s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .welcome-mark {
-  width: 56px;
-  height: 56px;
+  width: 51px;
+  height: 51px;
   display: grid;
   place-items: center;
   margin: 0 auto;
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(145deg, $primary-color, color-mix(in srgb, $primary-color 60%, #7c3aed));
-  font-size: 24px;
+  color: $text-placeholder;
+  background: transparent;
+  font-size: 40px;
 }
 
 .welcome-state > span {
   display: block;
-  margin-top: 16px;
+  margin-top: 21px;
   color: $text-secondary;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .015em;
 }
 
 .welcome-state h2 {
-  margin: 8px 0;
-  font-size: 26px;
-  font-weight: 700;
+  margin: 13px 0 10px;
+  font-size: clamp(30px, 2.3vw, 36px);
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -.035em;
 }
 
 .welcome-state > p {
-  max-width: 480px;
+  max-width: 620px;
   margin: 0 auto;
   color: $text-secondary;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 28px;
+  margin-top: clamp(32px, 5vh, 49px);
 }
 
 .quick-grid button {
   position: relative;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 16px;
-  grid-template-rows: auto auto;
-  gap: 2px 10px;
-  align-items: center;
-  padding: 12px;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  grid-template-rows: 27px auto auto;
+  gap: 0 10px;
+  align-items: start;
+  min-height: 126px;
+  padding: 18px 16px 15px;
   border: 1px solid $border-color;
-  border-radius: 10px;
+  border-radius: 14px;
   color: $text-primary;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: border-color .15s ease, background .15s ease;
+  transition: transform .2s ease, border-color .2s ease, background .2s ease;
 
   &:hover {
     border-color: $border-strong;
     background: var(--vp-sidebar-active-bg);
+    transform: translateY(-2px);
   }
 
   > span {
-    grid-row: 1 / 3;
-    width: 30px;
-    height: 30px;
+    grid-row: 1;
+    grid-column: 1;
+    width: 27px;
+    height: 27px;
     display: grid;
     place-items: center;
-    border-radius: 8px;
-    color: #fff;
-    background: $primary-color;
-    font-size: 16px;
+    justify-self: start;
+    color: $primary-color;
+    background: transparent;
+    font-size: 21px;
 
-    &.dataset { background: #8b5cf6; }
-    &.training { background: #0ea5e9; }
-    &.catalog { background: #f59e0b; }
-    &.knowledge { background: #10b981; }
+    &.dataset { color: #8b5cf6; }
+    &.training { color: #0ea5e9; }
+    &.catalog { color: #f59e0b; }
+    &.knowledge { color: #10b981; }
   }
 
-  strong { font-size: 13px; font-weight: 600; }
-  small { color: $text-placeholder; font-size: 11px; }
+  strong {
+    grid-row: 2;
+    grid-column: 1 / 3;
+    align-self: end;
+    margin-top: 18px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  small {
+    grid-row: 3;
+    grid-column: 1 / 3;
+    margin-top: 7px;
+    color: $text-placeholder;
+    font-size: 11px;
+    line-height: 1.45;
+  }
 
   .quick-arrow {
     grid-row: 1;
-    grid-column: 3;
+    grid-column: 2;
+    align-self: center;
+    justify-self: end;
     color: $text-placeholder;
-    font-size: 12px;
+    font-size: 17px;
   }
 }
 
@@ -1439,7 +1482,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 :global(html.dark .agent-chat-page .message-files span),
 :global(html.dark .agent-chat-page .attachment-tray > span) { background: var(--vp-sidebar-active-bg); }
 :global(html.dark .agent-chat-page .composer-box:focus-within) { border-color: var(--vp-primary); box-shadow: var(--vp-ring); }
-:global(html.dark .agent-chat-page .welcome-mark) { color: #fff; }
+:global(html.dark .agent-chat-page .welcome-mark) { color: var(--vp-text-placeholder); }
 :global(html.dark .agent-chat-page .floating-control-capsule) {
   background: rgba(23, 26, 33, .95);
   border-color: var(--vp-border);
@@ -1447,6 +1490,12 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 
 @media (max-width: 1180px) {
   .chat-layout { --session-column: 220px; --insight-column: 250px; }
+}
+
+@media (max-width: 1450px) {
+  .welcome-state { padding-top: 28px; padding-bottom: 24px; }
+  .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 34px; }
+  .quick-grid button { min-height: 118px; }
 }
 
 @media (max-width: 920px) {

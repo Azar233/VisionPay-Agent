@@ -89,6 +89,26 @@ describe('ChatPage background navigation', () => {
     expect(agentStore.isLoading).toBe(false)
   })
 
+  it('turns off the agent activity indicator as soon as the response completes', async () => {
+    const agentStore = useAgentStore()
+    const response = { role: 'assistant', content: '', loading: true, agent: 'dataset', parallelAgents: [] }
+    agentStore.messages = [response]
+    agentStore.isLoading = true
+
+    const wrapper = shallowMount(ChatPage, {
+      global: { directives: { loading: () => {} } },
+    })
+    await flushPromises()
+
+    expect(wrapper.findAll('.agent-item').some((item) => item.classes('active'))).toBe(true)
+
+    agentStore.messages[0].loading = false
+    agentStore.isLoading = false
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.findAll('.agent-item').some((item) => item.classes('active'))).toBe(false)
+  })
+
   it('preserves unsent text and attachments across route navigation', async () => {
     const agentStore = useAgentStore()
     const file = new File(['image'], 'draft.jpg', { type: 'image/jpeg' })
