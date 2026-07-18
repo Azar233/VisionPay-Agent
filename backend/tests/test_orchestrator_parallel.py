@@ -443,6 +443,33 @@ async def test_supervisor_summary_streams_llm(orchestrator):
 
 
 @pytest.mark.asyncio
+async def test_supervisor_summary_includes_custom_instructions(orchestrator):
+    """User custom instructions must reach the summary LLM like any other agent."""
+    orchestrator.custom_instructions = "用活泼的语气回答"
+    captured = {}
+
+    class FakeChunk:
+        def __init__(self, content):
+            self.content = content
+
+    class FakeLLM:
+        def __init__(self, **kwargs):
+            pass
+
+        async def astream_events(self, messages, version="v2"):
+            captured["messages"] = messages
+            yield {"event": "on_chat_model_stream", "data": {"chunk": FakeChunk("done")}, "run_id": "r1"}
+
+    with patch("langchain_openai.ChatOpenAI", FakeLLM):
+        async for _event in orchestrator._supervisor_summary({"a": "草稿"}, {}, ["a"], "msg", []):
+            pass
+
+    system_text = str(captured["messages"][0].content)
+    assert "用活泼的语气回答" in system_text
+    assert "用户自定义响应指令" in system_text
+
+
+@pytest.mark.asyncio
 async def test_supervisor_summary_falls_back_on_llm_failure(orchestrator):
     drafts = {"a": "草稿A"}
     structural = {"a": [{"type": "tool_result", "tool": "t", "content": "data"}]}

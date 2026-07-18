@@ -7,6 +7,10 @@ import json
 from typing import AsyncGenerator, Callable
 
 from app.agent.agents import CatalogAgent, DatasetAgent, KnowledgeAgent, TrainingAgent
+from app.agent.custom_instructions import (
+    CUSTOM_INSTRUCTIONS_PROMPT,
+    render_custom_instructions,
+)
 from app.agent.detection_agent import DetectionAgent
 from app.agent.prompts import SUPERVISOR_SUMMARY_PROMPT
 from app.agent.routing import AgentRouter, RouteDecision
@@ -480,11 +484,17 @@ class MultiAgentOrchestrator:
             user_message=message,
             context="\n\n".join(material),
         )
+        system_content = (
+            "你是 VisionPay 的多智能体调度中枢。请根据用户问题以及各 Agent 的执行结果，"
+            "整合成一段简洁、连贯、专业的中文回复。不要编造数据中不存在的信息。"
+        )
+        if self.custom_instructions:
+            # 与各 Agent 相同的安全渲染：用户偏好只影响表达风格，不改变事实与安全边界。
+            system_content += CUSTOM_INSTRUCTIONS_PROMPT.format(
+                custom_instructions=render_custom_instructions(self.custom_instructions)
+            )
         messages = [
-            SystemMessage(
-                content="你是 VisionPay 的多智能体调度中枢。请根据用户问题以及各 Agent 的执行结果，"
-                "整合成一段简洁、连贯、专业的中文回复。不要编造数据中不存在的信息。"
-            ),
+            SystemMessage(content=system_content),
             *chat_history,
             HumanMessage(content=prompt),
         ]
