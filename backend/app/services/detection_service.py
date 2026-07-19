@@ -624,21 +624,29 @@ class DetectionService:
         video_writer = None
         output_fps = max(1.0, fps / stride)
         try:
-            import cv2
-            for codec in ("mp4v", "avc1", "XVID"):
-                fourcc = cv2.VideoWriter_fourcc(*codec)
-                candidate = annotated_path if codec != "XVID" else annotated_path.with_suffix(".avi")
-                writer = cv2.VideoWriter(str(candidate), fourcc, output_fps, (width, height))
+            import imageio.v2 as imageio
+            video_writer = imageio.get_writer(
+                str(annotated_path),
+                fps=output_fps,
+                codec="libx264",
+                quality=8,
+                macro_block_size=1,
+            )
+        except Exception as exc:
+            logger.warning("imageio 标注视频初始化失败，尝试 OpenCV MJPG: %s", exc)
+            try:
+                import cv2
+                annotated_path = annotated_path.with_suffix(".avi")
+                fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+                writer = cv2.VideoWriter(str(annotated_path), fourcc, output_fps, (width, height))
                 if writer.isOpened():
                     video_writer = writer
-                    annotated_path = candidate
-                    break
-                writer.release()
-            if video_writer is None:
-                logger.warning("标注视频写入器初始化失败，将跳过视频生成: %s", annotated_path)
-        except Exception as exc:
-            logger.warning("标注视频初始化异常，将跳过视频生成: %s", exc)
-            video_writer = None
+                else:
+                    writer.release()
+                    logger.warning("标注视频写入器初始化失败，将跳过视频生成: %s", annotated_path)
+            except Exception as cv_exc:
+                logger.warning("标注视频初始化异常，将跳过视频生成: %s", cv_exc)
+                video_writer = None
 
         if progress_callback:
             progress_callback(5, "正在初始化轨迹跟踪")
@@ -674,10 +682,16 @@ class DetectionService:
                         frame_height, frame_width = annotated_frame.shape[:2]
                         if (frame_width, frame_height) != (width, height):
                             annotated_frame = cv2.resize(annotated_frame, (width, height))
-                        video_writer.write(annotated_frame)
+                        if hasattr(video_writer, "append_data"):
+                            video_writer.append_data(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
+                        else:
+                            video_writer.write(annotated_frame)
                 except Exception as exc:
                     logger.warning("标注视频帧写入失败，停止生成视频: %s", exc)
-                    video_writer.release()
+                    if hasattr(video_writer, "close"):
+                        video_writer.close()
+                    else:
+                        video_writer.release()
                     video_writer = None
             processed += 1
             if progress_callback:
@@ -688,11 +702,17 @@ class DetectionService:
 
         if processed == 0:
             if video_writer is not None:
-                video_writer.release()
+                if hasattr(video_writer, "close"):
+                    video_writer.close()
+                else:
+                    video_writer.release()
             raise DetectionServiceError("视频中没有可读取的帧")
 
         if video_writer is not None:
-            video_writer.release()
+            if hasattr(video_writer, "close"):
+                video_writer.close()
+            else:
+                video_writer.release()
         annotated_video_url = f"/media/video-annotated/{annotated_path.name}" if annotated_path.is_file() else None
 
         summaries, items, price_summary = self._finalize_tracked_video(
