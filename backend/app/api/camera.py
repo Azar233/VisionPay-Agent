@@ -27,8 +27,8 @@ def normalize_ip_webcam_url(raw_url: str) -> str:
         raise ValueError("IP Webcam 地址必须以 http:// 开头")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("暂不支持包含账号、参数或片段的摄像头地址")
-    if not address.is_private or address.is_link_local or address.is_loopback:
-        raise ValueError("只允许连接局域网地址")
+    if not (address.is_private or address.is_loopback) or address.is_link_local:
+        raise ValueError("只允许连接局域网地址或本机地址")
     if port is None:
         port = 8080
 
