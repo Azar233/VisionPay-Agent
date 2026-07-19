@@ -1,16 +1,5 @@
 <template>
   <div class="dashboard-page" v-loading="loading">
-    <header class="page-header">
-      <div>
-        <span class="vp-kicker">Retail Intelligence</span>
-        <h1 class="vp-page-title">数据概览</h1>
-        <p class="vp-page-subtitle">分别查看商品识别业务与多 Agent 模型调用情况，避免不同类型的数据相互干扰。</p>
-      </div>
-      <div class="page-actions">
-        <el-button :icon="Refresh" :loading="loading" @click="refreshCurrent">刷新当前概览</el-button>
-      </div>
-    </header>
-
     <section class="dashboard-workspace">
       <el-tabs v-model="activeSection" class="dashboard-tabs" @tab-change="handleSectionChange">
         <el-tab-pane name="detection">
@@ -20,8 +9,13 @@
           <div class="dashboard-pane">
             <div class="pane-toolbar">
               <div><strong>识别数据概览</strong><small>识别任务、处理规模与商品分布</small></div>
-              <div class="period-switch" role="group" aria-label="识别概览时间范围">
-                <button v-for="option in periodOptions" :key="option.value" type="button" :class="{ active: detectionPeriodDays === option.value }" @click="selectDetectionPeriod(option.value)">{{ option.label }}</button>
+              <div class="pane-actions">
+                <el-tooltip content="刷新当前概览" placement="left" :show-arrow="false">
+                  <el-button class="pane-refresh" text :icon="Refresh" :loading="loading" aria-label="刷新当前概览" @click="refreshCurrent" />
+                </el-tooltip>
+                <div class="period-switch" role="group" aria-label="识别概览时间范围">
+                  <button v-for="option in periodOptions" :key="option.value" type="button" :class="{ active: detectionPeriodDays === option.value }" @click="selectDetectionPeriod(option.value)">{{ option.label }}</button>
+                </div>
               </div>
             </div>
 
@@ -59,8 +53,13 @@
           <div class="dashboard-pane">
             <div class="pane-toolbar">
               <div><strong>模型调用概览</strong><small>大模型请求、Token 与 Agent 使用情况</small></div>
-              <div class="period-switch" role="group" aria-label="模型调用时间范围">
-                <button v-for="option in periodOptions" :key="option.value" type="button" :class="{ active: modelPeriodDays === option.value }" @click="selectModelPeriod(option.value)">{{ option.label }}</button>
+              <div class="pane-actions">
+                <el-tooltip content="刷新当前概览" placement="left" :show-arrow="false">
+                  <el-button class="pane-refresh" text :icon="Refresh" :loading="loading" aria-label="刷新当前概览" @click="refreshCurrent" />
+                </el-tooltip>
+                <div class="period-switch" role="group" aria-label="模型调用时间范围">
+                  <button v-for="option in periodOptions" :key="option.value" type="button" :class="{ active: modelPeriodDays === option.value }" @click="selectModelPeriod(option.value)">{{ option.label }}</button>
+                </div>
               </div>
             </div>
 
@@ -78,7 +77,7 @@
                 <div ref="modelTrendChartRef" class="chart"></div>
               </article>
               <article class="chart-card">
-                <header class="card-header"><div><span>Agent 使用分布</span><small>按实际模型调用次数统计</small></div></header>
+                <header class="card-header"><div><span>Agent 使用分布</span><small>按 Agent 参与轮次统计</small></div></header>
                 <div ref="agentChartRef" class="chart"></div>
               </article>
             </section>
@@ -88,7 +87,7 @@
               <el-table :data="modelUsage.recent" row-key="id" empty-text="当前周期内暂无模型调用记录">
                 <el-table-column label="调用时间" min-width="168"><template #default="{ row }">{{ formatDate(row.created_at) }}</template></el-table-column>
                 <el-table-column label="模型" min-width="150" show-overflow-tooltip><template #default="{ row }"><span class="model-name"><el-icon><Cpu /></el-icon>{{ row.model_name }}</span></template></el-table-column>
-                <el-table-column label="Agent" min-width="155"><template #default="{ row }"><span :class="['agent-badge', row.agent]"><i></i>{{ row.agent_label }}</span></template></el-table-column>
+                <el-table-column label="Agent" min-width="150"><template #default="{ row }"><div class="agent-stack"><span v-for="item in (row.agents?.length ? row.agents : [{ agent: row.agent, label: row.agent_label }])" :key="item.agent" :class="['agent-badge', item.agent]"><i></i>{{ item.label }}</span></div></template></el-table-column>
                 <el-table-column prop="call_count" label="模型请求" width="94" align="right" />
                 <el-table-column label="输入 / 输出 Token" min-width="160" align="right"><template #default="{ row }">{{ formatNumber(row.input_tokens) }} / {{ formatNumber(row.output_tokens) }}</template></el-table-column>
                 <el-table-column label="总 Token" width="112" align="right"><template #default="{ row }">{{ formatNumber(row.total_tokens) }}</template></el-table-column>
@@ -227,7 +226,8 @@ function renderActiveCharts() {
         textStyle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
       },
       graphic: source.length ? [] : emptyGraphic(emptyText),
-      series: [{ type: 'pie', radius: ['38%', '64%'], center: ['34%', '50%'], minAngle: 3, label: { show: false }, data: source }],
+      // 饼图左移并稍收半径，避免右缘与图例文字重合。
+      series: [{ type: 'pie', radius: ['34%', '56%'], center: ['30%', '50%'], minAngle: 3, label: { show: false }, data: source }],
     }, true)
   })
 
@@ -258,7 +258,7 @@ function renderActiveCharts() {
   const modelTrendChart = baseChart(modelTrendChartRef.value)
   modelTrendChart?.setOption({
     color: ['#0071e3', '#af52de'], tooltip: { trigger: 'axis', ...tooltip },
-    legend: { top: 0, right: 4, textStyle: { color: colors.muted } }, grid: { left: 48, right: 52, top: 46, bottom: 34 },
+    legend: { top: 0, right: 4, textStyle: { color: colors.muted } }, grid: { left: 48, right: 52, top: 46, bottom: 34, containLabel: true },
     xAxis: {
       type: 'category', data: modelUsage.value.trend.map(modelTrendLabel), ...axis,
       axisLabel: { ...axis.axisLabel, interval: modelUsage.value.granularity === 'hour' ? 0 : 'auto' },
@@ -345,10 +345,12 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .dashboard-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
-.page-header { padding: 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.page-header .vp-kicker { margin-bottom: 6px; }
-.page-actions { display: flex; align-items: center; flex-shrink: 0; gap: 10px; }
-.dashboard-workspace { min-width: 0; }.dashboard-tabs :deep(.el-tabs__header) { margin: 0 0 16px; padding: 5px; border: 1px solid $border-color; border-radius: 14px; background: $surface-muted; }.dashboard-tabs :deep(.el-tabs__nav-wrap::after),.dashboard-tabs :deep(.el-tabs__active-bar) { display: none; }.dashboard-tabs :deep(.el-tabs__item) { height: 42px; padding: 0 7px; color: $text-secondary; }.dashboard-tabs :deep(.el-tabs__item.is-active) { color: $text-primary; }.tab-label { height: 34px; padding: 0 13px; display: inline-flex; align-items: center; gap: 7px; border-radius: 10px; transition: .2s ease; }.dashboard-tabs :deep(.is-active) .tab-label { color: $primary-color; background: $surface-color; box-shadow: 0 5px 14px rgba(15,23,42,.07); }.tab-label small { min-width: 20px; padding: 2px 6px; border-radius: 999px; color: $text-placeholder; background: color-mix(in srgb,$border-color 60%,transparent); font-size: 9px; text-align: center; }.dashboard-tabs :deep(.is-active) .tab-label small { color: $primary-color; background: $primary-soft; }
+.dashboard-workspace { position: relative; min-width: 0; }
+.pane-actions { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.pane-refresh { color: $text-secondary; }
+.pane-refresh:hover, .pane-refresh:focus-visible { color: $primary-color; }
+// 灰条收窄为内容宽度，给图表让出横向空间。
+.dashboard-tabs :deep(.el-tabs__header) { width: fit-content; margin: 0 0 16px; padding: 5px; border: 1px solid $border-color; border-radius: 14px; background: $surface-muted; }.dashboard-tabs :deep(.el-tabs__nav-wrap::after),.dashboard-tabs :deep(.el-tabs__active-bar) { display: none; }.dashboard-tabs :deep(.el-tabs__item) { height: 42px; padding: 0 7px; color: $text-secondary; }.dashboard-tabs :deep(.el-tabs__item.is-active) { color: $text-primary; }.tab-label { height: 34px; padding: 0 13px; display: inline-flex; align-items: center; gap: 7px; border-radius: 10px; transition: .2s ease; }.dashboard-tabs :deep(.is-active) .tab-label { color: $primary-color; background: $surface-color; box-shadow: 0 5px 14px rgba(15,23,42,.07); }.tab-label small { min-width: 20px; padding: 2px 6px; border-radius: 999px; color: $text-placeholder; background: color-mix(in srgb,$border-color 60%,transparent); font-size: 9px; text-align: center; }.dashboard-tabs :deep(.is-active) .tab-label small { color: $primary-color; background: $primary-soft; }
 .dashboard-pane { display: flex; flex-direction: column; gap: 16px; }.pane-toolbar { min-height: 54px; padding: 2px 2px 8px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }.pane-toolbar > div:first-child { display: flex; flex-direction: column; gap: 4px; }.pane-toolbar strong { font-size: 17px; }.pane-toolbar small { color: $text-secondary; font-size: 12px; }
 .period-switch { max-width: 100%; padding: 3px; display: inline-flex !important; flex: none; flex-direction: row !important; align-items: center; gap: 2px !important; overflow-x: auto; border: 1px solid $border-color; border-radius: 12px; background: $surface-muted; white-space: nowrap; scrollbar-width: none; }.period-switch::-webkit-scrollbar { display: none; }.period-switch button { height: 30px; padding: 0 12px; flex: none; border: 0; border-radius: 9px; color: $text-secondary; background: transparent; font: inherit; font-size: 12px; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }.period-switch button:hover { color: $text-primary; }.period-switch button.active { color: $primary-color; background: $surface-color; box-shadow: 0 3px 10px rgba(15,23,42,.08); font-weight: 650; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
@@ -358,7 +360,9 @@ onBeforeUnmount(() => {
 .growth,.metric-note { grid-column: 1 / -1; width: fit-content; font-size: 11px; }.growth { padding: 5px 8px; border-radius: 999px; font-weight: 600; }.growth.positive { color: $success-color; background: color-mix(in srgb, $success-color 12%, transparent); }.growth.negative { color: $danger-color; background: color-mix(in srgb, $danger-color 10%, transparent); }.growth.neutral { color: $text-secondary; background: $surface-muted; }.metric-note { color: $text-secondary; }.model-metric-card { min-height: 132px; }
 .chart-grid,.model-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }.chart-card { min-width: 0; overflow: hidden; border: 1px solid $border-color; border-radius: $border-radius-md; background: $surface-color; box-shadow: $shadow-sm; }.chart-card.chart-wide { grid-column: 1 / -1; }.model-chart-grid { grid-template-columns: minmax(0, 1.45fr) minmax(340px, .55fr); }
 .card-header { min-height: 70px; padding: 0 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid $border-color; }.card-header > div:not(.period-switch) { display: flex; flex-direction: column; gap: 4px; }.card-header span { color: $text-primary; font-weight: 600; }.card-header small { color: $text-secondary; }.chart { width: 100%; height: 330px; }.chart-trend { height: 360px; }
-.recent-card { overflow: visible; }.recent-card :deep(.el-table) { border-radius: 0 0 $border-radius-md $border-radius-md; }.record-count { color: $text-secondary !important; font-size: 12px; font-weight: 500 !important; }.model-name,.agent-badge { display: inline-flex; align-items: center; gap: 7px; }.model-name { color: $text-primary; font-weight: 600; }.agent-badge { font-weight: 700; }.agent-badge i { width: 8px; height: 8px; border-radius: 50%; background: #0071e3; }.agent-badge.dataset i { background: #8b5cf6; }.agent-badge.training i { background: #0ea5e9; }.agent-badge.catalog i { background: #f59e0b; }.agent-badge.knowledge i { background: #10b981; }
+.recent-card { overflow: visible; }.recent-card :deep(.el-table) { border-radius: 0 0 $border-radius-md $border-radius-md; }.record-count { color: $text-secondary !important; font-size: 12px; font-weight: 500 !important; }.model-name,.agent-badge { display: inline-flex; align-items: center; gap: 7px; }.model-name { color: $text-primary; font-weight: 600; }.agent-badge { font-weight: 700; white-space: nowrap; }.agent-badge i { width: 8px; height: 8px; border-radius: 50%; background: #0071e3; }.agent-badge.dataset i { background: #8b5cf6; }.agent-badge.training i { background: #0ea5e9; }.agent-badge.catalog i { background: #f59e0b; }.agent-badge.knowledge i { background: #10b981; }
+// 并行调用时子 Agent 标识竖向排列。
+.agent-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 :global(html.dark .dashboard-tabs .el-tabs__header) { background: rgba(22,22,24,.9); border-color: rgba(255,255,255,.1); }:global(html.dark .period-switch) { background: rgba(22,22,24,.9); border-color: rgba(255,255,255,.1); }:global(html.dark .period-switch button.active) { background: #2c2c2e; box-shadow: 0 4px 12px rgba(0,0,0,.24); }
 @media (max-width: 1100px) { .metric-grid { grid-template-columns: repeat(2, 1fr); }.model-chart-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .dashboard-page { padding: 16px; }.page-header { align-items: flex-start; flex-direction: column; }.page-actions { width: 100%; justify-content: flex-start; }.metric-grid,.chart-grid { grid-template-columns: 1fr; }.chart-card.chart-wide { grid-column: auto; }.card-header { padding: 14px 18px; align-items: flex-start; flex-wrap: wrap; }.period-switch { width: fit-content; }.pane-toolbar { align-items: flex-start; flex-direction: column; }.chart { height: 300px; } }

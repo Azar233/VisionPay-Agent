@@ -173,8 +173,8 @@ body,
 }
 
 /* Teleported Element Plus surfaces follow the active theme */
-.el-popper.is-dark,
-.el-tooltip__popper.is-dark {
+html.dark .el-popper.is-dark,
+html.dark .el-tooltip__popper.is-dark {
   padding: 7px 10px !important;
   color: #f3f4f6 !important;
   background: rgba(31, 35, 44, .96) !important;
@@ -182,8 +182,8 @@ body,
   border-radius: 8px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .28) !important;
 }
-.el-popper.is-dark .el-popper__arrow,
-.el-tooltip__popper.is-dark .el-popper__arrow { display: none !important; }
+html.dark .el-popper.is-dark .el-popper__arrow,
+html.dark .el-tooltip__popper.is-dark .el-popper__arrow { display: none !important; }
 
 html.dark .el-popper,
 html.dark .el-dropdown-menu,
@@ -211,6 +211,21 @@ html.dark .el-textarea__inner,
 html.dark .el-select__wrapper,
 html.dark .el-input-number { color: #f3f4f6; background: #1f232c; }
 html.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .2); }
+
+/* 浅色主题下将 Element Plus 深色 tooltip 气泡改为浅底深字卡片。 */
+html:not(.dark) .el-popper.is-dark {
+  background: var(--vp-surface);
+  border: 1px solid var(--vp-border);
+  border-radius: 10px;
+  color: var(--vp-text);
+  box-shadow: var(--vp-shadow-md);
+}
+html:not(.dark) .el-popper.is-dark .el-popper__arrow::before {
+  background: var(--vp-surface);
+  border: 1px solid var(--vp-border);
+  border-right: 0;
+  border-bottom: 0;
+}
 
 /* Keep all teleported Element Plus modal surfaces anchored to the current viewport. */
 body > .el-overlay,

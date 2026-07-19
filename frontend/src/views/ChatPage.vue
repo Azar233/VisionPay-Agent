@@ -30,11 +30,11 @@
       <main :class="['conversation-panel', { 'has-floating-controls': sessionsCollapsed || insightsCollapsed }]">
         <div v-if="sessionsCollapsed || insightsCollapsed" class="floating-panel-controls" aria-label="侧栏快捷操作">
           <div v-if="sessionsCollapsed" class="floating-control-capsule floating-control-capsule--left">
+            <el-button class="floating-control-button" text :icon="Plus" aria-label="新建对话" @click="createNewChat" />
+            <span class="floating-control-divider" aria-hidden="true"></span>
             <el-tooltip content="展开历史对话" placement="bottom" :show-arrow="false">
               <el-button class="floating-control-button" text :icon="DArrowRight" aria-label="展开历史对话" @click="sessionsCollapsed = false" />
             </el-tooltip>
-            <span class="floating-control-divider" aria-hidden="true"></span>
-            <el-button class="floating-control-button" text :icon="Plus" aria-label="新建对话" @click="createNewChat" />
           </div>
           <div v-if="insightsCollapsed" class="floating-control-capsule floating-control-capsule--right">
             <el-tooltip content="展开右侧设置" placement="bottom" :show-arrow="false">
@@ -309,7 +309,17 @@ async function ensureSession() {
   agentStore.currentSessionId = session.session_uuid
   return session.session_uuid
 }
-function createNewChat() {
+async function createNewChat() {
+  // 有进行中的内容时先确认，避免误点直接打断当前对话。
+  if (agentStore.isLoading || agentStore.messages.length) {
+    try {
+      await ElMessageBox.confirm(
+        '新建对话将打断当前进行中的对话并清空当前内容，确定要继续吗？',
+        '新建对话',
+        { confirmButtonText: '新建对话', cancelButtonText: '取消', type: 'warning' },
+      )
+    } catch { return }
+  }
   stopStream(); agentStore.currentSessionId = null; agentStore.messages = []; inputText.value = ''; pendingFormSubmission.value = null; clearFiles(); newChatViewKey.value += 1
 }
 async function openSession(sessionUuid) {
@@ -581,7 +591,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   width: 32px;
   min-width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: $border-radius-sm;
   color: $text-secondary;
   border-color: transparent;
   background: transparent;
@@ -742,8 +752,9 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 }
 
 .insight-content section + section {
-  margin-top: 18px;
-  padding-top: 14px;
+  // 收紧右侧面板纵向间距，多数窗口高度下不再出现面板内滚动条。
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid $border-color;
 }
 
@@ -901,7 +912,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
 .safety-card {
   display: flex;
   gap: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid $border-color;
   border-radius: 10px;
   color: $text-primary;
@@ -949,7 +960,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   gap: 2px;
   padding: 3px;
   border: 1px solid $border-color;
-  border-radius: 999px;
+  border-radius: $border-radius-md;
   color: $text-secondary;
   background: rgba($surface-color, .92);
   box-shadow: $shadow-md;
@@ -965,7 +976,8 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   min-width: 30px;
   height: 30px;
   margin: 0;
-  border-radius: 50%;
+  // 与外层圆角矩形胶囊保持一致的圆角预览。
+  border-radius: $border-radius-sm;
   color: inherit;
   border-color: transparent;
   background: transparent;

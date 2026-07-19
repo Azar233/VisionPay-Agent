@@ -253,7 +253,10 @@ class DashboardService:
             successful_turns += 0 if failed else 1
             if message.latency_ms is not None:
                 latency_values.append(int(message.latency_ms))
-            agent_counts[agent] = agent_counts.get(agent, 0) + call_count
+            # 并行/流水线调用的 agent_used 是逗号拼接的多个子 Agent，
+            # 分布统计按子 Agent 拆分：本轮参与的每个子 Agent 各计一次。
+            for agent_part in {part.strip() for part in agent.split(",") if part.strip()}:
+                agent_counts[agent_part] = agent_counts.get(agent_part, 0) + 1
 
             if hours is not None:
                 bucket_time = message.created_at.replace(
@@ -273,6 +276,8 @@ class DashboardService:
             bucket["tokens"] += tokens
 
             if len(recent) < limit:
+                # 并行调用时给出子 Agent 列表，前端按各自颜色竖向排列展示。
+                agent_parts = [part.strip() for part in agent.split(",") if part.strip()]
                 recent.append(
                     {
                         "id": message.id,
@@ -280,6 +285,10 @@ class DashboardService:
                         "model_name": model_name,
                         "agent": agent,
                         "agent_label": AGENT_LABELS.get(agent, agent),
+                        "agents": [
+                            {"agent": part, "label": AGENT_LABELS.get(part, part)}
+                            for part in agent_parts
+                        ],
                         "call_count": call_count,
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,

@@ -1,6 +1,23 @@
 <template>
   <header class="app-header">
-    <h1 class="page-title">{{ pageTitle }}</h1>
+    <div class="header-left">
+      <h1 class="page-title">{{ pageTitle }}</h1>
+      <el-popover
+        v-if="pageDescription"
+        trigger="click"
+        placement="bottom-start"
+        :width="320"
+        :show-arrow="false"
+        :offset="8"
+      >
+        <template #reference>
+          <button class="page-info-button" type="button" aria-label="查看页面说明">
+            <el-icon><InfoFilled /></el-icon>
+          </button>
+        </template>
+        <p class="page-info-text">{{ pageDescription }}</p>
+      </el-popover>
+    </div>
 
     <div class="header-right">
       <el-dropdown
@@ -37,7 +54,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, InfoFilled, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
@@ -48,6 +65,7 @@ const userStore = useUserStore()
 const { isDark, themeLabel, toggleTheme } = useTheme()
 
 const pageTitle = computed(() => route.meta?.title || 'VisionPay')
+const pageDescription = computed(() => route.meta?.description || '')
 
 function handleCommand(command) {
   if (command === 'theme') {
@@ -80,11 +98,43 @@ function handleCommand(command) {
   border-bottom: 1px solid $border-color;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .page-title {
   margin: 0;
   color: $text-primary;
   font-size: 17px;
   font-weight: 600;
+}
+
+.page-info-button {
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  color: $text-placeholder;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color .2s ease;
+
+  &:hover { color: $primary-color; }
+}
+
+.page-info-text {
+  margin: 0;
+  color: $text-secondary;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .header-right, .user-info { display: flex; align-items: center; }

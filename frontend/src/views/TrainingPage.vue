@@ -2,9 +2,7 @@
   <div class="training-page">
     <div class="page-header">
       <div>
-        <span class="vp-kicker">Model Operations</span>
         <h1 class="vp-page-title">模型训练与监控</h1>
-        <p class="vp-page-subtitle">启动 YOLOv11 训练任务，实时观察 loss、mAP 与运行状态。</p>
       </div>
       <div class="page-actions">
         <el-button :icon="Upload" @click="openImportDialog">

@@ -335,7 +335,8 @@ defineExpose({ start, stop })
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: $bg-color-dark;
+  // 浅色模式下用柔和灰底，暗色模式下仍为主题深色。
+  background: $surface-muted;
 
   canvas {
     display: block;

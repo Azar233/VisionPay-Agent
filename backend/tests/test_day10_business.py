@@ -176,8 +176,9 @@ def test_dashboard_model_usage_is_aggregated_and_user_scoped(client, db_session)
         "avg_latency_ms": 1000,
         "success_rate": 50.0,
     }
+    # 分布统计按参与轮次计：每个子 Agent 每轮计一次。
     assert {item["agent"]: item["value"] for item in data["agent_distribution"]} == {
-        "dataset": 2,
+        "dataset": 1,
         "knowledge": 1,
     }
     assert len(data["recent"]) == 1
@@ -376,3 +377,43 @@ def test_user_directory_is_admin_only(client, db_session):
     listing = client.get("/api/user/list?keyword=day10", headers=headers)
     assert listing.status_code == 200
     assert listing.json()["items"][0]["username"] == "day10_user"
+
+
+def test_dashboard_model_usage_splits_parallel_agents(client, db_session):
+    headers = auth_headers(client)
+    owner = db_session.query(User).filter_by(username="day10_user").one()
+    session = ChatSession(user_id=owner.id, session_uuid="dashboard-parallel-session")
+    db_session.add(session)
+    db_session.flush()
+    db_session.add(
+        ChatMessage(
+            session_id=session.id,
+            role="assistant",
+            content="并行检测与查价完成",
+            agent_used="catalog,detection",
+            tokens_used=300,
+            latency_ms=2000,
+            tool_calls={
+                "model_name": "deepseek-chat",
+                "model_run_count": 4,
+                "model_usage": {"input_tokens": 240, "output_tokens": 60, "total_tokens": 300},
+            },
+            created_at=datetime.now(),
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/api/dashboard/model-usage?days=30&limit=1", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    # 并行调用按子 Agent 拆分统计：catalog 与 detection 各计一次参与轮次。
+    distribution = {item["agent"]: item["value"] for item in data["agent_distribution"]}
+    assert distribution["catalog"] == 1
+    assert distribution["detection"] == 1
+    assert "catalog,detection" not in distribution
+    # 最近调用记录携带子 Agent 列表，前端按各自颜色竖排展示。
+    agents = data["recent"][0]["agents"]
+    assert [item["agent"] for item in agents] == ["catalog", "detection"]
+    assert agents[0]["label"] == "Catalog Agent"
+    assert agents[1]["label"] == "Detection Agent"

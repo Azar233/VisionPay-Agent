@@ -1,13 +1,5 @@
 <template>
   <div class="price-management-page">
-    <div class="page-header">
-      <div>
-        <span class="vp-kicker">Catalog Operations</span>
-        <h1 class="vp-page-title">价目表管理</h1>
-        <p class="vp-page-subtitle">选择数据集版本后，只管理该版本中已有商品的价格</p>
-      </div>
-    </div>
-
     <section class="card-container dataset-scope-panel">
       <div class="scope-copy">
         <strong><span class="required-star">*</span>数据集版本</strong>
@@ -63,7 +55,7 @@
             v-model="searchKeyword"
             placeholder="搜索商品名、条码、product_id 或 product_key"
             clearable
-            style="width: 380px; max-width: 100%"
+            style="width: 540px; max-width: 100%"
             @keyup.enter="handleSearch"
             @clear="handleSearch"
           >
@@ -91,7 +83,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="class_index" label="class_id" sortable="custom" min-width="100">
+          <el-table-column prop="class_index" label="class_id" sortable="custom" min-width="120">
             <template #default="{ row }">{{ row.class_index }}</template>
           </el-table-column>
           <el-table-column prop="product_id" label="product_id" min-width="110" />

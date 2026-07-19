@@ -311,12 +311,18 @@ class HistoryService:
         content = message.content or ""
         failed = content.startswith("Agent 处理失败") or content.startswith("请求失败")
         attachments = user_meta.get("attachments") or []
+        # 并行/流水线调用的 agent_used 是逗号拼接，拆成子 Agent 列表供前端竖排展示。
+        agent_parts = [part.strip() for part in (message.agent_used or "").split(",") if part.strip()]
         return {
             "id": message.id,
             "session_uuid": message.session.session_uuid,
             "session_title": message.session.title,
             "agent": message.agent_used,
             "agent_label": AGENT_LABELS.get(message.agent_used, message.agent_used),
+            "agents": [
+                {"agent": part, "label": AGENT_LABELS.get(part, part)}
+                for part in agent_parts
+            ],
             "action": action,
             "action_label": action_label,
             "tool": tool or None,

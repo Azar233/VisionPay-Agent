@@ -2,9 +2,7 @@
   <div class="dataset-page">
     <div class="page-header">
       <div>
-        <span class="vp-kicker">Dataset Operations</span>
         <h1 class="vp-page-title">数据集版本管理</h1>
-        <p class="vp-page-subtitle">登记数据集元数据和类别映射，冻结后形成不可变版本，并记录训练与模型谱系。</p>
       </div>
       <div class="page-actions">
         <el-button :icon="UploadFilled" @click="openModelImportDialog">导入可用模型</el-button>

@@ -9,7 +9,7 @@
         <button type="button" class="history-button" @click="router.push('/checkout/history')">
           <el-icon><List /></el-icon>订单历史
         </button>
-        <div class="header-status"><i></i><span>设备就绪</span><small>原型模式</small></div>
+        <div class="header-status"><i></i><span>设备就绪</span></div>
       </div>
     </header>
 
@@ -432,8 +432,9 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
   min-height: calc(100vh - 74px);
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(390px, .65fr);
-  gap: 20px;
-  padding: 20px;
+  // 保留一条窄灰缝，避免白块之间隔得太远。
+  gap: 12px;
+  padding: 12px;
   background: $bg-color;
 }
 
@@ -913,11 +914,6 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     grid-template-columns: 1fr;
   }
 
-  .capture-section,
-  .basket-section {
-    border-right: 0;
-  }
-
   .basket-section {
     min-height: 620px;
   }
@@ -935,8 +931,8 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
 
   .checkout-main {
     min-height: calc(100vh - 66px);
-    padding: 16px;
-    gap: 16px;
+    padding: 10px;
+    gap: 10px;
   }
 
   .capture-section,
