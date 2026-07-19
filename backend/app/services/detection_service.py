@@ -617,6 +617,29 @@ class DetectionService:
         expected = max(1, math.ceil(total_frames / stride))
         last_percent = 5
         frame_index = -1
+
+        annotated_dir = Path(settings.MEDIA_ROOT).resolve() / "video-annotated"
+        annotated_dir.mkdir(parents=True, exist_ok=True)
+        annotated_path = annotated_dir / f"task_{task.id}.mp4"
+        video_writer = None
+        output_fps = max(1.0, fps / stride)
+        try:
+            import cv2
+            for codec in ("mp4v", "avc1", "XVID"):
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                candidate = annotated_path if codec != "XVID" else annotated_path.with_suffix(".avi")
+                writer = cv2.VideoWriter(str(candidate), fourcc, output_fps, (width, height))
+                if writer.isOpened():
+                    video_writer = writer
+                    annotated_path = candidate
+                    break
+                writer.release()
+            if video_writer is None:
+                logger.warning("标注视频写入器初始化失败，将跳过视频生成: %s", annotated_path)
+        except Exception as exc:
+            logger.warning("标注视频初始化异常，将跳过视频生成: %s", exc)
+            video_writer = None
+
         if progress_callback:
             progress_callback(5, "正在初始化轨迹跟踪")
 
@@ -644,6 +667,18 @@ class DetectionService:
             tracks = self._serialize_tracks(result)
             peaks = registry.update(frame_index, frame_index / fps, tracks)
             self._capture_evidence(evidence, peaks, tracks, frame)
+            if video_writer is not None:
+                try:
+                    annotated_frame = result.plot()
+                    if annotated_frame is not None and annotated_frame.size > 0:
+                        frame_height, frame_width = annotated_frame.shape[:2]
+                        if (frame_width, frame_height) != (width, height):
+                            annotated_frame = cv2.resize(annotated_frame, (width, height))
+                        video_writer.write(annotated_frame)
+                except Exception as exc:
+                    logger.warning("标注视频帧写入失败，停止生成视频: %s", exc)
+                    video_writer.release()
+                    video_writer = None
             processed += 1
             if progress_callback:
                 percent = min(5 + round(processed / expected * 90), 95)
@@ -652,7 +687,13 @@ class DetectionService:
                     progress_callback(percent, f"正在跟踪视频帧 {processed}/{expected}")
 
         if processed == 0:
+            if video_writer is not None:
+                video_writer.release()
             raise DetectionServiceError("视频中没有可读取的帧")
+
+        if video_writer is not None:
+            video_writer.release()
+        annotated_video_url = f"/media/video-annotated/{annotated_path.name}" if annotated_path.is_file() else None
 
         summaries, items, price_summary = self._finalize_tracked_video(
             db,
@@ -694,6 +735,7 @@ class DetectionService:
             "total_inference_time_ms": round(total_inference, 2),
             "items": items,
             "price_summary": price_summary,
+            "annotated_video_url": annotated_video_url,
         }
 
     @staticmethod

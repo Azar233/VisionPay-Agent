@@ -11,6 +11,11 @@
       <el-tag v-if="isTracked" effect="plain">峰值同时 {{ result.peak_simultaneous || 0 }} 件</el-tag>
       <span>{{ isTracked ? 'ByteTrack 跨帧去重统计；遮挡或快速移动可能造成少量误差' : '统计为各采样帧检测次数之和，不代表跨帧去重商品数' }}</span>
     </div>
+    <div v-if="isVideo && result.annotated_video_url" class="annotated-video">
+      <video controls preload="metadata" :src="result.annotated_video_url">
+        您的浏览器不支持视频播放
+      </video>
+    </div>
     <div v-if="classes.length" class="class-strip">
       <div v-for="item in classes" :key="item.name" class="class-stat">
         <span class="swatch" :style="{ backgroundColor: item.color }"></span><span>{{ item.name }}</span><strong>{{ item.count }}</strong>
@@ -100,6 +105,8 @@ function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 .video-meta { display: flex; align-items: center; gap: 7px; padding: 9px 16px; overflow-x: auto; border-bottom: 1px solid $border-color; background: $surface-muted; }
 .video-meta > * { flex-shrink: 0; }
 .video-meta > span { color: $text-secondary; font-size: 10px; }
+.annotated-video { padding: 12px 16px; border-bottom: 1px solid $border-color; background: $surface-muted; }
+.annotated-video video { display: block; width: 100%; max-height: 480px; border-radius: $border-radius-sm; background: #000; }
 .class-strip { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: $surface-muted; }
 .class-stat { display: grid; grid-template-columns: 8px auto auto; align-items: center; gap: 7px; min-width: max-content; padding: 6px 10px; border: 1px solid $border-color; border-radius: $border-radius-sm; background: $surface-color; font-size: 12px; }
 .class-stat strong { margin-left: 4px; }
