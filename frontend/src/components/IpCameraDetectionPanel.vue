@@ -49,13 +49,16 @@
         <small>{{ runtimeInfo }} · 已处理 {{ result.frame_count || 0 }} 帧 · 主动丢弃 {{ result.dropped_frames || 0 }} 个旧帧</small>
       </div>
       <div class="action-group">
-        <el-button type="primary" plain :disabled="active" @click="accumulate = !accumulate" :title="accumulate ? '当前为累计模式，切换为瞬时模式' : '当前为瞬时模式，切换为累计模式'">
-          <el-icon class="button-icon"><Switch /></el-icon>{{ accumulate ? '累计模式' : '瞬时模式' }}
-        </el-button>
+        <div class="mode-group" :class="{ disabled: active }">
+          <button type="button" :class="['mode-option', { active: accumulate }]" :disabled="active" @click="accumulate = true">累计模式</button>
+          <button type="button" :class="['mode-option', { active: !accumulate }]" :disabled="active" @click="accumulate = false">瞬时模式</button>
+        </div>
         <el-button v-if="!active" type="primary" :loading="loading" @click="start">
-          <el-icon class="button-icon"><VideoPlay /></el-icon>开始检测
+          <el-icon class="button-icon"><CaretRight /></el-icon>开始检测
         </el-button>
-        <el-button v-else type="danger" plain @click="stop">停止检测</el-button>
+        <el-button v-else type="danger" plain @click="stop">
+          <el-icon class="button-icon"><VideoPause /></el-icon>停止检测
+        </el-button>
       </div>
     </footer>
   </section>
@@ -63,7 +66,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Switch, VideoCamera, VideoPlay } from '@element-plus/icons-vue'
+import { CaretRight, VideoCamera, VideoPause } from '@element-plus/icons-vue'
 
 const props = defineProps({
   sceneId: { type: Number, default: undefined },
@@ -509,6 +512,45 @@ defineExpose({ start, stop, resetScan })
 
 .camera-actions .action-group .button-icon {
   margin-right: 4px;
+}
+
+.mode-group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.mode-group.disabled {
+  opacity: .6;
+}
+
+.mode-option {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid $border-color;
+  background: $surface-color;
+  color: $text-secondary;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: .2s;
+}
+
+.mode-option:last-child {
+  border-bottom: 0;
+}
+
+.mode-option.active {
+  background: $primary-color;
+  color: #fff;
+}
+
+.mode-option:disabled {
+  cursor: not-allowed;
 }
 
 .compact {
