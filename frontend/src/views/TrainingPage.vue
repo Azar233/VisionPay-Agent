@@ -318,7 +318,7 @@
           <span>ETA {{ liveProgress?.eta_text || '-' }}</span>
           <span>{{ liveProgress?.rate_text || '--it/s' }}</span>
         </div>
-        <pre v-if="liveProgress?.tqdm_line" class="tqdm-line">{{ liveProgress.tqdm_line }}</pre>
+        <pre v-if="showTqdmLine" class="tqdm-line">{{ liveProgress.tqdm_line }}</pre>
       </div>
 
       <div class="metric-grid">
@@ -509,6 +509,9 @@
       </el-form>
       <template #footer>
         <el-button @click="showImportDialog = false">取消</el-button>
+        <el-button :loading="importingLocalResults" @click="submitLocalResultsImport">
+          导入 backend/results.csv
+        </el-button>
         <el-button type="primary" :loading="importing" @click="submitImportRun">
           导入结果
         </el-button>
@@ -677,6 +680,7 @@ import {
   getTrainingMetricsApi,
   getTrainingStatusApi,
   getTrainingTasksApi,
+  importLocalTrainingResultsApi,
   importTrainingRunApi,
   setDefaultDetectionModelApi,
   startTrainingApi,
@@ -702,6 +706,7 @@ const showCreateDialog = ref(false)
 const creating = ref(false)
 const showImportDialog = ref(false)
 const importing = ref(false)
+const importingLocalResults = ref(false)
 const importForm = ref({
   scene_id: 1,
   dataset_version_id: null,
@@ -823,8 +828,13 @@ const liveProgressTitle = computed(() => {
     failed: '训练失败',
     cancelled: '已取消',
   }[phase] || phase
-  return `${label} ${liveProgress.value?.bar || ''}`.trim()
+  return label
 })
+
+const showTqdmLine = computed(() => (
+  Boolean(liveProgress.value?.tqdm_line)
+  && ['pending', 'running', 'train'].includes(selectedTask.value?.status || liveProgress.value?.phase)
+))
 
 const logText = computed(() => logLines.value.join('\n'))
 const logDrawerTitle = computed(() => `Training Log - ${logTask.value?.task_uuid || '-'}`)
@@ -1138,6 +1148,15 @@ function updateCharts(metrics) {
     axisLine: { lineStyle: { color: borderColor } },
     splitLine: { lineStyle: { color: borderColor } },
   }
+  const epochAxis = {
+    ...axis,
+    type: 'category',
+    name: 'Epoch',
+    nameLocation: 'middle',
+    nameGap: 30,
+    nameTextStyle: { ...axis.nameTextStyle, align: 'center' },
+    data: epochs,
+  }
   const common = {
     title: { left: 'center', textStyle: { color: textColor, fontSize: 14 } },
     tooltip: {
@@ -1152,8 +1171,8 @@ function updateCharts(metrics) {
     lossChart.setOption({
       ...common,
       title: { ...common.title, text: '训练损失曲线' },
-      grid: { left: 56, right: 24, top: 52, bottom: 52 },
-      xAxis: { ...axis, type: 'category', name: 'Epoch', data: epochs },
+      grid: { left: 56, right: 36, top: 52, bottom: 66 },
+      xAxis: epochAxis,
       yAxis: { ...axis, type: 'value', name: 'Loss' },
       series: [
         { name: 'Box Loss', type: 'line', smooth: true, data: metrics.map((m) => m.box_loss) },
@@ -1167,8 +1186,8 @@ function updateCharts(metrics) {
     metricChart.setOption({
       ...common,
       title: { ...common.title, text: '评估指标曲线' },
-      grid: { left: 56, right: 24, top: 52, bottom: 52 },
-      xAxis: { ...axis, type: 'category', name: 'Epoch', data: epochs },
+      grid: { left: 56, right: 36, top: 52, bottom: 66 },
+      xAxis: epochAxis,
       yAxis: { ...axis, type: 'value', name: 'Score', min: 0, max: 1 },
       series: [
         { name: 'mAP@50', type: 'line', smooth: true, data: metrics.map((m) => m.map50) },
@@ -1254,6 +1273,28 @@ async function submitImportRun() {
     if (result.task) await selectTask(result.task)
   } finally {
     importing.value = false
+  }
+}
+
+async function submitLocalResultsImport() {
+  if (!importForm.value.dataset_version_id) {
+    ElMessage.warning('请先选择这次 results.csv 对应的数据集版本')
+    return
+  }
+  importingLocalResults.value = true
+  try {
+    const result = await importLocalTrainingResultsApi({
+      scene_id: importForm.value.scene_id,
+      dataset_version_id: importForm.value.dataset_version_id,
+      task_uuid: importForm.value.task_uuid || 'imported_results_csv',
+      model_name: importForm.value.model_name || 'yolov11n',
+    })
+    ElMessage.success(`已导入 backend/results.csv：${result.metrics_imported || 0} 个 epoch`)
+    showImportDialog.value = false
+    await Promise.all([fetchTasks(), fetchTrainingDatasets(), fetchModelVersions()])
+    if (result.task) await selectTask(result.task)
+  } finally {
+    importingLocalResults.value = false
   }
 }
 

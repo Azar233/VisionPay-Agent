@@ -26,6 +26,10 @@ export function importTrainingRunApi(data) {
   return request.post('/training/import-run', data, { timeout: 0 })
 }
 
+export function importLocalTrainingResultsApi(data) {
+  return request.post('/training/import-local-results', data, { timeout: 0 })
+}
+
 export function getTrainingStatusApi(taskId) {
   return request.get(`/training/status/${taskId}`)
 }

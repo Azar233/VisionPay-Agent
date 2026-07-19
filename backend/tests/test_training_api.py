@@ -238,6 +238,76 @@ def test_training_start_uses_registered_dataset_version(
     assert captured["data_yaml"] == str((tmp_path / "data.yaml").resolve())
 
 
+def test_import_local_results_csv_creates_completed_task(client, db_session, monkeypatch, tmp_path):
+    import app.training.training_service as training_module
+    from app.api import training as training_api
+    from app.entity.db_models import DatasetVersion, DetectionScene, TrainingMetric, User
+
+    headers = _auth_headers(client)
+    user = db_session.query(User).filter_by(username="training_api_user").first()
+    scene = DetectionScene(
+        name="local_results_scene",
+        display_name="Local Results Scene",
+        category="retail",
+        class_names=["product"],
+        created_by=user.id,
+    )
+    db_session.add(scene)
+    db_session.flush()
+    dataset_path = tmp_path / "dataset"
+    dataset_path.mkdir()
+    dataset = DatasetVersion(
+        scene_id=scene.id,
+        version="local-results-v1",
+        name="Local Results Dataset",
+        status="pending_train",
+        is_current=True,
+        storage_path=str(dataset_path),
+        data_yaml_path="data.yaml",
+        content_hash="sha256:local-results",
+        created_by=user.id,
+    )
+    db_session.add(dataset)
+    db_session.commit()
+    db_session.refresh(dataset)
+
+    (tmp_path / "results.csv").write_text(
+        "epoch,train/box_loss,train/cls_loss,train/dfl_loss,metrics/precision(B),"
+        "metrics/recall(B),metrics/mAP50(B),metrics/mAP50-95(B),lr/pg0\n"
+        "1,0.7,1.2,0.9,0.5,0.6,0.7,0.4,0.01\n"
+        "2,0.6,1.0,0.8,0.6,0.7,0.8,0.5,0.009\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(training_api, "BACKEND_ROOT", tmp_path)
+    monkeypatch.setattr(training_module, "PROJECT_ROOT", tmp_path)
+
+    response = client.post(
+        "/api/training/import-local-results",
+        headers=headers,
+        json={
+            "scene_id": scene.id,
+            "dataset_version_id": dataset.id,
+            "task_uuid": "ppt_curve",
+            "model_name": "yolov11n",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["metrics_imported"] == 2
+    assert data["task"]["task_uuid"] == "ppt_curve"
+    assert data["task"]["status"] == "completed"
+    assert data["task"]["progress"] == 100
+    assert (tmp_path / "runs" / "train" / "task_ppt_curve" / "results.csv").exists()
+
+    metric = (
+        db_session.query(TrainingMetric)
+        .filter(TrainingMetric.task_id == data["task"]["id"], TrainingMetric.epoch == 2)
+        .first()
+    )
+    assert metric.map50 == pytest.approx(0.8)
+
+
 def test_model_versions_register_builtin_best_pt(
     client,
     db_session,

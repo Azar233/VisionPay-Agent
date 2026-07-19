@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +16,7 @@ from app.core.logger import get_logger
 from app.database.session import get_db
 from app.entity.db_models import DatasetVersion, DetectionScene, ModelVersion, TrainingTask
 from app.entity.schemas import (
+    LocalTrainingResultsImportRequest,
     ModelExportRequest,
     ModelValidateRequest,
     TrainingRunImportRequest,
@@ -327,6 +329,78 @@ async def import_training_run(
 
     logger.info(
         "用户 %s 导入离线训练结果：scene=%s, task=%s",
+        current_user.username,
+        scene.name,
+        result.get("task", {}).get("task_uuid"),
+    )
+    return result
+
+
+@router.post("/import-local-results")
+async def import_local_results_csv(
+    request: LocalTrainingResultsImportRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Temporary endpoint to import the repository-level backend/results.csv."""
+
+    scene = db.query(DetectionScene).filter(DetectionScene.id == request.scene_id).first()
+    if scene is None:
+        raise HTTPException(status_code=404, detail="妫€娴嬪満鏅笉瀛樺湪")
+
+    config = request.model_dump(exclude_none=True)
+    if request.dataset_version_id is not None:
+        dataset = _get_registered_dataset(
+            db,
+            scene_id=scene.id,
+            dataset_version_id=request.dataset_version_id,
+            allow_archived=True,
+        )
+        config.update(_registered_dataset_config(dataset, require_files=False))
+
+    source_csv = BACKEND_ROOT / "results.csv"
+    if not source_csv.exists():
+        raise HTTPException(status_code=404, detail=f"results.csv 鏂囦欢涓嶅瓨鍦? {source_csv}")
+
+    task_uuid = config.get("task_uuid") or "imported_results_csv"
+    safe_uuid = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in str(task_uuid))
+    safe_uuid = safe_uuid.strip("_-")[:100] or "imported_results_csv"
+    staged_run_dir = BACKEND_ROOT / settings.TRAIN_OUTPUT_DIR / f"task_{safe_uuid}"
+    staged_run_dir.mkdir(parents=True, exist_ok=True)
+    staged_results_csv = staged_run_dir / "results.csv"
+    if staged_results_csv.exists():
+        staged_results_csv.chmod(0o666)
+    shutil.copyfile(source_csv, staged_results_csv)
+    staged_results_csv.chmod(0o666)
+
+    config.update(
+        {
+            "run_dir": str(staged_run_dir),
+            "task_uuid": safe_uuid,
+            "status": "completed",
+        }
+    )
+
+    try:
+        result = training_service.import_training_run(
+            db=db,
+            user_id=current_user.id,
+            scene_id=request.scene_id,
+            config=config,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Import backend/results.csv failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Import backend/results.csv failed: {exc}",
+        ) from exc
+
+    logger.info(
+        "鐢ㄦ埛 %s 瀵煎叆 backend/results.csv锛歴cene=%s, task=%s",
         current_user.username,
         scene.name,
         result.get("task", {}).get("task_uuid"),

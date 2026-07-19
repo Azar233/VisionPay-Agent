@@ -597,6 +597,26 @@ class TrainingRunImportRequest(ProjectBaseModel):
     }
 
 
+class LocalTrainingResultsImportRequest(ProjectBaseModel):
+    """Temporary import for the checked-in backend/results.csv file."""
+
+    scene_id: int = Field(..., description="Associated detection scene ID")
+    dataset_version_id: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Dataset version used by the imported training history",
+    )
+    task_uuid: Optional[str] = Field(
+        default="imported_results_csv",
+        description="Training task ID created for backend/results.csv",
+    )
+    model_name: Optional[str] = Field(default="yolov11n", description="Base model name")
+
+    model_config = {
+        "protected_namespaces": (),
+    }
+
+
 class TrainingTaskResponse(ProjectBaseModel):
     """训练任务响应"""
     id: int
