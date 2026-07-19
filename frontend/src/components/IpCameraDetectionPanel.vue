@@ -18,7 +18,10 @@
         clearable
         @change="saveCameraUrl"
       />
-      <small>支持局域网 IPv4 地址；检测时后端会自动连接 /video</small>
+      <button type="button" class="mode-toggle" :disabled="active" @click="accumulate = !accumulate">
+        <span>{{ accumulate ? '累计模式' : '瞬时模式' }}</span>
+        <span :class="['mode-switch', { active: accumulate }]" aria-hidden="true"><i></i></span>
+      </button>
     </div>
 
     <div class="camera-screen">
@@ -49,9 +52,6 @@
         <small>{{ runtimeInfo }} · 已处理 {{ result.frame_count || 0 }} 帧 · 主动丢弃 {{ result.dropped_frames || 0 }} 个旧帧</small>
       </div>
       <div class="action-group">
-        <el-button type="primary" plain :disabled="active" @click="accumulate = !accumulate">
-          <el-icon class="button-icon"><DCaret /></el-icon>{{ accumulate ? '累计模式' : '瞬时模式' }}
-        </el-button>
         <el-button v-if="!active" type="primary" :loading="loading" @click="start">开始检测</el-button>
         <el-button v-else type="danger" plain @click="stop">停止检测</el-button>
       </div>
@@ -61,7 +61,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { DCaret, VideoCamera } from '@element-plus/icons-vue'
+import { VideoCamera } from '@element-plus/icons-vue'
 
 const props = defineProps({
   sceneId: { type: Number, default: undefined },
@@ -341,6 +341,53 @@ defineExpose({ start, stop, resetScan })
     color: $text-secondary;
     font-size: 9px;
   }
+
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $text-primary;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+  }
+
+  .mode-switch {
+    width: 32px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 999px;
+    background: #d2d2d7;
+    transition: background .25s ease;
+
+    i {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+      transition: transform .25s cubic-bezier(.2, .8, .2, 1);
+    }
+
+    &.active {
+      background: var(--vp-primary);
+    }
+
+    &.active i {
+      transform: translateX(14px);
+    }
+  }
 }
 
 .camera-screen {
@@ -503,10 +550,6 @@ defineExpose({ start, stop, resetScan })
 
 .camera-actions .action-group .el-button {
   flex-shrink: 0;
-}
-
-.camera-actions .action-group .button-icon {
-  margin-right: 4px;
 }
 
 .compact {
