@@ -219,13 +219,14 @@ async def test_single_agent_stream_has_no_collaboration_context(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_parallel_stream_skips_summary_on_interactive(orchestrator):
-    """Interactive cards end the turn without an LLM summary."""
+async def test_parallel_stream_summarizes_despite_interactive(orchestrator):
+    """Interactive cards stream through live, and the remaining agents' answers
+    are still summarized instead of being discarded."""
     summary_called = []
 
     async def fake_summary(drafts, structural, agents, message, history):
         summary_called.append(True)
-        yield {"type": "text_chunk", "content": "不应出现"}
+        yield {"type": "text_chunk", "content": "汇总"}
 
     orchestrator._supervisor_summary = fake_summary
 
@@ -238,9 +239,9 @@ async def test_parallel_stream_skips_summary_on_interactive(orchestrator):
     decision = RouteDecision.parallel(agents=["a", "b"], method="parallel", confidence=0.9, reason="t")
     events = [event async for event in orchestrator._parallel_stream("msg", [], [], decision)]
 
-    assert summary_called == []
+    assert summary_called == [True]
     assert any(event.get("type") == "input_form" for event in events)
-    assert not any(event.get("type") == "text_chunk" for event in events)
+    assert any(event.get("type") == "text_chunk" and event.get("content") == "汇总" for event in events)
 
 
 @pytest.mark.asyncio

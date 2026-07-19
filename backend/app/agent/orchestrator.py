@@ -25,7 +25,8 @@ logger = get_logger(__name__)
 # 单个 Agent 在并行/流水线执行中的最大等待时间（秒）。
 PARALLEL_AGENT_TIMEOUT_SECONDS = 120
 
-# 执行阶段产生的交互类事件：一旦出现，本轮以卡片收尾，不再做 LLM 汇总。
+# 执行阶段产生的交互类事件：流水线中出现时中断下游执行；汇总不受其影响，
+# 卡片与其余 Agent 的文字回答会同时呈现。
 _INTERACTIVE_EVENT_TYPES = {"input_form", "handoff_required", "confirmation_required"}
 
 # 检测结果中携带二进制图片的字段：仅供前端卡片展示，绝不能作为文本喂给 LLM。
@@ -309,15 +310,15 @@ class MultiAgentOrchestrator:
                 # 主 Agent 失败时不再继续下游，交由汇总说明情况。
                 break
 
-            # 出现表单/确认卡等交互事件时，本轮以卡片收尾，不再继续下游 Agent。
+            # 出现表单/确认卡等交互事件时，本轮以卡片收尾，不再继续下游 Agent；
+            # 已完成 Agent 的结果仍会在下方汇总呈现。
             if interactive:
                 break
 
             upstream_context = self._upstream_context(agent_name, drafts[agent_name], structural[agent_name])
 
-        if not interactive:
-            async for event in self._supervisor_summary(drafts, structural, agents, message, history):
-                yield event
+        async for event in self._supervisor_summary(drafts, structural, agents, message, history):
+            yield event
 
         yield {
             "type": "parallel_progress",
@@ -356,7 +357,6 @@ class MultiAgentOrchestrator:
         queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
         drafts: dict[str, str] = {name: "" for name in agents}
         structural: dict[str, list[dict]] = {name: [] for name in agents}
-        interactive = False
 
         async def run_agent(agent_name: str) -> None:
             sub_message = decision.task_for(agent_name, message)
@@ -398,15 +398,14 @@ class MultiAgentOrchestrator:
                 continue
             if event_type in ("tool_result", "detection_result", "error"):
                 structural[agent_name].append(dict(event))
-            if event_type in _INTERACTIVE_EVENT_TYPES:
-                interactive = True
             yield event
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        if not interactive:
-            async for event in self._supervisor_summary(drafts, structural, agents, message, history):
-                yield event
+        # 确认卡/表单等交互卡片已实时推给前端；其余 Agent 的结果照常汇总，
+        # 卡片与文字汇总在界面上共存，不再因出现卡片而丢弃其他 Agent 的回答。
+        async for event in self._supervisor_summary(drafts, structural, agents, message, history):
+            yield event
 
         yield {
             "type": "parallel_progress",
