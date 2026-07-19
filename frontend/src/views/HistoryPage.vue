@@ -1,10 +1,10 @@
 <template>
   <div class="history-page">
-    <section class="summary-strip">
-      <article class="summary-cell detection"><span><el-icon><View /></el-icon></span><div><small>识别任务</small><strong>{{ overview.detection_tasks }}</strong><p>当前账号累计检测</p></div></article>
-      <article class="summary-cell agent"><span><el-icon><Connection /></el-icon></span><div><small>Agent 调用</small><strong>{{ overview.agent_calls }}</strong><p>今日 {{ overview.today_agent_calls }} 次</p></div></article>
-      <article class="summary-cell model"><span><el-icon><Cpu /></el-icon></span><div><small>模型版本</small><strong>{{ overview.models }}</strong><p>{{ overview.active_models }} 个处于活动状态</p></div></article>
-      <article class="summary-cell coverage"><span><el-icon><Clock /></el-icon></span><div><small>记录范围</small><strong>3</strong><p>检测、Agent 与模型</p></div></article>
+    <section class="summary-grid">
+      <button type="button" class="summary-card detection" @click="jumpToTab('detection')"><span><el-icon><View /></el-icon></span><div><small>识别任务</small><strong>{{ overview.detection_tasks }}</strong><p>当前账号累计检测</p></div></button>
+      <button type="button" class="summary-card agent" @click="jumpToTab('agent')"><span><el-icon><Connection /></el-icon></span><div><small>Agent 调用</small><strong>{{ overview.agent_calls }}</strong><p>今日 {{ overview.today_agent_calls }} 次</p></div></button>
+      <button type="button" class="summary-card model" @click="jumpToTab('model')"><span><el-icon><Cpu /></el-icon></span><div><small>模型版本</small><strong>{{ overview.models }}</strong><p>{{ overview.active_models }} 个处于活动状态</p></div></button>
+      <button type="button" class="summary-card coverage"><span><el-icon><Clock /></el-icon></span><div><small>记录范围</small><strong>3</strong><p>检测、Agent 与模型</p></div></button>
     </section>
 
     <section class="history-workspace card-container">
@@ -56,6 +56,13 @@ async function handleTabChange(name) {
   await nextTick()
 }
 
+// 指标卡点击后同步切换下方记录页签。
+async function jumpToTab(name) {
+  if (activeTab.value === name) return
+  activeTab.value = name
+  await handleTabChange(name)
+}
+
 async function refreshCurrent() {
   refreshing.value = true
   try {
@@ -68,19 +75,19 @@ onMounted(loadOverview)
 
 <style lang="scss" scoped>
 .history-page { min-height: 100%; padding: 24px; display: flex; flex-direction: column; gap: 18px; color: $text-primary; background: $bg-color; }
-// 四个指标合为一整块，竖线分隔。
-.summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
-.summary-cell { min-width: 0; padding: 18px 20px; display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 12px; }
-.summary-cell + .summary-cell { border-left: 1px solid $border-color; }
-.summary-cell > span { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; font-size: 20px; }
-.summary-strip .detection > span { color: $primary-color; background: $primary-soft; }
-.summary-strip .agent > span { color: $secondary-color; background: color-mix(in srgb, $secondary-color 12%, transparent); }
-.summary-strip .model > span { color: $info-color; background: var(--vp-info-bg); }
-.summary-strip .coverage > span { color: $success-color; background: var(--vp-success-bg); }
-.summary-cell div { min-width: 0; display: grid; grid-template-columns: 1fr auto; align-items: baseline; }
-.summary-cell small { color: $text-primary; font-size: 15px; font-weight: 700; }
-.summary-cell strong { grid-row: 1 / 3; grid-column: 2; color: $text-primary; font-size: 28px; font-weight: 650; }
-.summary-cell p { margin: 4px 0 0; overflow: hidden; color: $text-placeholder; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+// 四张独立指标卡，可点击跳转到对应记录页签。
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.summary-card { min-width: 0; padding: 18px 20px; display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 12px; text-align: left; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; cursor: pointer; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.summary-card:hover, .summary-card:focus-visible { border-color: $primary-color; box-shadow: $shadow-md; transform: translateY(-1px); }
+.summary-card > span { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; font-size: 20px; }
+.summary-grid .detection > span { color: $primary-color; background: $primary-soft; }
+.summary-grid .agent > span { color: $secondary-color; background: color-mix(in srgb, $secondary-color 12%, transparent); }
+.summary-grid .model > span { color: $info-color; background: var(--vp-info-bg); }
+.summary-grid .coverage > span { color: $success-color; background: var(--vp-success-bg); }
+.summary-card div { min-width: 0; display: grid; grid-template-columns: 1fr auto; align-items: baseline; }
+.summary-card small { color: $text-primary; font-size: 17px; font-weight: 700; }
+.summary-card strong { grid-row: 1 / 3; grid-column: 2; color: $text-primary; font-size: 28px; font-weight: 650; }
+.summary-card p { margin: 4px 0 0; overflow: hidden; color: $text-placeholder; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .history-workspace { position: relative; min-width: 0; }
 // 刷新按钮：透明文字钮，锚定在灰条右端内部（卡片内边距 24px + 灰条内缩），与 tab 头同高。
 .tabs-refresh { position: absolute; top: 33px; right: 30px; z-index: 5; color: $text-secondary; }
@@ -93,6 +100,6 @@ onMounted(loadOverview)
 .history-tabs :deep(.is-active) .tab-label { color: $primary-color; background: $surface-color; box-shadow: $shadow-sm; }
 .tab-label small { min-width: 20px; padding: 2px 6px; border-radius: 999px; color: $text-placeholder; background: $surface-muted; font-size: 9px; text-align: center; }
 .history-tabs :deep(.is-active) .tab-label small { color: $primary-color; background: $primary-soft; }
-@media (max-width: 1050px) { .summary-strip { grid-template-columns: repeat(2, 1fr); }.summary-cell:nth-child(3) { border-left: 0; }.summary-cell:nth-child(n+3) { border-top: 1px solid $border-color; } }
-@media (max-width: 760px) { .history-page { padding: 16px; }.summary-strip { grid-template-columns: 1fr; }.summary-cell + .summary-cell { border-top: 1px solid $border-color; border-left: 0; }.history-tabs :deep(.el-tabs__item) { padding: 0 2px; }.tab-label { padding: 0 8px; }.tab-label small { display: none; } }
+@media (max-width: 1050px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 760px) { .history-page { padding: 16px; }.summary-grid { grid-template-columns: 1fr; }.history-tabs :deep(.el-tabs__item) { padding: 0 2px; }.tab-label { padding: 0 8px; }.tab-label small { display: none; } }
 </style>

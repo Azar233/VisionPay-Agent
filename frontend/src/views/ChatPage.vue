@@ -591,7 +591,7 @@ function stopStream() { agentStore.abort(); const last = agentStore.messages.at(
   width: 32px;
   min-width: 32px;
   height: 32px;
-  border-radius: 50%;
+  border-radius: $border-radius-sm;
   color: $text-secondary;
   border-color: transparent;
   background: transparent;

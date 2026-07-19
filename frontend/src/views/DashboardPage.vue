@@ -226,7 +226,8 @@ function renderActiveCharts() {
         textStyle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
       },
       graphic: source.length ? [] : emptyGraphic(emptyText),
-      series: [{ type: 'pie', radius: ['38%', '64%'], center: ['34%', '50%'], minAngle: 3, label: { show: false }, data: source }],
+      // 饼图左移并稍收半径，避免右缘与图例文字重合。
+      series: [{ type: 'pie', radius: ['34%', '56%'], center: ['30%', '50%'], minAngle: 3, label: { show: false }, data: source }],
     }, true)
   })
 

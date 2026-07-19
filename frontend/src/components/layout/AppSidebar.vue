@@ -21,8 +21,8 @@
     </el-menu>
 
     <el-tooltip :content="collapsed ? '展开侧边栏' : '收起侧边栏'" placement="right" :show-arrow="false">
-      <button type="button" class="sidebar-collapse" :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'" @click="$emit('update:collapsed', !collapsed)">
-        <el-icon><DArrowRight v-if="collapsed" /><DArrowLeft v-else /></el-icon>
+      <button type="button" :class="['sidebar-collapse', { rotated: collapsed }]" :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'" @click="$emit('update:collapsed', !collapsed)">
+        <el-icon><DArrowLeft /></el-icon>
       </button>
     </el-tooltip>
   </aside>
@@ -104,11 +104,16 @@ const menuItems = computed(() => [
 }
 
 .brand-name {
+  display: inline-block;
+  max-width: 140px;
+  overflow: hidden;
   color: $text-primary;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -.02em;
   white-space: nowrap;
+  opacity: 1;
+  transition: max-width .22s ease, opacity .15s ease;
 }
 
 .el-menu {
@@ -127,7 +132,18 @@ const menuItems = computed(() => [
   color: $sidebar-text;
   font-size: 14px;
   font-weight: 500;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s, color 0.2s, padding 0.22s ease;
+
+  // 文字用 max-width + 透明度收进，图标在两种状态下保持同一锚点，不再跳位。
+  span {
+    display: inline-block;
+    max-width: 160px;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: middle;
+    opacity: 1;
+    transition: max-width .22s ease, opacity .15s ease;
+  }
 
   .el-icon { font-size: 18px; }
 
@@ -158,29 +174,32 @@ const menuItems = computed(() => [
   border-radius: 8px;
   transition: background .2s, color .2s;
 
+  .el-icon { transition: transform .22s ease; }
+  &.rotated .el-icon { transform: rotate(180deg); }
+
   &:hover { color: $text-primary; background: var(--vp-sidebar-active-bg); }
 }
 
 .app-sidebar.collapsed {
   width: $sidebar-collapsed-width;
-  padding: 0 10px 12px;
+  padding: 0 12px 12px;
 
-  .brand { justify-content: center; margin: 0; }
-  .brand-name { display: none; }
-  .el-menu-item { justify-content: center; padding: 0 !important; }
-  .el-menu-item span { display: none; }
+  .brand-name,
+  .el-menu-item span { max-width: 0; opacity: 0; }
+  // 折叠态把菜单项内边距平滑过渡到 10px：图标起始位置左移校正居中；
+  // padding 可动画，不会像 justify-content 那样瞬移。
+  .el-menu-item { padding: 0 10px !important; }
+  .el-menu-item .el-icon { margin-right: 0; }
   .sidebar-collapse { margin-inline: 0; }
 }
 
 @media (max-width: 900px) {
   .app-sidebar {
     width: $sidebar-collapsed-width;
-    padding: 0 10px 12px;
+    padding: 0 12px 12px;
 
-    .brand { justify-content: center; margin: 0; }
-    .brand-name { display: none; }
-    .el-menu-item { justify-content: center; padding: 0 !important; }
-    .el-menu-item span { display: none; }
+    .brand-name,
+    .el-menu-item span { max-width: 0; opacity: 0; }
     .sidebar-collapse { margin-inline: 0; }
   }
 }
