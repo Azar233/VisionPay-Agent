@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="380" viewBox="0 0 1200 380"
+     role="img" aria-labelledby="title desc">
+  <title id="title">VisionPay Agent Platform</title>
+  <desc id="desc">A bright editorial title card showing the VisionPay workflow from dataset and training to detection and checkout.</desc>
+
+  <rect width="1200" height="380" rx="28" fill="#F7F4EE"/>
+  <path d="M0 28Q0 0 28 0H1172Q1200 0 1200 28V352Q1200 380 1172 380H28Q0 380 0 352Z"
+        fill="none" stroke="#DEDAD2"/>
+  <path d="M0 28Q0 0 28 0H36V380H28Q0 380 0 352Z" fill="#2B7FFF"/>
+
+  <g id="title-block" transform="translate(82 58)"
+     font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif">
+    <text x="0" y="0" fill="#4D5A6C"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          font-size="16" letter-spacing="2.5">RETAIL VISION / AGENT OPERATIONS</text>
+
+    <text x="0" y="104" fill="#16181C" font-size="82" font-weight="760" letter-spacing="-3">VisionPay</text>
+    <rect x="0" y="124" width="108" height="7" rx="3.5" fill="#2B7FFF"/>
+
+    <text x="0" y="184" fill="#1E2632" font-size="28" font-weight="520">让商品识别，直接走到计价与结算</text>
+    <text x="0" y="224" fill="#697382" font-size="20">数据、模型与商品身份始终可追溯</text>
+
+    <text x="0" y="286" fill="#7B8491"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          font-size="15" letter-spacing="1.2">VISIONPAY / AGENT PLATFORM</text>
+  </g>
+
+  <g id="workflow" transform="translate(664 42)"
+     font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <rect width="478" height="296" rx="148" fill="#E8F1FF"/>
+    <path d="M48 213C108 213 114 112 184 112C255 112 249 226 322 226C391 226 398 92 455 92"
+          fill="none" stroke="#2B7FFF" stroke-width="6" stroke-linecap="round"/>
+    <path d="M48 213C115 213 123 166 184 166C248 166 258 226 322 226C384 226 396 155 455 155"
+          fill="none" stroke="#B9C6D8" stroke-width="2.5" stroke-linecap="round"/>
+
+    <g id="dataset-node" transform="translate(48 213)">
+      <circle r="17" fill="#F7F4EE" stroke="#16181C" stroke-width="2.5"/>
+      <circle r="6" fill="#2B7FFF"/>
+      <text x="0" y="48" text-anchor="middle" fill="#3F4A59" font-size="18" letter-spacing="1.4">DATASET</text>
+    </g>
+
+    <g id="training-node" transform="translate(184 112)">
+      <circle r="17" fill="#F7F4EE" stroke="#16181C" stroke-width="2.5"/>
+      <circle r="6" fill="#2B7FFF"/>
+      <text x="0" y="-34" text-anchor="middle" fill="#3F4A59" font-size="18" letter-spacing="1.4">TRAIN</text>
+    </g>
+
+    <g id="detection-node" transform="translate(322 226)">
+      <circle r="17" fill="#F7F4EE" stroke="#16181C" stroke-width="2.5"/>
+      <circle r="6" fill="#2B7FFF"/>
+      <text x="0" y="48" text-anchor="middle" fill="#3F4A59" font-size="18" letter-spacing="1.4">DETECT</text>
+    </g>
+
+    <g id="checkout-node" transform="translate(455 92)">
+      <circle r="17" fill="#F7F4EE" stroke="#16181C" stroke-width="2.5"/>
+      <circle r="6" fill="#2B7FFF"/>
+      <text x="-8" y="-34" text-anchor="end" fill="#3F4A59" font-size="18" letter-spacing="1.4">CHECKOUT</text>
+    </g>
+
+    <g id="model-lineage" transform="translate(155 184)">
+      <path d="M0 0H196" stroke="#9BA9BA" stroke-width="1.5" stroke-dasharray="5 7"/>
+      <circle cx="0" cy="0" r="4" fill="#FFFFFF" stroke="#697382" stroke-width="1.5"/>
+      <circle cx="98" cy="0" r="4" fill="#FFFFFF" stroke="#697382" stroke-width="1.5"/>
+      <circle cx="196" cy="0" r="4" fill="#FFFFFF" stroke="#697382" stroke-width="1.5"/>
+    </g>
+  </g>
+</svg>

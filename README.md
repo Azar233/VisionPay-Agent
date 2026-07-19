@@ -1,4 +1,17 @@
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="VisionPay Agent Platform：连接数据集版本、模型训练、商品检测、计价和自助结算的零售视觉智能体平台">
+</p>
+
 # VisionPay Agent Platform
+
+<p align="center">
+  <a href="#1-核心功能">核心功能</a> ·
+  <a href="#2-系统架构">系统架构</a> ·
+  <a href="#6-本地安装与启动">快速开始</a> ·
+  <a href="#9-检测结算与支付使用方法">使用方法</a> ·
+  <a href="#11-api-概览">API</a> ·
+  <a href="#14-常见问题">常见问题</a>
+</p>
 
 VisionPay Agent Platform 是一个面向零售自助结算场景的商品视觉识别平台。系统以 YOLOv11 完成图片、视频和实时画面的商品检测，以 FastAPI 管理数据集、训练任务、模型版本、商品与价格，以 Vue 3 提供智能对话、数据集版本、模型训练、自助结算和运营管理界面。
 
