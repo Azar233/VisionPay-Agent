@@ -22,6 +22,10 @@ export const useUserStore = defineStore('user', {
     isLoggedIn: (state) => !!state.token,
     /** 用户名 */
     username: (state) => state.user?.username || '',
+    /** 可重复、可修改的展示昵称 */
+    nickname: (state) => state.user?.nickname || '',
+    /** 界面展示名称，未设置昵称时回退到用户名 */
+    displayName: (state) => state.user?.nickname?.trim() || state.user?.username || '',
     /** 用户头像 */
     avatar: (state) => state.user?.avatar || '',
     /** 用户角色列表 */

@@ -108,6 +108,7 @@ class UserService:
         return {
             "id": user.id,
             "username": user.username,
+            "nickname": user.nickname,
             "email": user.email,
             "phone": user.phone,
             "avatar": user.avatar,
@@ -135,7 +136,13 @@ class UserService:
         keyword = (keyword or "").strip()
         if keyword:
             pattern = f"%{keyword}%"
-            query = query.filter(or_(User.username.ilike(pattern), User.email.ilike(pattern)))
+            query = query.filter(
+                or_(
+                    User.username.ilike(pattern),
+                    User.nickname.ilike(pattern),
+                    User.email.ilike(pattern),
+                )
+            )
         total = query.count()
         users = (
             query.order_by(User.created_at.desc())
@@ -170,11 +177,14 @@ class UserService:
         db: Session,
         user_id: int,
         *,
+        nickname: str | None = None,
         phone: str | None = None,
         email: str | None = None,
         avatar: str | None = None,
     ) -> dict:
         user = UserService.get_user_by_id(db, user_id)
+        if nickname is not None:
+            user.nickname = nickname.strip() or None
         if email is not None:
             email = email.strip()
             if not email:

@@ -4,12 +4,13 @@ import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SettingsPage from '@/views/SettingsPage.vue'
-import { getAgentInstructions, updateAgentInstructions } from '@/api/user'
+import { getAgentInstructions, updateAgentInstructions, updateProfile } from '@/api/user'
 
 
 vi.mock('@/api/auth', () => ({
   getUserInfoApi: vi.fn().mockResolvedValue({
     username: 'operator',
+    nickname: '',
     email: 'operator@example.com',
     phone: '',
     avatar: '',
@@ -39,6 +40,16 @@ describe('SettingsPage Agent 自定义指令', () => {
       instructions: instructions.trim(),
       max_length: 4000,
     }))
+    updateProfile.mockReset().mockResolvedValue({
+      user: {
+        username: 'operator',
+        nickname: '小蓝',
+        email: 'operator@example.com',
+        phone: '',
+        avatar: '',
+        created_at: '2026-01-01T00:00:00',
+      },
+    })
   })
 
   it('loads, edits, saves and clears the user-scoped instructions', async () => {
@@ -65,5 +76,22 @@ describe('SettingsPage Agent 自定义指令', () => {
     await flushPromises()
     expect(updateAgentInstructions).toHaveBeenLastCalledWith('')
     expect(textarea.element.value).toBe('')
+  })
+
+  it('updates the optional display nickname from the profile panel', async () => {
+    const wrapper = mount(SettingsPage, {
+      global: { plugins: [createPinia(), ElementPlus] },
+    })
+    await flushPromises()
+
+    await wrapper.get('input[placeholder="未设置时显示用户名"]').setValue('小蓝')
+    const save = wrapper.findAll('button').find((button) => button.text().trim() === '保存个人资料')
+    await save.trigger('click')
+    await flushPromises()
+
+    expect(updateProfile).toHaveBeenCalledWith(expect.objectContaining({
+      nickname: '小蓝',
+      email: 'operator@example.com',
+    }))
   })
 })

@@ -41,6 +41,7 @@ class UserBrief(ProjectBaseModel):
     """用户简要信息（嵌入在 Token 响应中）"""
     id: int
     username: str
+    nickname: Optional[str] = None
     email: str
     avatar: Optional[str] = None
     is_superuser: bool = False
@@ -64,6 +65,7 @@ class UserResponse(ProjectBaseModel):
     """用户详情响应"""
     id: int
     username: str
+    nickname: Optional[str] = None
     email: str
     phone: Optional[str] = None
     avatar: Optional[str] = None
@@ -80,6 +82,7 @@ class UserResponse(ProjectBaseModel):
 
 class UserUpdate(ProjectBaseModel):
     """用户信息更新"""
+    nickname: Optional[str] = Field(default=None, max_length=50)
     phone: Optional[str] = None
     avatar: Optional[str] = None
     email: Optional[str] = None

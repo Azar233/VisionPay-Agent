@@ -17,6 +17,7 @@ class TestRegister:
         assert response.status_code == 201
         data = response.json()
         assert data["username"] == "test_register_user"
+        assert data["nickname"] is None
         assert data["email"] == "test_register@example.com"
         # 确保不返回密码字段
         assert "hashed_password" not in data
@@ -104,6 +105,7 @@ class TestLogin:
         assert "access_token" in data
         assert data["token_type"] == "bearer"
         assert data["user"]["username"] == "login_user"
+        assert data["user"]["nickname"] is None
 
     def test_login_wrong_password(self, client):
         """密码错误"""
@@ -165,6 +167,7 @@ class TestGetCurrentUser:
         assert response.status_code == 200
         data = response.json()
         assert data["username"] == "me_user"
+        assert data["nickname"] is None
         assert data["email"] == "me@example.com"
 
     def test_get_me_without_token(self, client):

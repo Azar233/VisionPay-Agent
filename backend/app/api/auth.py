@@ -97,6 +97,7 @@ async def login(request: UserLogin, db: Session = Depends(get_db)):
         "user": {
             "id": user.id,
             "username": user.username,
+            "nickname": user.nickname,
             "email": user.email,
             "avatar": user.avatar,
             "is_superuser": user.is_superuser,
@@ -115,6 +116,7 @@ async def get_current_user_info(
     return {
         "id": current_user.id,
         "username": current_user.username,
+        "nickname": current_user.nickname,
         "email": current_user.email,
         "phone": current_user.phone,
         "avatar": current_user.avatar,

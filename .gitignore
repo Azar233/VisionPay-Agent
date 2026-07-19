@@ -170,6 +170,8 @@ docs/
 .LiuCheng/
 # 本地架构规划（评审定稿前不提交）
 初期项目规划.md
+# 本地设计验收记录（包含临时截图与运行时路径）
+design-qa.md
 logs/
 log/
 *.log

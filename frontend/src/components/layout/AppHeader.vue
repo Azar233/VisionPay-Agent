@@ -30,9 +30,9 @@
       >
         <div class="user-info" aria-label="打开用户菜单">
           <el-avatar :size="32" :src="userStore.avatar || undefined">
-            {{ userStore.username?.charAt(0)?.toUpperCase() }}
+            {{ userStore.displayName?.charAt(0)?.toUpperCase() }}
           </el-avatar>
-          <span class="username">{{ userStore.username }}</span>
+          <span class="username">{{ userStore.displayName }}</span>
           <el-icon><ArrowDown /></el-icon>
         </div>
         <template #dropdown>

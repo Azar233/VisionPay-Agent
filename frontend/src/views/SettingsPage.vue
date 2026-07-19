@@ -4,7 +4,7 @@
       <div>
         <span class="vp-kicker">Account</span>
         <h1 class="vp-page-title">账号设置</h1>
-        <p class="vp-page-subtitle">维护个人资料、Agent 响应偏好与登录安全。用户名和角色由管理员统一管理。</p>
+        <p class="vp-page-subtitle">维护个人资料、Agent 响应偏好与登录安全。用户名用于登录，昵称用于界面展示。</p>
       </div>
     </header>
 
@@ -76,7 +76,7 @@
         >
           <header class="panel-heading">
             <div class="panel-icon profile"><el-icon><User /></el-icon></div>
-            <div><h2>个人资料</h2><p>管理头像和联系方式，用户名与角色由管理员统一维护。</p></div>
+            <div><h2>个人资料</h2><p>管理头像、展示昵称和联系方式，登录用户名不可在此修改。</p></div>
           </header>
 
           <div class="panel-body profile-body">
@@ -103,11 +103,10 @@
               </div>
               <div class="form-grid">
                 <el-form-item label="用户名"><el-input v-model="profileForm.username" disabled /></el-form-item>
-                <el-form-item label="账号角色"><el-input :model-value="roleText" disabled /></el-form-item>
+                <el-form-item label="昵称" prop="nickname"><el-input v-model.trim="profileForm.nickname" placeholder="未设置时显示用户名" maxlength="50" clearable /></el-form-item>
                 <el-form-item label="邮箱" prop="email"><el-input v-model.trim="profileForm.email" placeholder="name@example.com" /></el-form-item>
                 <el-form-item label="手机号" prop="phone"><el-input v-model.trim="profileForm.phone" placeholder="选填" maxlength="20" /></el-form-item>
                 <el-form-item label="注册时间"><el-input :model-value="formatDate(profileForm.created_at)" disabled /></el-form-item>
-                <el-form-item label="最近登录"><el-input :model-value="formatDate(profileForm.last_login_at)" disabled /></el-form-item>
               </div>
               <div class="form-actions"><el-button type="primary" :loading="profileLoading" @click="saveProfile">保存个人资料</el-button></div>
             </el-form>
@@ -267,10 +266,9 @@ const instructionsLoading = ref(false)
 const activeSettingsSection = ref('profile')
 const agentInstructions = ref('')
 const savedAgentInstructions = ref('')
-const profileForm = reactive({ username: '', email: '', phone: '', avatar: '', roles: [], created_at: null, last_login_at: null })
+const profileForm = reactive({ username: '', nickname: '', email: '', phone: '', avatar: '', created_at: null })
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '' })
-const roleText = computed(() => profileForm.roles?.length ? profileForm.roles.join('、') : '普通用户')
-const avatarInitial = computed(() => profileForm.username?.charAt(0)?.toUpperCase() || 'U')
+const avatarInitial = computed(() => (profileForm.nickname || profileForm.username)?.charAt(0)?.toUpperCase() || 'U')
 const instructionsDirty = computed(() => agentInstructions.value.trim() !== savedAgentInstructions.value)
 const instructionExamples = [
   '始终使用中文回答',
@@ -295,6 +293,7 @@ const petPreviewStyle = computed(() => {
   }
 })
 const profileRules = {
+  nickname: [{ max: 50, message: '昵称不能超过 50 个字符', trigger: ['blur', 'change'] }],
   email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }, { type: 'email', message: '邮箱格式不正确', trigger: ['blur', 'change'] }],
   phone: [{ pattern: /^$|^[+\d][\d\s-]{5,19}$/, message: '手机号格式不正确', trigger: 'blur' }],
 }
@@ -313,7 +312,7 @@ function formatDate(value) {
 }
 
 function fillProfile(user) {
-  Object.assign(profileForm, { username: user.username || '', email: user.email || '', phone: user.phone || '', avatar: user.avatar || '', roles: user.roles || [], created_at: user.created_at, last_login_at: user.last_login_at })
+  Object.assign(profileForm, { username: user.username || '', nickname: user.nickname || '', email: user.email || '', phone: user.phone || '', avatar: user.avatar || '', created_at: user.created_at })
 }
 
 function formatPetSize(value) {
@@ -372,7 +371,7 @@ async function saveProfile() {
   if (!await profileFormRef.value.validate().catch(() => false)) return
   profileLoading.value = true
   try {
-    const data = await updateProfileApi({ email: profileForm.email, phone: profileForm.phone })
+    const data = await updateProfileApi({ nickname: profileForm.nickname, email: profileForm.email, phone: profileForm.phone })
     fillProfile({ ...profileForm, ...data.user })
     userStore.setUser({ ...userStore.user, ...data.user })
     ElMessage.success('个人资料已更新')

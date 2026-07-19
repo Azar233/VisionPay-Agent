@@ -327,11 +327,15 @@ def test_profile_and_password_settings(client):
     updated = client.put(
         "/api/user/profile",
         headers=headers,
-        json={"email": "updated@example.com", "phone": "13800138000"},
+        json={"nickname": "蓝色操作员", "email": "updated@example.com", "phone": "13800138000"},
     )
     assert updated.status_code == 200
+    assert updated.json()["user"]["nickname"] == "蓝色操作员"
+    assert updated.json()["user"]["username"] == "day10_user"
     assert updated.json()["user"]["phone"] == "13800138000"
-    assert client.get("/api/auth/me", headers=headers).json()["email"] == "updated@example.com"
+    current_user = client.get("/api/auth/me", headers=headers).json()
+    assert current_user["nickname"] == "蓝色操作员"
+    assert current_user["email"] == "updated@example.com"
 
     wrong = client.put(
         "/api/user/password",
@@ -346,6 +350,22 @@ def test_profile_and_password_settings(client):
     )
     assert changed.status_code == 200
     assert client.post("/api/auth/login", json={"username": "day10_user", "password": "654321"}).status_code == 200
+
+
+def test_nickname_is_optional_and_not_unique(client):
+    first_headers = auth_headers(client, "nickname_first")
+    second_headers = auth_headers(client, "nickname_second")
+
+    first = client.put("/api/user/profile", headers=first_headers, json={"nickname": "同名用户"})
+    second = client.put("/api/user/profile", headers=second_headers, json={"nickname": "同名用户"})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["user"]["nickname"] == second.json()["user"]["nickname"]
+
+    cleared = client.put("/api/user/profile", headers=first_headers, json={"nickname": "  "})
+    assert cleared.status_code == 200
+    assert cleared.json()["user"]["nickname"] is None
 
 
 def test_avatar_upload_updates_current_user(client):
