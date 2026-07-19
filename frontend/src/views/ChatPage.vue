@@ -67,7 +67,7 @@
                 <span :class="['agent-pill', message.agent || 'detection']"><el-icon><Cpu /></el-icon>{{ agentName(message.agent) }}</span>
                 <template v-if="message.tool">
                   <i></i>
-                  <span class="tool-state"><el-icon><Operation /></el-icon><small>{{ toolPrefix(message.tool) }}</small>{{ toolName(message.tool) }}</span>
+                  <span class="tool-state"><el-icon><Operation /></el-icon><small>{{ toolPrefix(message.tool) }}</small>{{ toolName(message.tool) }}<small v-if="message.toolProgress != null"> {{ message.toolProgress }}%</small></span>
                 </template>
                 <span v-else-if="message.loading" class="activity-status">正在处理</span>
               </div>
@@ -266,6 +266,8 @@ function agentName(name) {
   return parts.map((part) => map[part] || part).join(' + ') + ' Agent'
 }
 function toolName(name) { return ({
+  detect_single_product_image: '检测商品图片', detect_product_images: '批量检测商品图片',
+  detect_product_zip: '检测 ZIP 商品图片', detect_product_video: '视频跟踪检测',
   list_dataset_versions: '读取全部数据集版本', get_current_dataset_version: '读取当前数据集',
   get_dataset_version_detail: '读取版本详情', prepare_add_samples_handoff: '创建人工标注交接',
   preview_derive_dataset_version: '预览派生版本', preview_freeze_dataset_version: '校验并预览冻结',
@@ -408,7 +410,7 @@ async function sendMessage() {
   let sessionUuid
   try { sessionUuid = await ensureSession() } catch (error) { ElMessage.error(error.message || '无法创建对话'); return }
   agentStore.addMessage({ role: 'user', content: text, files: files.map((file) => ({ name: file.name })) })
-  const assistant = agentStore.addMessage({ role: 'assistant', content: '', loading: true, tool: '', result: null, agent: '', parallelAgents: [], _lastTextAgent: '', knowledgeSources: null, confirmations: [] })
+  const assistant = agentStore.addMessage({ role: 'assistant', content: '', loading: true, tool: '', toolProgress: null, result: null, agent: '', parallelAgents: [], _lastTextAgent: '', knowledgeSources: null, confirmations: [] })
   inputText.value = ''; agentStore.setLoading(true); scrollBottom()
   try {
     const upload = files.length ? await uploadChatFilesApi(files) : { files: [] }
@@ -444,18 +446,19 @@ async function sendMessage() {
           }
           assistant.content += event.content
         }
-        if (event.type === 'tool_call') assistant.tool = event.tool
-        if (event.type === 'tool_result') assistant.tool = ''
+        if (event.type === 'tool_call') { assistant.tool = event.tool; assistant.toolProgress = null }
+        if (event.type === 'tool_progress') { assistant.tool = event.tool; assistant.toolProgress = event.percent }
+        if (event.type === 'tool_result') { assistant.tool = ''; assistant.toolProgress = null }
         if (event.type === 'knowledge_sources') { assistant.knowledgeSources = event; assistant.tool = '' }
         if (event.type === 'input_form') { assistant.inputForm = event.form; assistant.tool = '' }
         if (event.type === 'handoff_required') { assistant.handoff = event; assistant.tool = '' }
         if (event.type === 'confirmation_required') { assistant.confirmations.push(event.operation); assistant.confirmation = event.operation; assistant.tool = ''; loadPendingOperations() }
-        if (event.type === 'detection_result') { assistant.result = event.result; assistant.tool = '' }
+        if (event.type === 'detection_result') { assistant.result = event.result; assistant.tool = ''; assistant.toolProgress = null }
         if (event.type === 'error') assistant.content += `\n\n${event.content}`
         scrollBottomIfNearBottom()
       },
-      onDone() { assistant.loading = false; assistant.tool = ''; agentStore.setLoading(false); agentStore.abortController = null; clearFiles(); loadSessions(); loadPendingOperations(); scrollBottomIfNearBottom() },
-      onError(error) { assistant.content = error.message; assistant.loading = false; assistant.tool = ''; agentStore.setLoading(false); agentStore.abortController = null; scrollBottomIfNearBottom() },
+      onDone() { assistant.loading = false; assistant.tool = ''; assistant.toolProgress = null; agentStore.setLoading(false); agentStore.abortController = null; clearFiles(); loadSessions(); loadPendingOperations(); scrollBottomIfNearBottom() },
+      onError(error) { assistant.content = error.message; assistant.loading = false; assistant.tool = ''; assistant.toolProgress = null; agentStore.setLoading(false); agentStore.abortController = null; scrollBottomIfNearBottom() },
     })
     pendingFormSubmission.value = null
     agentStore.abortController = stream.stop

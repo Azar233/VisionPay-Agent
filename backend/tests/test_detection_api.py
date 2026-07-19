@@ -46,6 +46,7 @@ def test_camera_options_validate_mode_and_bounds(monkeypatch):
         "iou": 0.5,
         "scene_id": 2,
         "camera_url": None,
+        "accumulate": True,
         "warning": None,
     }
     assert _camera_options({"conf": 0.3, "iou": 0.5})["mode"] == "cpu"
@@ -212,6 +213,151 @@ def test_camera_websocket_returns_annotated_current_frame(client, monkeypatch):
         assert result["annotated_frame"] == "ZmFrZQ=="
         assert result["frame_count"] == 1
         assert result["pipeline_latency_ms"] >= 0
+        assert result["scan_total_objects"] == 0
+        assert result["scan_class_counts"] == {}
+        assert result["new_confirmed"] == []
+        websocket.send_json({"type": "close"})
+
+
+def test_camera_websocket_instant_mode_pricing(client, monkeypatch):
+    import cv2
+    from app.api import detection as detection_api
+
+    class FakeCapture:
+        def isOpened(self):
+            return True
+
+        def set(self, *_args):
+            return True
+
+        def read(self):
+            return True, object()
+
+        def release(self):
+            return None
+
+    finalize_calls: list = []
+
+    def fake_finalize(*_args, **_kwargs):
+        finalize_calls.append(_kwargs.get("price_detections"))
+        return {
+            "annotated_frame": "ZmFrZQ==",
+            "detections": [],
+            "object_count": 0,
+            "class_counts": {},
+            "inference_time_ms": 12.5,
+            "price_summary": {"total_price": 0, "items": []},
+        }
+
+    monkeypatch.setattr(detection_api, "configured_ip_webcam_url", lambda: "http://192.168.1.109:8080/video")
+    monkeypatch.setattr(cv2, "VideoCapture", lambda *_args: FakeCapture())
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "prepare_realtime_model",
+        lambda **_kwargs: {"model": object(), "model_name": "best.pt", "scene": "Vision Pay"},
+    )
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "detect_realtime_frame",
+        lambda *_args, **_kwargs: {"detections": [], "inference_time_ms": 12.5},
+    )
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "finalize_realtime_frame",
+        fake_finalize,
+    )
+
+    with client.websocket_connect(
+        "/api/detection/camera",
+        headers={"origin": "http://localhost:5173"},
+    ) as websocket:
+        websocket.send_json({"type": "config", "mode": "cpu", "accumulate": False})
+        configured = websocket.receive_json()
+        assert configured["type"] == "config_ok"
+        assert configured["accumulate"] is False
+        result = websocket.receive_json()
+        assert result["type"] == "result"
+        # 瞬时模式计价应基于当前帧，不传入累计轨迹列表
+        assert finalize_calls[-1] is None
+        websocket.send_json({"type": "close"})
+    import cv2
+    from app.api import detection as detection_api
+
+    class FakeCapture:
+        def isOpened(self):
+            return True
+
+        def set(self, *_args):
+            return True
+
+        def read(self):
+            return True, object()
+
+        def release(self):
+            return None
+
+    tracked = [
+        {
+            "track_id": 7,
+            "class_id": 0,
+            "class_name": "drink",
+            "confidence": 0.6,
+            "bbox": [10, 10, 100, 100],
+        }
+    ]
+
+    monkeypatch.setattr(detection_api, "configured_ip_webcam_url", lambda: "http://192.168.1.109:8080/video")
+    monkeypatch.setattr(cv2, "VideoCapture", lambda *_args: FakeCapture())
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "prepare_realtime_model",
+        lambda **_kwargs: {"model": object(), "model_name": "best.pt", "scene": "Vision Pay"},
+    )
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "detect_realtime_frame",
+        lambda *_args, **_kwargs: {"detections": list(tracked), "inference_time_ms": 12.5},
+    )
+    monkeypatch.setattr(
+        detection_api.detection_service,
+        "finalize_realtime_frame",
+        lambda *_args, **_kwargs: {
+            "annotated_frame": "ZmFrZQ==",
+            "detections": [],
+            "object_count": 0,
+            "class_counts": {},
+            "inference_time_ms": 12.5,
+            "price_summary": {"total_price": 0, "items": []},
+        },
+    )
+
+    with client.websocket_connect(
+        "/api/detection/camera",
+        headers={"origin": "http://localhost:5173"},
+    ) as websocket:
+        websocket.send_json({"type": "config", "mode": "cpu"})
+        websocket.receive_json()  # config_ok
+
+        first = websocket.receive_json()
+        assert first["scan_total_objects"] == 0
+        assert first["new_confirmed"] == []
+
+        # min_hits=2：同一轨迹第二帧确认并计入累计。
+        second = websocket.receive_json()
+        assert second["scan_total_objects"] == 1
+        assert second["scan_class_counts"] == {"drink": 1}
+        assert second["new_confirmed"][0]["track_id"] == 7
+
+        third = websocket.receive_json()
+        assert third["scan_total_objects"] == 1
+        assert third["new_confirmed"] == []
+
+        # 清空重扫：累计归零，当前画面内的轨迹重新进入确认流程。
+        websocket.send_json({"type": "reset_scan"})
+        reset_frame = websocket.receive_json()
+        assert reset_frame["scan_total_objects"] == 0
+        reconfirmed = websocket.receive_json()
+        assert reconfirmed["scan_total_objects"] == 1
         websocket.send_json({"type": "close"})
 
 
@@ -424,6 +570,7 @@ def test_video_detection_samples_uniform_key_frames(db_session, monkeypatch, tmp
         frame_sample_rate=5,
         max_frames=10,
         progress_callback=lambda value, message: progress.append((value, message)),
+        tracking=False,
     )
 
     assert sampled_indices == list(range(0, 260, 26))
@@ -432,6 +579,168 @@ def test_video_detection_samples_uniform_key_frames(db_session, monkeypatch, tmp
     assert result["duration_seconds"] == 10.4
     assert result["object_count_mode"] == "sampled_detections"
     assert progress[-1][0] == 100
+
+
+def _tracked_video_fixtures(db_session, monkeypatch, tmp_path, total_frames=6, fps=25):
+    """Shared scaffolding for tracked video tests; returns (service, task_id, user_id, scene_id)."""
+    import cv2
+    import numpy as np
+    from app.config.settings import settings as settings_module
+    from app.services import detection_service as detection_module
+
+    user = User(username="video_track_user", email="video_track_user@example.com", hashed_password="test")
+    db_session.add(user)
+    db_session.flush()
+    scene = DetectionScene(
+        name="video_track_scene",
+        display_name="Video Track",
+        category="retail",
+        class_names=["drink", "chocolate"],
+        created_by=user.id,
+    )
+    db_session.add(scene)
+    db_session.flush()
+    task = DetectionTask(user_id=user.id, scene_id=scene.id, task_type="video", status="pending")
+    db_session.add(task)
+    db_session.commit()
+    task_id, user_id, scene_id = task.id, user.id, scene.id
+
+    shared_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+    class FakeCapture:
+        def __init__(self):
+            self.index = -1
+
+        def isOpened(self):
+            return True
+
+        def get(self, prop):
+            return {
+                cv2.CAP_PROP_FRAME_COUNT: total_frames,
+                cv2.CAP_PROP_FPS: fps,
+                cv2.CAP_PROP_FRAME_WIDTH: 1280,
+                cv2.CAP_PROP_FRAME_HEIGHT: 720,
+            }.get(prop, 0)
+
+        def read(self):
+            self.index += 1
+            if self.index >= total_frames:
+                return False, None
+            return True, shared_frame
+
+        def release(self):
+            return None
+
+    service = DetectionService()
+    video_test_session = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=db_session.get_bind(),
+    )
+    monkeypatch.setattr(detection_module, "SessionLocal", video_test_session)
+    monkeypatch.setattr(cv2, "VideoCapture", lambda _path: FakeCapture())
+    monkeypatch.setattr(service, "_resolve_model", lambda *_args: (Path("best.pt"), None))
+    monkeypatch.setattr(settings_module, "MEDIA_ROOT", str(tmp_path / "media"))
+    return service, task_id, user_id, scene_id
+
+
+def test_video_tracking_dedups_by_track_and_saves_evidence(db_session, monkeypatch, tmp_path):
+    import torch
+    from app.entity.db_models import DetectionResult
+
+    service, task_id, user_id, scene_id = _tracked_video_fixtures(
+        db_session, monkeypatch, tmp_path
+    )
+    # stride=2 处理第 0/2/4 帧：track 1 三见，track 2 高置信一见。
+    script = [
+        ([1], [0], [0.60], [[10, 10, 110, 110]]),
+        ([1, 2], [0, 1], [0.70, 0.80], [[12, 11, 112, 111], [300, 200, 420, 330]]),
+        ([1], [0], [0.65], [[11, 12, 111, 112]]),
+    ]
+    calls = {"index": -1}
+
+    class FakeBoxes:
+        def __init__(self, ids, classes, confs, xyxy):
+            self.id = torch.tensor(ids)
+            self.cls = torch.tensor(classes)
+            self.conf = torch.tensor(confs)
+            self.xyxy = torch.tensor(xyxy)
+
+    class FakeResult:
+        def __init__(self, boxes):
+            self.boxes = boxes
+            self.names = {0: "drink", 1: "chocolate"}
+            self.speed = {"inference": 2.0}
+
+    class FakeModel:
+        def track(self, **_kwargs):
+            calls["index"] += 1
+            ids, classes, confs, xyxy = script[calls["index"]]
+            return [FakeResult(FakeBoxes(ids, classes, confs, xyxy))]
+
+    monkeypatch.setattr(service, "_load_fresh_model", lambda _path: FakeModel())
+    video_path = tmp_path / "tracked.mp4"
+    video_path.write_bytes(b"fake-video")
+    progress = []
+
+    result = service.detect_video(
+        video_path,
+        task_id=task_id,
+        user_id=user_id,
+        scene_id=scene_id,
+        progress_callback=lambda value, message: progress.append((value, message)),
+    )
+
+    assert result["object_count_mode"] == "bytetrack_unique_tracks"
+    assert result["total_objects"] == 2
+    assert result["class_counts"] == {"drink": 1, "chocolate": 1}
+    assert result["peak_simultaneous"] == 2
+    assert result["processed_frames"] == 3
+    assert len(result["tracks"]) == 2
+    drink_track = next(track for track in result["tracks"] if track["class_name"] == "drink")
+    assert drink_track["best_confidence"] == 0.7
+    assert drink_track["best_frame_index"] == 2
+    assert result["price_summary"]["unpriced_objects"] == 2
+    assert progress[-1][0] == 100
+
+    evidence_dir = tmp_path / "media" / "video-evidence" / f"task_{task_id}"
+    assert (evidence_dir / "track_1.jpg").is_file()
+    assert (evidence_dir / "track_2.jpg").is_file()
+
+    rows = (
+        db_session.query(DetectionResult)
+        .filter(DetectionResult.task_id == task_id)
+        .all()
+    )
+    assert len(rows) == 2
+    assert {row.class_name for row in rows} == {"drink", "chocolate"}
+    assert all(row.annotated_image_url for row in rows)
+    assert all(row.annotated_image_url.startswith("/media/video-evidence/") for row in rows)
+
+    task = db_session.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+    assert task.status == "completed"
+    assert task.total_objects == 2
+
+
+def test_video_tracking_rejects_overlong_video(db_session, monkeypatch, tmp_path):
+    service, task_id, user_id, scene_id = _tracked_video_fixtures(
+        db_session, monkeypatch, tmp_path, total_frames=25 * 200, fps=25
+    )
+
+    class FakeModel:
+        def track(self, **_kwargs):  # pragma: no cover - 超限时应根本不会调用
+            raise AssertionError("track should not run for overlong videos")
+
+    monkeypatch.setattr(service, "_load_fresh_model", lambda _path: FakeModel())
+    video_path = tmp_path / "overlong.mp4"
+    video_path.write_bytes(b"fake-video")
+
+    with pytest.raises(DetectionServiceError, match="超过跟踪上限"):
+        service.detect_video(video_path, task_id=task_id, user_id=user_id, scene_id=scene_id)
+
+    task = db_session.query(DetectionTask).filter(DetectionTask.id == task_id).first()
+    assert task.status == "failed"
+    assert "超过跟踪上限" in (task.error_message or "")
 
 
 def test_detection_conversation_crud(client):

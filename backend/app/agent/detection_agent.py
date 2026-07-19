@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any, AsyncGenerator
@@ -45,7 +46,29 @@ class DetectionAgent:
         self.user_id = user_id
         self.scene_id = scene_id
         self.last_detection_result: dict[str, Any] | None = None
+        self._progress_queue: asyncio.Queue | None = None
+        self._progress_loop: asyncio.AbstractEventLoop | None = None
         self.executor = self._build_executor()
+
+    def _report_progress(self, percent: int, message: str) -> None:
+        """Thread-safe bridge: tools call this from worker threads during stream()."""
+        queue = self._progress_queue
+        loop = self._progress_loop
+        if queue is None or loop is None:
+            return
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            (
+                "progress",
+                {
+                    "type": "tool_progress",
+                    "agent": "detection",
+                    "tool": "detect_product_video",
+                    "percent": int(percent),
+                    "message": message,
+                },
+            ),
+        )
 
     @staticmethod
     def _allowed_attachment(path_value: str) -> Path:
@@ -96,8 +119,8 @@ class DetectionAgent:
             )
             return result_to_json(self.last_detection_result)
 
-        def video(video_path: str, confidence: float = 0.25) -> str:
-            """抽取视频关键帧并检测零售商品，返回时长、帧数和类别统计。"""
+        def video(video_path: str, confidence: float = 0.25, tracking: bool = True) -> str:
+            """检测视频中的零售商品。默认用 ByteTrack 跨帧跟踪，按唯一商品去重计数，返回首末见时间、峰值同时数和证据帧；tracking=False 时退回关键帧采样累加模式。"""
             path = self._allowed_attachment(video_path)
             self.last_detection_result = detection_service.detect_video(
                 path,
@@ -106,6 +129,8 @@ class DetectionAgent:
                 conf=confidence,
                 frame_sample_rate=settings.VIDEO_FRAME_SAMPLE_RATE,
                 max_frames=settings.VIDEO_MAX_KEY_FRAMES,
+                progress_callback=self._report_progress,
+                tracking=tracking,
             )
             return result_to_json(self.last_detection_result)
 
@@ -216,7 +241,7 @@ class DetectionAgent:
 1. 用户消息中的“附件路径”是已上传到服务器的可信附件；单图调用单图工具，多图调用批量工具，ZIP 调用 ZIP 工具，视频调用视频工具。
 2. 有附件且用户表达检测、识别、盘点或结算意图时，直接调用工具，不要再次索要路径。
 3. 不编造商品、数量、价格或置信度。价格数据尚未接入时，明确说明只能生成识别清单，不能计算金额。
-4. 工具完成后先给出图片数或关键帧数和检测总数，再按类别汇总；视频结果说明统计未经跨帧去重，低置信度结果提示人工复核。
+4. 工具完成后先给出图片数或处理帧数和检测总数，再按类别汇总；视频默认经 ByteTrack 跨帧去重统计（唯一商品数），遮挡、快速移动或外观相似商品交叉可能引起少量计数偏差，应说明这是估计值；低置信度结果提示人工复核。视频超过时长上限会被直接拒绝，引导用户裁剪后重新上传。
 5. 管理员询问系统用户、管理员或账号列表时调用用户查询工具；普通用户无权查看全站用户目录。
 6. 没有附件时，可以回答本平台识别流程、模型能力和操作问题；不要声称已经执行检测。
 7. 始终禁止使用 emoji、颜文字或装饰性图标，除非用户自定义响应指令明确要求使用。未设置自定义指令时，直接给出结论，不要用“好的，我先……”等开场白；字段较多时可使用简洁 Markdown 表格。
@@ -257,58 +282,89 @@ class DetectionAgent:
         chat_history = build_chat_history(history)
 
         detection_emitted = False
-        async for event in self.executor.astream_events(
-            {
-                "input": agent_input,
-                "chat_history": chat_history,
-                "custom_instructions": render_custom_instructions(custom_instructions),
-            },
-            version="v2",
-        ):
-            kind = event.get("event")
-            if kind == "on_tool_start":
-                yield {
-                    "type": "tool_call",
-                    "tool": event.get("name", "detection_tool"),
-                    "input": event.get("data", {}).get("input", {}),
-                }
-            elif kind == "on_tool_end":
-                tool_name = event.get("name", "detection_tool")
-                output = event.get("data", {}).get("output")
-                content = _content_text(getattr(output, "content", output))
-                if tool_name == "request_user_input_form":
+        queue: asyncio.Queue = asyncio.Queue()
+        self._progress_queue = queue
+        self._progress_loop = asyncio.get_running_loop()
+
+        async def _pump_executor() -> None:
+            try:
+                async for event in self.executor.astream_events(
+                    {
+                        "input": agent_input,
+                        "chat_history": chat_history,
+                        "custom_instructions": render_custom_instructions(
+                            custom_instructions
+                        ),
+                    },
+                    version="v2",
+                ):
+                    queue.put_nowait(("event", event))
+            except Exception as exc:  # 透传给消费者，保持原有异常语义
+                queue.put_nowait(("error", exc))
+            finally:
+                queue.put_nowait(("done", None))
+
+        pump_task = asyncio.create_task(_pump_executor())
+        try:
+            while True:
+                msg_kind, payload = await queue.get()
+                if msg_kind == "done":
+                    break
+                if msg_kind == "error":
+                    raise payload
+                if msg_kind == "progress":
+                    yield payload
+                    continue
+                event = payload
+                kind = event.get("event")
+                if kind == "on_tool_start":
                     yield {
-                        "type": "tool_result",
-                        "agent": "detection",
-                        "tool": tool_name,
-                        "content": content,
+                        "type": "tool_call",
+                        "tool": event.get("name", "detection_tool"),
+                        "input": event.get("data", {}).get("input", {}),
                     }
-                    try:
-                        form = json.loads(content)
-                    except (TypeError, json.JSONDecodeError):
-                        form = None
-                    if isinstance(form, dict) and form.get("form_type"):
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "detection_tool")
+                    output = event.get("data", {}).get("output")
+                    content = _content_text(getattr(output, "content", output))
+                    if tool_name == "request_user_input_form":
                         yield {
-                            "type": "input_form",
+                            "type": "tool_result",
                             "agent": "detection",
-                            "form": form,
+                            "tool": tool_name,
+                            "content": content,
                         }
-                if self.last_detection_result and not detection_emitted:
-                    detection_emitted = True
-                    yield {"type": "detection_result", "result": self.last_detection_result}
-            elif kind == "on_chat_model_stream":
-                chunk = event.get("data", {}).get("chunk")
-                usage = usage_metadata(chunk)
-                if usage:
-                    yield {
-                        "type": "model_usage",
-                        "agent": "detection",
-                        "run_id": str(event.get("run_id") or ""),
-                        "usage": usage,
-                    }
-                content = _content_text(getattr(chunk, "content", ""))
-                if content:
-                    yield {"type": "text_chunk", "content": content}
+                        try:
+                            form = json.loads(content)
+                        except (TypeError, json.JSONDecodeError):
+                            form = None
+                        if isinstance(form, dict) and form.get("form_type"):
+                            yield {
+                                "type": "input_form",
+                                "agent": "detection",
+                                "form": form,
+                            }
+                    if self.last_detection_result and not detection_emitted:
+                        detection_emitted = True
+                        yield {"type": "detection_result", "result": self.last_detection_result}
+                elif kind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    usage = usage_metadata(chunk)
+                    if usage:
+                        yield {
+                            "type": "model_usage",
+                            "agent": "detection",
+                            "run_id": str(event.get("run_id") or ""),
+                            "usage": usage,
+                        }
+                    content = _content_text(getattr(chunk, "content", ""))
+                    if content:
+                        yield {"type": "text_chunk", "content": content}
+        finally:
+            self._progress_queue = None
+            self._progress_loop = None
+            if not pump_task.done():
+                pump_task.cancel()
 
         # Some compatible providers do not emit all nested v2 tool events.
         if self.last_detection_result and not detection_emitted:

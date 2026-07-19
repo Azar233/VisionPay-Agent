@@ -15,10 +15,13 @@ ALLOWED_STREAM_PATHS = {"/video", "/videofeed"}
 
 
 def normalize_ip_webcam_url(raw_url: str) -> str:
-    """Validate a LAN IP Webcam URL and return its direct MJPEG endpoint."""
+    """Validate a LAN or loopback IP Webcam URL and return its direct MJPEG endpoint."""
     try:
         parsed = urlsplit(raw_url.strip())
-        address = ipaddress.ip_address(parsed.hostname or "")
+        hostname = parsed.hostname or ""
+        if hostname.lower() == "localhost":
+            hostname = "127.0.0.1"
+        address = ipaddress.ip_address(hostname)
         port = parsed.port
     except (ValueError, TypeError) as exc:
         raise ValueError("请输入有效的局域网 IP Webcam 地址") from exc
@@ -27,8 +30,8 @@ def normalize_ip_webcam_url(raw_url: str) -> str:
         raise ValueError("IP Webcam 地址必须以 http:// 开头")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("暂不支持包含账号、参数或片段的摄像头地址")
-    if not address.is_private or address.is_link_local or address.is_loopback:
-        raise ValueError("只允许连接局域网地址")
+    if not (address.is_private or address.is_loopback) or address.is_link_local:
+        raise ValueError("只允许连接局域网地址或本机地址")
     if port is None:
         port = 8080
 

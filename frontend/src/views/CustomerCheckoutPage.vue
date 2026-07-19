@@ -123,6 +123,10 @@ const detectionError = ref('')
 let detectionSequence = 0
 let pricingSequence = 0
 const products = ref([])
+// 摄像头累计模式：服务端扫描计数为基准；手动调整以增量叠加，移除的类别在重置前隐藏。
+const manualDeltas = ref({})
+const removedClasses = ref(new Set())
+const confidenceMemory = {}
 const totalItems = computed(() => products.value.reduce((sum, item) => sum + item.quantity, 0))
 const totalPrice = computed(() => Number(checkoutSummary.value?.total_price || 0))
 const unpricedItems = computed(() => Number(checkoutSummary.value?.unpriced_objects || 0))
@@ -185,8 +189,40 @@ function applyRealtimeDetection(result) {
   const item = { filename: 'IP Webcam 当前帧', detections: result.detections || [] }
   detectionResult.value = { source: 'camera', items: [item] }
   activeModelVersionId.value = result.model_version_id || null
-  checkoutSummary.value = result.price_summary
-  products.value = productsFromDetection(item.detections, result.price_summary)
+  if (!result.accumulate) {
+    // 瞬时模式：每帧覆盖购物车，只保留当前画面物品。
+    manualDeltas.value = {}
+    removedClasses.value = new Set()
+    Object.keys(confidenceMemory).forEach((key) => delete confidenceMemory[key])
+    checkoutSummary.value = result.price_summary
+    products.value = productsFromDetection(item.detections, result.price_summary)
+    detectionError.value = ''
+    return
+  }
+  // 累计模式：服务端扫描计数为基准，手动调整以增量叠加，移除的类别在重置前隐藏。
+  for (const detection of item.detections) {
+    const values = confidenceMemory[detection.class_id] || (confidenceMemory[detection.class_id] = [])
+    values.push(Number(detection.confidence || 0))
+    if (values.length > 5) values.shift()
+  }
+  const scanSummary = result.price_summary
+  const nextProducts = productsFromDetection(item.detections, scanSummary)
+    .filter((product) => !removedClasses.value.has(product.classId))
+  let adjusted = false
+  for (const product of nextProducts) {
+    const remembered = confidenceMemory[product.classId]
+    if (remembered?.length) {
+      product.confidence = `${(remembered.reduce((sum, value) => sum + value, 0) / remembered.length * 100).toFixed(1)}%`
+    }
+    const delta = manualDeltas.value[product.classId] || 0
+    if (delta) { product.quantity = Math.max(1, product.quantity + delta); adjusted = true }
+  }
+  products.value = nextProducts
+  if (adjusted) {
+    if ((result.new_confirmed || []).length || !checkoutSummary.value) recalculateCart()
+  } else {
+    checkoutSummary.value = scanSummary
+  }
   detectionError.value = ''
 }
 
@@ -280,16 +316,32 @@ async function changeQuantity(item, delta) {
   const previous = item.quantity
   item.quantity = Math.max(1, Math.min(99, item.quantity + delta))
   if (item.quantity === previous) return
+  const applied = item.quantity - previous
+  if (sourceMode.value === 'camera') manualDeltas.value[item.classId] = (manualDeltas.value[item.classId] || 0) + applied
   try { await recalculateCart() }
-  catch { item.quantity = previous }
+  catch {
+    if (sourceMode.value === 'camera') manualDeltas.value[item.classId] -= applied
+    item.quantity = previous
+  }
 }
 async function removeProduct(classId) {
   const previous = products.value
+  const previousDelta = manualDeltas.value[classId]
   products.value = products.value.filter((item) => item.classId !== classId)
+  if (sourceMode.value === 'camera') {
+    removedClasses.value.add(classId)
+    delete manualDeltas.value[classId]
+  }
   try { await recalculateCart() }
-  catch { products.value = previous }
+  catch {
+    products.value = previous
+    if (sourceMode.value === 'camera') {
+      removedClasses.value.delete(classId)
+      if (previousDelta) manualDeltas.value[classId] = previousDelta
+    }
+  }
 }
-function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; activeModelVersionId.value = null; detectionError.value = ''; selectedUploadFile.value = null; if (sourceMode.value === 'camera') cameraDetectionRef.value?.start(); else selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
+function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; activeModelVersionId.value = null; detectionError.value = ''; selectedUploadFile.value = null; manualDeltas.value = {}; removedClasses.value = new Set(); Object.keys(confidenceMemory).forEach((key) => delete confidenceMemory[key]); if (sourceMode.value === 'camera') { cameraDetectionRef.value?.resetScan(); cameraDetectionRef.value?.start() } else selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
 function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
 async function goToPayment() {
   const order = { items: products.value, itemCount: totalItems.value, totalPrice: totalPrice.value, currency: 'CNY', modelVersionId: activeModelVersionId.value }
@@ -314,6 +366,9 @@ function selectSource(mode) {
   activeModelVersionId.value = null
   detectionError.value = ''
   products.value = []
+  manualDeltas.value = {}
+  removedClasses.value = new Set()
+  Object.keys(confidenceMemory).forEach((key) => delete confidenceMemory[key])
   sourceMode.value = mode
 }
 onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); cameraDetectionRef.value?.stop() })

@@ -32,6 +32,7 @@ from app.entity.db_models import (
     TrainingTask,
 )
 from app.services.model_version_service import model_version_service
+from app.services.track_aggregator import TrackRegistry
 
 logger = get_logger(__name__)
 
@@ -116,20 +117,33 @@ class DetectionService:
         )
 
     @staticmethod
-    def _load_model(model_path: Path):
+    def _ensure_yolo_config() -> None:
+        config_dir = Path(settings.YOLO_CONFIG_DIR)
+        if not config_dir.is_absolute():
+            config_dir = BACKEND_ROOT / config_dir
+        config_dir.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("YOLO_CONFIG_DIR", str(config_dir.resolve()))
+
+    @classmethod
+    def _load_model(cls, model_path: Path):
         key = str(model_path)
         with _MODEL_LOCK:
             if key not in _MODEL_CACHE:
-                config_dir = Path(settings.YOLO_CONFIG_DIR)
-                if not config_dir.is_absolute():
-                    config_dir = BACKEND_ROOT / config_dir
-                config_dir.mkdir(parents=True, exist_ok=True)
-                os.environ.setdefault("YOLO_CONFIG_DIR", str(config_dir.resolve()))
+                cls._ensure_yolo_config()
                 from ultralytics import YOLO
 
                 logger.info("加载商品检测模型: %s", key)
                 _MODEL_CACHE[key] = YOLO(key)
             return _MODEL_CACHE[key]
+
+    @classmethod
+    def _load_fresh_model(cls, model_path: Path):
+        """Uncached per-task YOLO instance so tracker state never leaks between tasks."""
+        cls._ensure_yolo_config()
+        from ultralytics import YOLO
+
+        logger.info("加载独立跟踪模型实例: %s", model_path)
+        return YOLO(str(model_path))
 
     @staticmethod
     def _get_device() -> str:
@@ -158,7 +172,8 @@ class DetectionService:
         try:
             scene = self._resolve_scene(db, scene_id)
             model_path, _model_version_id = self._resolve_model(db, scene.id)
-            model = self._load_model(model_path)
+            # 每会话独立实例：ByteTrack 的内部状态不能跨会话/跨任务残留。
+            model = self._load_fresh_model(model_path)
             scene_info = {
                 "scene_id": scene.id,
                 "scene": scene.display_name,
@@ -196,39 +211,55 @@ class DetectionService:
         jpeg_quality: int = 70,
         output_max_width: int = 960,
         finalize: bool = True,
+        tracking: bool = False,
     ) -> dict[str, Any]:
-        """Run one inference and return a compact WebSocket payload."""
+        """Run one inference (or ByteTrack step) and return a compact WebSocket payload."""
         import cv2
 
         # Real-time camera sessions are guaranteed single by _claim_camera_session,
         # so the global predict lock is not needed here.
         device = self._get_device()
-        result = model.predict(
-            source=frame,
-            conf=conf,
-            iou=iou,
-            imgsz=image_size,
-            device=device,
-            half=self._use_half(device),
-            save=False,
-            verbose=False,
-        )[0]
+        if tracking:
+            result = model.track(
+                source=frame,
+                persist=True,
+                tracker="bytetrack.yaml",
+                conf=conf,
+                iou=iou,
+                imgsz=image_size,
+                device=device,
+                half=self._use_half(device),
+                save=False,
+                verbose=False,
+            )[0]
+            detections = self._serialize_tracks(result)
+        else:
+            result = model.predict(
+                source=frame,
+                conf=conf,
+                iou=iou,
+                imgsz=image_size,
+                device=device,
+                half=self._use_half(device),
+                save=False,
+                verbose=False,
+            )[0]
 
-        names = result.names
-        detections: list[dict[str, Any]] = []
-        if result.boxes is not None:
-            for box in result.boxes:
-                class_id = int(box.cls.item())
-                detections.append(
-                    {
-                        "class_id": class_id,
-                        "class_name": str(names[class_id]),
-                        "confidence": round(float(box.conf.item()), 4),
-                        "bbox": [
-                            round(float(value), 2) for value in box.xyxy[0].tolist()
-                        ],
-                    }
-                )
+            names = result.names
+            detections = []
+            if result.boxes is not None:
+                for box in result.boxes:
+                    class_id = int(box.cls.item())
+                    detections.append(
+                        {
+                            "class_id": class_id,
+                            "class_name": str(names[class_id]),
+                            "confidence": round(float(box.conf.item()), 4),
+                            "bbox": [
+                                round(float(value), 2) for value in box.xyxy[0].tolist()
+                            ],
+                        }
+                    )
 
         speed = result.speed or {}
         inference_time_ms = round(float(speed.get("inference", 0)), 2)
@@ -253,6 +284,7 @@ class DetectionService:
         inference_time_ms: float,
         jpeg_quality: int = 70,
         output_max_width: int = 960,
+        price_detections: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Render stabilized detections and calculate their price summary."""
         import cv2
@@ -316,7 +348,10 @@ class DetectionService:
 
         db = SessionLocal()
         try:
-            price_summary = self._calculate_total_price(db, detections)
+            # price_detections 用于"按确认轨迹累计计价"；缺省按当前帧检测计价。
+            price_summary = self._calculate_total_price(
+                db, price_detections if price_detections is not None else detections
+            )
         finally:
             db.close()
 
@@ -379,8 +414,10 @@ class DetectionService:
         max_frames: int = 50,
         task_id: int | None = None,
         progress_callback: Callable[[int, str], None] | None = None,
+        tracking: bool | None = None,
     ) -> dict[str, Any]:
-        """Detect uniformly sampled video frames and return annotated key frames."""
+        """Detect a video; tracked mode (default) counts unique ByteTrack tracks,
+        sampled mode sums detections over uniformly sampled key frames."""
         import cv2
 
         path = Path(video_path).resolve()
@@ -388,6 +425,8 @@ class DetectionService:
             raise DetectionServiceError(f"不支持的视频文件: {path.name}")
         if frame_sample_rate < 1 or max_frames < 1:
             raise DetectionServiceError("视频采样间隔和最大关键帧数必须大于 0")
+        if tracking is None:
+            tracking = settings.VIDEO_TRACKING_ENABLED
         if task_id is None:
             task_id = self.create_video_task(
                 user_id=user_id,
@@ -410,7 +449,6 @@ class DetectionService:
 
             scene = self._resolve_scene(db, task.scene_id)
             model_path, _model_version_id = self._resolve_model(db, scene.id)
-            model = self._load_model(model_path)
             capture = cv2.VideoCapture(str(path))
             if not capture.isOpened():
                 raise DetectionServiceError("无法打开视频，请确认文件编码完整")
@@ -424,6 +462,27 @@ class DetectionService:
             if not math.isfinite(fps) or fps <= 0:
                 fps = 30.0
             duration_seconds = total_frames / fps
+
+            if tracking:
+                return self._detect_video_tracked(
+                    db,
+                    task=task,
+                    scene=scene,
+                    model_path=model_path,
+                    path=path,
+                    capture=capture,
+                    total_frames=total_frames,
+                    fps=fps,
+                    width=width,
+                    height=height,
+                    duration_seconds=duration_seconds,
+                    conf=conf,
+                    iou=iou,
+                    image_size=image_size,
+                    progress_callback=progress_callback,
+                )
+
+            model = self._load_model(model_path)
             effective_interval = max(
                 frame_sample_rate,
                 math.ceil(total_frames / max_frames),
@@ -521,6 +580,317 @@ class DetectionService:
             if capture is not None:
                 capture.release()
             db.close()
+
+    def _detect_video_tracked(
+        self,
+        db,
+        *,
+        task: DetectionTask,
+        scene: DetectionScene,
+        model_path: Path,
+        path: Path,
+        capture: Any,
+        total_frames: int,
+        fps: float,
+        width: int,
+        height: int,
+        duration_seconds: float,
+        conf: float,
+        iou: float,
+        image_size: int,
+        progress_callback: Callable[[int, str], None] | None,
+    ) -> dict[str, Any]:
+        """Track consecutive frames with ByteTrack and count unique tracks."""
+        max_seconds = settings.VIDEO_TRACKING_MAX_SECONDS
+        if max_seconds > 0 and duration_seconds > max_seconds:
+            raise DetectionServiceError(
+                f"视频时长 {duration_seconds:.0f} 秒，超过跟踪上限 {max_seconds} 秒，请裁剪后重新上传"
+            )
+        stride = max(1, settings.VIDEO_TRACK_FRAME_STRIDE)
+
+        model = self._load_fresh_model(model_path)
+        registry = TrackRegistry(min_hits=3, max_misses=3, min_confidence=conf)
+        device = self._get_device()
+        evidence: dict[int, bytes] = {}
+        total_inference = 0.0
+        processed = 0
+        expected = max(1, math.ceil(total_frames / stride))
+        last_percent = 5
+        frame_index = -1
+
+        import cv2
+
+        annotated_dir = Path(settings.MEDIA_ROOT).resolve() / "video-annotated"
+        annotated_dir.mkdir(parents=True, exist_ok=True)
+        annotated_path = annotated_dir / f"task_{task.id}.mp4"
+        video_writer = None
+        output_fps = max(1.0, fps / stride)
+        try:
+            import imageio.v2 as imageio
+            video_writer = imageio.get_writer(
+                str(annotated_path),
+                fps=output_fps,
+                codec="libx264",
+                quality=8,
+                macro_block_size=1,
+            )
+        except Exception as exc:
+            logger.warning("imageio 标注视频初始化失败，尝试 OpenCV MJPG: %s", exc)
+            try:
+                annotated_path = annotated_path.with_suffix(".avi")
+                fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+                writer = cv2.VideoWriter(str(annotated_path), fourcc, output_fps, (width, height))
+                if writer.isOpened():
+                    video_writer = writer
+                else:
+                    writer.release()
+                    logger.warning("标注视频写入器初始化失败，将跳过视频生成: %s", annotated_path)
+            except Exception as cv_exc:
+                logger.warning("标注视频初始化异常，将跳过视频生成: %s", cv_exc)
+                video_writer = None
+
+        if progress_callback:
+            progress_callback(5, "正在初始化轨迹跟踪")
+
+        while True:
+            ok, frame = capture.read()
+            if not ok or frame is None:
+                break
+            frame_index += 1
+            if frame_index % stride != 0:
+                continue
+            with _PREDICT_LOCK:
+                result = model.track(
+                    source=frame,
+                    persist=True,
+                    tracker="bytetrack.yaml",
+                    conf=conf,
+                    iou=iou,
+                    imgsz=image_size,
+                    device=device,
+                    half=self._use_half(device),
+                    save=False,
+                    verbose=False,
+                )[0]
+            total_inference += float((result.speed or {}).get("inference", 0))
+            tracks = self._serialize_tracks(result)
+            peaks = registry.update(frame_index, frame_index / fps, tracks)
+            self._capture_evidence(evidence, peaks, tracks, frame)
+            if video_writer is not None:
+                try:
+                    annotated_frame = result.plot()
+                    if annotated_frame is not None and annotated_frame.size > 0:
+                        frame_height, frame_width = annotated_frame.shape[:2]
+                        if (frame_width, frame_height) != (width, height):
+                            annotated_frame = cv2.resize(annotated_frame, (width, height))
+                        if hasattr(video_writer, "append_data"):
+                            video_writer.append_data(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
+                        else:
+                            video_writer.write(annotated_frame)
+                except Exception as exc:
+                    logger.warning("标注视频帧写入失败，停止生成视频: %s", exc)
+                    if hasattr(video_writer, "close"):
+                        video_writer.close()
+                    else:
+                        video_writer.release()
+                    video_writer = None
+            processed += 1
+            if progress_callback:
+                percent = min(5 + round(processed / expected * 90), 95)
+                if percent > last_percent:
+                    last_percent = percent
+                    progress_callback(percent, f"正在跟踪视频帧 {processed}/{expected}")
+
+        if processed == 0:
+            if video_writer is not None:
+                if hasattr(video_writer, "close"):
+                    video_writer.close()
+                else:
+                    video_writer.release()
+            raise DetectionServiceError("视频中没有可读取的帧")
+
+        if video_writer is not None:
+            if hasattr(video_writer, "close"):
+                video_writer.close()
+            else:
+                video_writer.release()
+        annotated_video_url = f"/media/video-annotated/{annotated_path.name}" if annotated_path.is_file() else None
+
+        summaries, items, price_summary = self._finalize_tracked_video(
+            db,
+            task=task,
+            registry=registry,
+            evidence=evidence,
+            path=path,
+            width=width,
+            height=height,
+            total_inference=total_inference,
+            processed=processed,
+        )
+        task.status = "completed"
+        task.total_images = processed
+        task.total_objects = registry.total_unique
+        task.total_inference_time = round(total_inference, 2)
+        task.completed_at = datetime.now()
+        db.commit()
+        if progress_callback:
+            progress_callback(100, "视频跟踪检测完成")
+        return {
+            "task_id": task.id,
+            "source": "video",
+            "scene": scene.display_name,
+            "model": model_path.name,
+            "filename": path.name,
+            "total_frames": total_frames,
+            "processed_frames": processed,
+            "total_images": processed,
+            "frame_sample_rate": stride,
+            "fps": round(fps, 2),
+            "duration_seconds": round(duration_seconds, 2),
+            "video_resolution": {"width": width, "height": height},
+            "total_objects": registry.total_unique,
+            "object_count_mode": "bytetrack_unique_tracks",
+            "class_counts": registry.dedup_class_counts(),
+            "peak_simultaneous": registry.peak_simultaneous,
+            "tracks": summaries,
+            "total_inference_time_ms": round(total_inference, 2),
+            "items": items,
+            "price_summary": price_summary,
+            "annotated_video_url": annotated_video_url,
+        }
+
+    @staticmethod
+    def _serialize_tracks(result: Any) -> list[dict[str, Any]]:
+        """Extract track observations from one ultralytics track result."""
+        boxes = result.boxes
+        if boxes is None or boxes.id is None:
+            return []
+        names = result.names
+        tracks = []
+        ids = boxes.id.int().cpu().tolist()
+        classes = boxes.cls.int().cpu().tolist()
+        confidences = boxes.conf.cpu().tolist()
+        xyxy = boxes.xyxy.cpu().tolist()
+        for track_id, class_id, confidence, bbox in zip(ids, classes, confidences, xyxy):
+            tracks.append(
+                {
+                    "track_id": int(track_id),
+                    "class_id": int(class_id),
+                    "class_name": str(names[int(class_id)]),
+                    "confidence": round(float(confidence), 4),
+                    "bbox": [round(float(value), 2) for value in bbox],
+                }
+            )
+        return tracks
+
+    @staticmethod
+    def _capture_evidence(
+        evidence: dict[int, bytes],
+        peak_track_ids: list[int],
+        tracks: list[dict[str, Any]],
+        frame: Any,
+    ) -> None:
+        """Cache a bbox crop for each track that hit its confidence peak this frame."""
+        if not peak_track_ids:
+            return
+        import cv2
+
+        height, width = frame.shape[:2]
+        by_id = {track["track_id"]: track for track in tracks}
+        for track_id in peak_track_ids:
+            track = by_id.get(track_id)
+            if track is None:
+                continue
+            x1, y1, x2, y2 = track["bbox"]
+            margin_x = (x2 - x1) * 0.1
+            margin_y = (y2 - y1) * 0.1
+            crop = frame[
+                max(0, int(y1 - margin_y)): min(height, int(y2 + margin_y)),
+                max(0, int(x1 - margin_x)): min(width, int(x2 + margin_x)),
+            ]
+            if crop.size == 0:
+                continue
+            ok, encoded = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if ok:
+                evidence[track_id] = encoded.tobytes()
+
+    def _finalize_tracked_video(
+        self,
+        db,
+        *,
+        task: DetectionTask,
+        registry: TrackRegistry,
+        evidence: dict[int, bytes],
+        path: Path,
+        width: int,
+        height: int,
+        total_inference: float,
+        processed: int,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+        """Persist one row per confirmed track and build summaries/items/price."""
+        evidence_dir = Path(settings.MEDIA_ROOT).resolve() / "video-evidence" / f"task_{task.id}"
+        average_inference = round(total_inference / max(processed, 1), 2)
+        summaries: list[dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
+        count_by_class_id: Counter[int] = Counter()
+        name_map: dict[int, str] = {}
+        for record in registry.confirmed_tracks():
+            evidence_url = None
+            blob = evidence.get(record.track_id)
+            if blob:
+                evidence_dir.mkdir(parents=True, exist_ok=True)
+                filename = f"track_{record.track_id}.jpg"
+                (evidence_dir / filename).write_bytes(blob)
+                evidence_url = f"/media/video-evidence/task_{task.id}/{filename}"
+            db.add(
+                DetectionResult(
+                    task_id=task.id,
+                    image_path=f"{path.name}.track_{record.track_id:06d}.jpg",
+                    annotated_image_url=evidence_url,
+                    class_name=record.class_name,
+                    class_id=record.class_id,
+                    confidence=round(record.best_confidence, 4),
+                    bbox=[round(value, 2) for value in record.best_bbox],
+                    inference_time=average_inference,
+                    image_width=width,
+                    image_height=height,
+                )
+            )
+            count_by_class_id[record.class_id] += 1
+            name_map[record.class_id] = record.class_name
+            summary = record.summary()
+            summary["evidence_url"] = evidence_url
+            summaries.append(summary)
+            items.append(
+                {
+                    "filename": f"{path.name}.track_{record.track_id:06d}.jpg",
+                    "track_id": record.track_id,
+                    "class_name": record.class_name,
+                    "duration": summary["duration"],
+                    "best_confidence": round(record.best_confidence, 4),
+                    "frame_index": record.best_frame_index,
+                    "timestamp_seconds": round(record.best_timestamp, 2),
+                    "object_count": 1,
+                    "class_counts": {record.class_name: 1},
+                    "detections": [
+                        {
+                            "class_id": record.class_id,
+                            "class_name": record.class_name,
+                            "confidence": round(record.best_confidence, 4),
+                            "bbox": [round(value, 2) for value in record.best_bbox],
+                        }
+                    ],
+                    "inference_time_ms": average_inference,
+                    "annotated_image": evidence_url or "",
+                }
+            )
+        price_summary = self.calculate_price(
+            db,
+            dict(count_by_class_id),
+            name_map,
+            model_version_id=task.model_version_id,
+        )
+        return summaries, items, price_summary
 
     @staticmethod
     def validate_image(path: str | Path) -> Path:

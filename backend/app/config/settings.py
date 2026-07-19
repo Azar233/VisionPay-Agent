@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     VIDEO_MAX_KEY_FRAMES: int = 50
     VIDEO_TASK_TTL_SECONDS: int = 3600
     VIDEO_RESULT_DIR: str = "runs/detect/video-results"
+    VIDEO_TRACKING_ENABLED: bool = True
+    VIDEO_TRACKING_MAX_SECONDS: int = 120
+    VIDEO_TRACK_FRAME_STRIDE: int = 2
     MEDIA_ROOT: str = ".runtime/media"
     USER_AVATAR_MAX_FILE_MB: int = 2
 
@@ -70,8 +73,8 @@ class Settings(BaseSettings):
     CAMERA_OUTPUT_MAX_WIDTH: int = 960
     CAMERA_READ_TIMEOUT_MS: int = 2000
     CAMERA_STALE_TIMEOUT_SECONDS: float = 5.0
-    CAMERA_STABILITY_MIN_HITS: int = 2
-    CAMERA_STABILITY_MAX_MISSES: int = 2
+    CAMERA_STABILITY_MIN_HITS: int = 3
+    CAMERA_STABILITY_MAX_MISSES: int = 3
     CAMERA_STABILITY_IOU: float = 0.25
 
     # ── DeepSeek Agent 配置（OpenAI 兼容接口）─────────

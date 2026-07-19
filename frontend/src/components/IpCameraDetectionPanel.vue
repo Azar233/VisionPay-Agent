@@ -18,7 +18,10 @@
         clearable
         @change="saveCameraUrl"
       />
-      <small>支持局域网 IPv4 地址；检测时后端会自动连接 /video</small>
+      <button type="button" class="mode-toggle" :disabled="active" @click="accumulate = !accumulate">
+        <span>{{ accumulate ? '累计模式' : '瞬时模式' }}</span>
+        <span :class="['mode-switch', { active: accumulate }]" aria-hidden="true"><i></i></span>
+      </button>
     </div>
 
     <div class="camera-screen">
@@ -32,10 +35,10 @@
     </div>
 
     <div class="camera-metrics">
-      <div><span>当前商品</span><strong>{{ result.object_count || 0 }}</strong></div>
+      <div><span>{{ accumulate ? '已扫累计' : '当前商品' }}</span><strong>{{ accumulate ? (result.scan_total_objects ?? 0) : (result.object_count || 0) }}</strong></div>
+      <div><span>{{ accumulate ? '画面内' : '采集到画面' }}</span><strong>{{ accumulate ? (result.object_count || 0) : Number(result.pipeline_latency_ms || 0).toFixed(0) + ' ms' }}</strong></div>
       <div><span>处理帧率</span><strong>{{ Number(result.fps || 0).toFixed(1) }} FPS</strong></div>
       <div><span>推理耗时</span><strong>{{ Number(result.inference_time_ms || 0).toFixed(0) }} ms</strong></div>
-      <div><span>采集到画面</span><strong>{{ Number(result.pipeline_latency_ms || 0).toFixed(0) }} ms</strong></div>
     </div>
 
     <div v-if="classes.length" class="camera-classes">
@@ -48,8 +51,10 @@
         <span>{{ modelInfo }}</span>
         <small>{{ runtimeInfo }} · 已处理 {{ result.frame_count || 0 }} 帧 · 主动丢弃 {{ result.dropped_frames || 0 }} 个旧帧</small>
       </div>
-      <el-button v-if="!active" type="primary" :loading="loading" @click="start">开始实时检测</el-button>
-      <el-button v-else type="danger" plain @click="stop">停止检测</el-button>
+      <div class="action-group">
+        <el-button v-if="!active" type="primary" :loading="loading" @click="start">开始检测</el-button>
+        <el-button v-else type="danger" plain @click="stop">停止检测</el-button>
+      </div>
     </footer>
   </section>
 </template>
@@ -67,6 +72,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['result', 'status'])
 
+const accumulate = ref(false)
 const canvasRef = ref(null)
 const active = ref(false)
 const running = ref(false)
@@ -88,7 +94,7 @@ let pendingFrame = ''
 let renderingFrame = false
 let renderGeneration = 0
 
-const classes = computed(() => Object.entries(result.value.class_counts || {}).map(([name, count]) => ({ name, count })))
+const classes = computed(() => Object.entries((accumulate.value ? result.value.scan_class_counts : result.value.class_counts) || {}).map(([name, count]) => ({ name, count })))
 
 function saveCameraUrl() {
   const value = cameraUrl.value.trim()
@@ -166,6 +172,7 @@ function connect() {
       iou: props.iou,
       scene_id: props.sceneId || null,
       camera_url: cameraUrl.value.trim(),
+      accumulate: accumulate.value,
     }))
   }
   socket.onmessage = async (event) => {
@@ -176,11 +183,12 @@ function connect() {
       loading.value = false
       running.value = true
       modelInfo.value = `${message.model} · ${message.scene}`
-      runtimeInfo.value = `${message.image_size} × ${message.image_size} · 目标 ${Number(message.target_fps).toFixed(1)} FPS · 跨帧稳定`
+      runtimeInfo.value = `${message.image_size} × ${message.image_size} · 目标 ${Number(message.target_fps).toFixed(1)} FPS · ${accumulate.value ? '累计计数' : '瞬时计数'}`
       setStatus('实时识别中')
       return
     }
     if (message.type === 'result') {
+      message.accumulate = accumulate.value
       result.value = message
       await nextTick()
       renderLatestFrame(message.annotated_frame)
@@ -260,9 +268,15 @@ function stop() {
   setStatus('已停止')
 }
 
+function resetScan() {
+  // 通知后端清空累计轨迹；本地展示一并归零，等待下一帧刷新。
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'reset_scan' }))
+  result.value = {}
+}
+
 onMounted(() => { if (props.autoStart) start() })
 onBeforeUnmount(stop)
-defineExpose({ start, stop })
+defineExpose({ start, stop, resetScan })
 </script>
 
 <style lang="scss" scoped>
@@ -326,6 +340,53 @@ defineExpose({ start, stop })
   small {
     color: $text-secondary;
     font-size: 9px;
+  }
+
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $text-primary;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+  }
+
+  .mode-switch {
+    width: 32px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 999px;
+    background: #d2d2d7;
+    transition: background .25s ease;
+
+    i {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+      transition: transform .25s cubic-bezier(.2, .8, .2, 1);
+    }
+
+    &.active {
+      background: var(--vp-primary);
+    }
+
+    &.active i {
+      transform: translateX(14px);
+    }
   }
 }
 
@@ -477,6 +538,18 @@ defineExpose({ start, stop })
     color: $text-secondary;
     font-size: 9px;
   }
+}
+
+.camera-actions .action-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.camera-actions .action-group .el-button {
+  flex-shrink: 0;
 }
 
 .compact {

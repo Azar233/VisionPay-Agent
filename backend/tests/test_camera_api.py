@@ -10,6 +10,8 @@ from app.config.settings import settings
         ("http://192.168.1.20:8080", "http://192.168.1.20:8080/video"),
         ("http://10.0.0.8/video", "http://10.0.0.8:8080/video"),
         ("http://172.16.2.3:9000/videofeed", "http://172.16.2.3:9000/videofeed"),
+        ("http://127.0.0.1:8080", "http://127.0.0.1:8080/video"),
+        ("http://localhost:8080/video", "http://127.0.0.1:8080/video"),
     ],
 )
 def test_normalize_ip_webcam_url(raw_url, expected):
@@ -21,7 +23,6 @@ def test_normalize_ip_webcam_url(raw_url, expected):
     [
         "https://192.168.1.20:8080",
         "http://example.com:8080",
-        "http://127.0.0.1:8080/video",
         "http://127.0.0.1:8080/admin",
         "http://user:password@192.168.1.20:8080",
     ],
