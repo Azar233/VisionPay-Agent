@@ -328,6 +328,7 @@ async def camera_detection_ws(websocket: WebSocket):
             return TrackRegistry(
                 min_hits=settings.CAMERA_STABILITY_MIN_HITS,
                 max_misses=settings.CAMERA_STABILITY_MAX_MISSES,
+                min_confidence=options["conf"],
                 on_track_confirmed=lambda record: newly_confirmed.append(
                     {
                         "track_id": record.track_id,

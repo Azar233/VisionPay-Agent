@@ -74,12 +74,14 @@ class TrackRegistry:
         *,
         min_hits: int = 2,
         max_misses: int = 2,
+        min_confidence: float = 0.30,
         high_confidence: float = 0.75,
         on_track_confirmed: Callable[[TrackRecord], None] | None = None,
         on_track_expired: Callable[[TrackRecord], None] | None = None,
     ) -> None:
         self.min_hits = min_hits
         self.max_misses = max_misses
+        self.min_confidence = min_confidence
         self.high_confidence = high_confidence
         self.on_track_confirmed = on_track_confirmed
         self.on_track_expired = on_track_expired
@@ -132,7 +134,7 @@ class TrackRegistry:
                     if self.on_track_expired is not None:
                         self.on_track_expired(record)
                 continue
-            if not record.confirmed and (
+            if not record.confirmed and record.best_confidence >= self.min_confidence and (
                 record.hits >= self.min_hits or record.best_confidence >= self.high_confidence
             ):
                 record.confirmed = True

@@ -72,7 +72,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['result', 'status'])
 
-const accumulate = ref(true)
+const accumulate = ref(false)
 const canvasRef = ref(null)
 const active = ref(false)
 const running = ref(false)
