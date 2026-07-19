@@ -618,6 +618,8 @@ class DetectionService:
         last_percent = 5
         frame_index = -1
 
+        import cv2
+
         annotated_dir = Path(settings.MEDIA_ROOT).resolve() / "video-annotated"
         annotated_dir.mkdir(parents=True, exist_ok=True)
         annotated_path = annotated_dir / f"task_{task.id}.mp4"
@@ -635,7 +637,6 @@ class DetectionService:
         except Exception as exc:
             logger.warning("imageio 标注视频初始化失败，尝试 OpenCV MJPG: %s", exc)
             try:
-                import cv2
                 annotated_path = annotated_path.with_suffix(".avi")
                 fourcc = cv2.VideoWriter_fourcc(*"MJPG")
                 writer = cv2.VideoWriter(str(annotated_path), fourcc, output_fps, (width, height))
