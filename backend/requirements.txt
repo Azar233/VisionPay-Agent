@@ -23,6 +23,8 @@ ollama==0.3.0  #本地 LLM 模型备选
 ultralytics==8.3.0   # Ultralytics YOLO框架（包含PyTorch）
 opencv-python==4.8.0.76 # OpenCV图像处理库
 Pillow==10.0.0   # Pillow图像处理库
+imageio==2.37.3  # 视频标注输出（H.264 编码）
+imageio-ffmpeg==0.6.0  # imageio 的 ffmpeg 后端，自带二进制无需系统安装
 
 # ── 数据库（PostgreSQL + ORM）─────────────────────────
 sqlalchemy==2.0.0  # SQLAlchemy ORM框架
