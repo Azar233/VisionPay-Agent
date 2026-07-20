@@ -699,7 +699,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import {
   DataAnalysis,
   Delete,
@@ -739,6 +739,7 @@ import {
   validateTrainingTaskApi,
 } from '@/api/training'
 import { getDatasetVersionsApi } from '@/api/datasets'
+import { confirmAction } from '@/utils/messageBox'
 
 echarts.use([
   TitleComponent,
@@ -1092,11 +1093,18 @@ async function fetchModelVersions() {
 async function switchDetectionModel() {
   const model = selectedModelVersion.value
   if (!model || model.is_default || !model.file_exists) return
-  await ElMessageBox.confirm(
+  const confirmed = await confirmAction(
     `确定将 ${model.version} 设为场景“${model.scene_name || model.scene_id}”的检测使用版本吗？`,
     '切换检测模型',
-    { type: 'warning', confirmButtonText: '切换', cancelButtonText: '取消' },
+    {
+      type: 'warning',
+      confirmButtonText: '切换',
+      cancelButtonText: '取消',
+      customClass: 'app-confirm-dialog',
+    },
   )
+  if (!confirmed) return
+
   switchingModelVersionId.value = model.id
   try {
     await setDefaultDetectionModelApi(model.id)
@@ -1113,7 +1121,14 @@ async function archiveModel(model) {
   const message = model.is_default
     ? `确定归档当前检测模型 ${model.version} 吗？系统会尝试切换到其他可用模型；若该数据集下无其他模型，对应数据集将回退为待训练。`
     : `确定归档模型 ${model.version} 吗？仅归档该模型，不影响其他模型和数据集。`
-  await ElMessageBox.confirm(message, '归档模型', { type: 'warning' })
+  const confirmed = await confirmAction(message, '归档模型', {
+    type: 'warning',
+    confirmButtonText: '归档',
+    cancelButtonText: '取消',
+    customClass: 'app-confirm-dialog',
+  })
+  if (!confirmed) return
+
   await archiveDetectionModelApi(model.id)
   ElMessage.success('模型已归档')
   await Promise.all([fetchModelVersions(), fetchTrainingDatasets()])
@@ -1379,7 +1394,14 @@ async function submitLocalResultsImport() {
 }
 
 async function stopTask(taskId) {
-  await ElMessageBox.confirm('确定要停止当前训练任务吗？', '确认停止', { type: 'warning' })
+  const confirmed = await confirmAction('确定要停止当前训练任务吗？', '确认停止', {
+    type: 'warning',
+    confirmButtonText: '停止',
+    cancelButtonText: '取消',
+    customClass: 'app-confirm-dialog',
+  })
+  if (!confirmed) return
+
   await stopTrainingApi(taskId)
   ElMessage.success('训练任务已停止')
   await Promise.all([fetchTasks(), fetchTrainingDatasets()])

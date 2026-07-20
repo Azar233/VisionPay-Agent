@@ -33,6 +33,8 @@
   --vp-shadow-md: 0 4px 16px rgba(16, 24, 40, 0.06);
   --vp-shadow-lg: 0 16px 48px rgba(16, 24, 40, 0.12);
   --vp-ring: 0 0 0 3px rgba(43, 127, 255, 0.14);
+  --vp-modal-backdrop: rgba(15, 23, 42, 0.24);
+  --vp-modal-backdrop-blur: 8px;
   --el-color-primary: #2b7fff;
   --el-color-primary-light-3: #5c9dff;
   --el-color-primary-light-5: #8dbaff;
@@ -92,6 +94,7 @@ html.dark {
   --vp-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.34);
   --vp-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
   --vp-ring: 0 0 0 3px rgba(59, 139, 255, 0.22);
+  --vp-modal-backdrop: rgba(0, 0, 0, 0.42);
   --el-color-primary: #3b8bff;
   --el-color-primary-light-3: #62a2ff;
   --el-color-primary-light-5: #89bbff;
@@ -282,6 +285,22 @@ body > .el-overlay,
 body > .el-overlay-message-box {
   position: fixed !important;
   inset: 0 !important;
+}
+
+/*
+ * Every teleported modal owns an independent backdrop. With stacked modals,
+ * the upper backdrop blurs the dialog beneath it while its own surface stays sharp.
+ */
+body > .el-overlay.el-modal-dialog,
+body > .el-overlay.el-modal-drawer,
+body > .el-overlay.is-message-box {
+  background-color: var(--vp-modal-backdrop);
+  -webkit-backdrop-filter: blur(var(--vp-modal-backdrop-blur));
+  backdrop-filter: blur(var(--vp-modal-backdrop-blur));
+  transition:
+    background-color 0.2s ease,
+    -webkit-backdrop-filter 0.2s ease,
+    backdrop-filter 0.2s ease;
 }
 
 body > .el-overlay .el-overlay-dialog,
