@@ -71,7 +71,13 @@
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="rows" stripe class="dataset-table" empty-text="暂无数据集版本">
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        stripe
+        class="dataset-table"
+        empty-text="暂无数据集版本"
+      >
         <el-table-column label="版本" min-width="220">
           <template #default="{ row }">
             <button
@@ -82,8 +88,14 @@
             >
               <div class="version-title">
                 <strong>{{ row.version }}</strong>
-                <span v-if="row.extra_metadata?.catalog_only" class="vp-pill vp-pill--primary vp-pill--plain">模型目录</span>
-                <span v-if="row.is_current" class="vp-pill vp-pill--success vp-pill--plain">当前版本</span>
+                <span
+                  v-if="row.extra_metadata?.catalog_only"
+                  class="vp-pill vp-pill--primary vp-pill--plain"
+                  >模型目录</span
+                >
+                <span v-if="row.is_current" class="vp-pill vp-pill--success vp-pill--plain"
+                  >当前版本</span
+                >
               </div>
               <span class="version-name">{{ row.name }}</span>
             </button>
@@ -97,7 +109,9 @@
         <el-table-column label="状态" min-width="150">
           <template #default="{ row }">
             <div class="status-tags">
-              <span class="vp-pill" :class="`vp-pill--${statusType(row.status)}`">{{ statusText(row.status) }}</span>
+              <span class="vp-pill" :class="`vp-pill--${statusType(row.status)}`">{{
+                statusText(row.status)
+              }}</span>
               <span v-if="row.is_in_use" class="vp-pill vp-pill--success">使用中</span>
             </div>
           </template>
@@ -110,7 +124,10 @@
             </div>
             <div v-else class="split-cell">
               <strong>{{ row.total_image_count }}</strong>
-              <span>T {{ row.train_image_count }} · V {{ row.val_image_count }} · E {{ row.test_image_count }}</span>
+              <span
+                >T {{ row.train_image_count }} · V {{ row.val_image_count }} · E
+                {{ row.test_image_count }}</span
+              >
             </div>
           </template>
         </el-table-column>
@@ -121,19 +138,68 @@
         <el-table-column label="操作" width="350" fixed="right">
           <template #default="{ row }">
             <div class="row-actions vp-table-action-safe-area">
-              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button is-primary-action" size="small" :icon="Plus" @click="openAddProductDialog(row)">添加样本</el-button>
-              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button is-danger-action" size="small" :icon="Delete" @click="openDeleteProductDialog(row)">删除商品</el-button>
-              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button" size="small" :icon="CircleCheck" @click="validateRow(row)">校验</el-button>
-              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button is-primary-action" size="small" :icon="Lock" @click="freezeRow(row)">冻结</el-button>
+              <el-button
+                v-if="isDatasetDraft(row.status)"
+                class="row-action-button vp-table-action-button"
+                size="small"
+                :icon="Edit"
+                @click="openEditDialog(row)"
+                >编辑</el-button
+              >
+              <el-button
+                v-if="isDatasetDraft(row.status)"
+                class="row-action-button vp-table-action-button is-primary-action"
+                size="small"
+                :icon="Plus"
+                @click="openAddProductDialog(row)"
+                >添加样本</el-button
+              >
+              <el-button
+                v-if="isDatasetDraft(row.status)"
+                class="row-action-button vp-table-action-button is-danger-action"
+                size="small"
+                :icon="Delete"
+                @click="openDeleteProductDialog(row)"
+                >删除商品</el-button
+              >
+              <el-button
+                v-if="isDatasetDraft(row.status)"
+                class="row-action-button vp-table-action-button"
+                size="small"
+                :icon="CircleCheck"
+                @click="validateRow(row)"
+                >校验</el-button
+              >
+              <el-button
+                v-if="isDatasetDraft(row.status)"
+                class="row-action-button vp-table-action-button is-primary-action"
+                size="small"
+                :icon="Lock"
+                @click="freezeRow(row)"
+                >冻结</el-button
+              >
               <el-button
                 v-if="canArchiveDataset(row.status)"
                 class="row-action-button vp-table-action-button"
                 size="small"
                 @click="archiveRow(row)"
-              >归档</el-button>
-              <el-button v-if="canDeriveDataset(row.status)" class="row-action-button vp-table-action-button is-primary-action" size="small" @click="openDeriveDialog(row)">派生版本</el-button>
-              <el-button v-if="isDatasetDraft(row.status)" class="row-action-button vp-table-action-button is-danger-action" size="small" :icon="Delete" @click="deleteRow(row)">删除草稿</el-button>
+                >归档</el-button
+              >
+              <el-button
+                v-if="canDeriveDataset(row.status)"
+                class="row-action-button vp-table-action-button is-primary-action"
+                size="small"
+                @click="openDeriveDialog(row)"
+                >派生版本</el-button
+              >
+              <el-button
+                v-if="isDatasetDraft(row.status)"
+                class="row-action-button vp-table-action-button is-danger-action"
+                size="small"
+                :icon="Delete"
+                @click="deleteRow(row)"
+                >删除草稿</el-button
+              >
             </div>
           </template>
         </el-table-column>
@@ -153,10 +219,20 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="108px">
         <div class="form-grid">
           <el-form-item label="场景 ID" prop="scene_id">
-            <el-input-number v-model="form.scene_id" :min="1" :disabled="Boolean(editingId)" controls-position="right" />
+            <el-input-number
+              v-model="form.scene_id"
+              :min="1"
+              :disabled="Boolean(editingId)"
+              controls-position="right"
+            />
           </el-form-item>
           <el-form-item label="父版本 ID" prop="parent_id">
-            <el-input-number v-model="form.parent_id" :min="1" clearable controls-position="right" />
+            <el-input-number
+              v-model="form.parent_id"
+              :min="1"
+              clearable
+              controls-position="right"
+            />
           </el-form-item>
           <el-form-item label="版本号" prop="version">
             <el-input v-model="form.version" placeholder="例如 v2026.07.01" />
@@ -167,7 +243,10 @@
         </div>
 
         <el-form-item label="版本根目录" prop="storage_path">
-          <el-input v-model="form.storage_path" placeholder="/cluster/datasets/vision_pay/v000001 或 s3://..." />
+          <el-input
+            v-model="form.storage_path"
+            placeholder="/cluster/datasets/vision_pay/v000001 或 s3://..."
+          />
         </el-form-item>
         <el-form-item label="data.yaml" prop="data_yaml_path">
           <el-input v-model="form.data_yaml_path" placeholder="data.yaml 或完整路径" />
@@ -181,13 +260,27 @@
 
         <el-divider content-position="left">数据规模</el-divider>
         <div class="count-grid">
-          <el-form-item label="类别数"><el-input-number v-model="form.class_count" :min="0" /></el-form-item>
-          <el-form-item label="训练图片"><el-input-number v-model="form.train_image_count" :min="0" /></el-form-item>
-          <el-form-item label="验证图片"><el-input-number v-model="form.val_image_count" :min="0" /></el-form-item>
-          <el-form-item label="测试图片"><el-input-number v-model="form.test_image_count" :min="0" /></el-form-item>
-          <el-form-item label="训练标注"><el-input-number v-model="form.train_annotation_count" :min="0" /></el-form-item>
-          <el-form-item label="验证标注"><el-input-number v-model="form.val_annotation_count" :min="0" /></el-form-item>
-          <el-form-item label="测试标注"><el-input-number v-model="form.test_annotation_count" :min="0" /></el-form-item>
+          <el-form-item label="类别数"
+            ><el-input-number v-model="form.class_count" :min="0"
+          /></el-form-item>
+          <el-form-item label="训练图片"
+            ><el-input-number v-model="form.train_image_count" :min="0"
+          /></el-form-item>
+          <el-form-item label="验证图片"
+            ><el-input-number v-model="form.val_image_count" :min="0"
+          /></el-form-item>
+          <el-form-item label="测试图片"
+            ><el-input-number v-model="form.test_image_count" :min="0"
+          /></el-form-item>
+          <el-form-item label="训练标注"
+            ><el-input-number v-model="form.train_annotation_count" :min="0"
+          /></el-form-item>
+          <el-form-item label="验证标注"
+            ><el-input-number v-model="form.val_annotation_count" :min="0"
+          /></el-form-item>
+          <el-form-item label="测试标注"
+            ><el-input-number v-model="form.test_annotation_count" :min="0"
+          /></el-form-item>
         </div>
 
         <el-form-item label="类别映射 JSON" class="mapping-field">
@@ -198,7 +291,10 @@
             spellcheck="false"
             placeholder='[{"class_index":0,"product_key":"sku-001","category_id":1,"class_name":"product_1","display_name":"商品一"}]'
           />
-          <p class="form-tip">class_index 必须从 0 连续排列；product_key 在版本间保持稳定。集群注册脚本后续可直接调用同一 API 批量填写。</p>
+          <p class="form-tip">
+            class_index 必须从 0 连续排列；product_key
+            在版本间保持稳定。集群注册脚本后续可直接调用同一 API 批量填写。
+          </p>
         </el-form-item>
         <el-form-item label="版本说明">
           <el-input v-model="form.description" type="textarea" :rows="3" />
@@ -218,24 +314,52 @@
             <span>{{ detail.scene_name || `场景 #${detail.scene_id}` }}</span>
             <h3>{{ detail.version }} · {{ detail.name }}</h3>
           </div>
-          <span class="vp-pill" :class="`vp-pill--${statusType(detail.status)}`">{{ statusText(detail.status) }}</span>
+          <span class="vp-pill" :class="`vp-pill--${statusType(detail.status)}`">{{
+            statusText(detail.status)
+          }}</span>
         </div>
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="当前版本">{{ detail.is_current ? '是' : '否' }}</el-descriptions-item>
-          <el-descriptions-item label="父版本">{{ detail.parent_version || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="当前版本">{{
+            detail.is_current ? '是' : '否'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="父版本">{{
+            detail.parent_version || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="类别数">{{ detail.class_count }}</el-descriptions-item>
-          <el-descriptions-item label="图片总数">{{ detail.total_image_count }}</el-descriptions-item>
-          <el-descriptions-item label="标注总数">{{ detail.total_annotation_count }}</el-descriptions-item>
-          <el-descriptions-item label="创建人">{{ detail.creator_name || `#${detail.created_by}` }}</el-descriptions-item>
-          <el-descriptions-item label="版本目录" :span="2">{{ detail.storage_path }}</el-descriptions-item>
-          <el-descriptions-item label="data.yaml" :span="2">{{ detail.data_yaml_path }}</el-descriptions-item>
-          <el-descriptions-item label="内容指纹" :span="2">{{ detail.content_hash || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="说明" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="图片总数">{{
+            detail.total_image_count
+          }}</el-descriptions-item>
+          <el-descriptions-item label="标注总数">{{
+            detail.total_annotation_count
+          }}</el-descriptions-item>
+          <el-descriptions-item label="创建人">{{
+            detail.creator_name || `#${detail.created_by}`
+          }}</el-descriptions-item>
+          <el-descriptions-item label="版本目录" :span="2">{{
+            detail.storage_path
+          }}</el-descriptions-item>
+          <el-descriptions-item label="data.yaml" :span="2">{{
+            detail.data_yaml_path
+          }}</el-descriptions-item>
+          <el-descriptions-item label="内容指纹" :span="2">{{
+            detail.content_hash || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="说明" :span="2">{{
+            detail.description || '-'
+          }}</el-descriptions-item>
         </el-descriptions>
 
-        <div v-if="detail.validation_report" class="validation-box" :class="{ invalid: !detail.validation_report.valid }">
-          <strong>{{ detail.validation_report.valid ? '最近一次校验通过' : '最近一次校验未通过' }}</strong>
-          <span>{{ detail.validation_report.checked_filesystem ? '已检查集群目录' : '仅逻辑校验' }}</span>
+        <div
+          v-if="detail.validation_report"
+          class="validation-box"
+          :class="{ invalid: !detail.validation_report.valid }"
+        >
+          <strong>{{
+            detail.validation_report.valid ? '最近一次校验通过' : '最近一次校验未通过'
+          }}</strong>
+          <span>{{
+            detail.validation_report.checked_filesystem ? '已检查集群目录' : '仅逻辑校验'
+          }}</span>
           <ul v-if="detail.validation_report.errors?.length">
             <li v-for="item in detail.validation_report.errors" :key="item">{{ item }}</li>
           </ul>
@@ -248,10 +372,20 @@
         <el-table :data="detail.classes" border height="420" empty-text="尚未登记类别映射">
           <el-table-column prop="class_index" label="class_id" width="88" />
           <el-table-column prop="product_id" label="product_id" width="100" />
-          <el-table-column prop="product_key" label="商品键" min-width="130" show-overflow-tooltip />
+          <el-table-column
+            prop="product_key"
+            label="商品键"
+            min-width="130"
+            show-overflow-tooltip
+          />
           <el-table-column prop="category_id" label="原类别 ID" width="100" />
           <el-table-column prop="class_name" label="类别名" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="display_name" label="显示名" min-width="130" show-overflow-tooltip />
+          <el-table-column
+            prop="display_name"
+            label="显示名"
+            min-width="130"
+            show-overflow-tooltip
+          />
         </el-table>
       </template>
     </el-drawer>
@@ -285,7 +419,9 @@
               :value="scene.id"
             />
           </el-select>
-          <p v-if="!sceneOptions.length" class="form-tip">当前没有可用的检测场景，请先创建或初始化检测场景。</p>
+          <p v-if="!sceneOptions.length" class="form-tip">
+            当前没有可用的检测场景，请先创建或初始化检测场景。
+          </p>
         </el-form-item>
         <el-form-item label="版本号" required>
           <el-input v-model.trim="modelImportForm.version" placeholder="例如 checkout-model-v1" />
@@ -294,7 +430,10 @@
           <el-input v-model.trim="modelImportForm.name" placeholder="例如 收银检测模型 v1" />
         </el-form-item>
         <el-form-item label="模型来源" required>
-          <el-radio-group v-model="modelImportForm.source_mode" @change="handleModelSourceModeChange">
+          <el-radio-group
+            v-model="modelImportForm.source_mode"
+            @change="handleModelSourceModeChange"
+          >
             <el-radio-button value="upload">上传 best.pt</el-radio-button>
             <el-radio-button value="path">服务器文件路径</el-radio-button>
           </el-radio-group>
@@ -321,7 +460,9 @@
             v-model.trim="modelImportForm.source_path"
             placeholder="例如 D:\\models\\best.pt 或 /opt/models/best.pt"
           />
-          <p class="form-tip">路径必须能被后端所在机器访问；浏览器所在电脑与后端是同一台机器时可直接填写本机绝对路径。</p>
+          <p class="form-tip">
+            路径必须能被后端所在机器访问；浏览器所在电脑与后端是同一台机器时可直接填写本机绝对路径。
+          </p>
         </el-form-item>
         <el-form-item label="导入后启用">
           <div class="model-import-switches">
@@ -330,7 +471,12 @@
           </div>
         </el-form-item>
         <el-form-item label="说明">
-          <el-input v-model="modelImportForm.description" type="textarea" :rows="3" placeholder="可填写模型来源、适用范围等信息" />
+          <el-input
+            v-model="modelImportForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="可填写模型来源、适用范围等信息"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -340,36 +486,67 @@
           :loading="modelImportSubmitting"
           :disabled="!sceneOptions.length"
           @click="submitModelImport"
-        >开始导入</el-button>
+          >开始导入</el-button
+        >
       </template>
     </el-dialog>
 
-    <el-dialog v-model="baselineVisible" title="导入基线 dataset" width="640px" append-to-body :close-on-click-modal="false">
+    <el-dialog
+      v-model="baselineVisible"
+      title="导入基线 dataset"
+      width="640px"
+      append-to-body
+      :close-on-click-modal="false"
+    >
       <el-form :model="baselineForm" label-width="120px">
-        <el-form-item label="场景 ID"><el-input-number v-model="baselineForm.scene_id" :min="1" /></el-form-item>
-        <el-form-item label="源目录"><el-input v-model="baselineForm.source_path" placeholder="datasets/vision_pay 或集群绝对路径" /></el-form-item>
-        <el-form-item label="版本号"><el-input v-model="baselineForm.version" placeholder="baseline-v1" /></el-form-item>
+        <el-form-item label="场景 ID"
+          ><el-input-number v-model="baselineForm.scene_id" :min="1"
+        /></el-form-item>
+        <el-form-item label="源目录"
+          ><el-input
+            v-model="baselineForm.source_path"
+            placeholder="datasets/vision_pay 或集群绝对路径"
+        /></el-form-item>
+        <el-form-item label="版本号"
+          ><el-input v-model="baselineForm.version" placeholder="baseline-v1"
+        /></el-form-item>
         <el-form-item label="显示名称"><el-input v-model="baselineForm.name" /></el-form-item>
-        <el-form-item label="复制为托管版本"><el-switch v-model="baselineForm.copy_files" /></el-form-item>
-        <el-form-item label="设为当前"><el-switch v-model="baselineForm.set_current" /></el-form-item>
-        <el-alert title="导入会扫描 data.yaml、图片和 YOLO 标注，创建稳定 product_id/product_key 及 manifest 索引。" type="info" :closable="false" />
+        <el-form-item label="复制为托管版本"
+          ><el-switch v-model="baselineForm.copy_files"
+        /></el-form-item>
+        <el-form-item label="设为当前"
+          ><el-switch v-model="baselineForm.set_current"
+        /></el-form-item>
+        <el-alert
+          title="导入会扫描 data.yaml、图片和 YOLO 标注，创建稳定 product_id/product_key 及 manifest 索引。"
+          type="info"
+          :closable="false"
+        />
       </el-form>
       <template #footer>
         <el-button @click="baselineVisible = false">取消</el-button>
-        <el-button type="primary" :loading="workspaceSubmitting" @click="submitBaseline">开始导入</el-button>
+        <el-button type="primary" :loading="workspaceSubmitting" @click="submitBaseline"
+          >开始导入</el-button
+        >
       </template>
     </el-dialog>
 
     <el-dialog v-model="deriveVisible" title="新建派生版本" width="560px" append-to-body>
       <el-form :model="deriveForm" label-width="100px">
-        <el-form-item label="父版本"><el-input :model-value="deriveParent?.version || ''" disabled /></el-form-item>
+        <el-form-item label="父版本"
+          ><el-input :model-value="deriveParent?.version || ''" disabled
+        /></el-form-item>
         <el-form-item label="版本号"><el-input v-model="deriveForm.version" /></el-form-item>
         <el-form-item label="名称"><el-input v-model="deriveForm.name" /></el-form-item>
-        <el-form-item label="说明"><el-input v-model="deriveForm.description" type="textarea" /></el-form-item>
+        <el-form-item label="说明"
+          ><el-input v-model="deriveForm.description" type="textarea"
+        /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="deriveVisible = false">取消</el-button>
-        <el-button type="primary" :loading="workspaceSubmitting" @click="submitDerive">创建派生版本</el-button>
+        <el-button type="primary" :loading="workspaceSubmitting" @click="submitDerive"
+          >创建派生版本</el-button
+        >
       </template>
     </el-dialog>
 
@@ -384,22 +561,58 @@
       :close-on-click-modal="false"
       @closed="handleAddProductClosed"
     >
-      <el-form ref="productFormRef" :model="productForm" :rules="productRules" label-width="108px" class="product-setup-form">
+      <el-form
+        ref="productFormRef"
+        :model="productForm"
+        :rules="productRules"
+        label-width="108px"
+        class="product-setup-form"
+      >
         <el-form-item label="样本类型" prop="mode" required>
-          <el-radio-group v-model="productForm.mode" :disabled="Boolean(annotationStage)" @change="resetSampleFiles">
+          <el-radio-group
+            v-model="productForm.mode"
+            :disabled="Boolean(annotationStage)"
+            @change="resetSampleFiles"
+          >
             <el-radio-button value="train_new">新建商品训练图</el-radio-button>
             <el-radio-button value="train_existing">已有商品训练图</el-radio-button>
             <el-radio-button value="scene">val/test 结账场景</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <div v-if="productForm.mode === 'train_new'" class="product-setup-grid">
-          <el-form-item label="商品名称" prop="name" required><el-input v-model="productForm.name" :disabled="Boolean(annotationStage)" /></el-form-item>
-          <el-form-item label="类别名称" prop="class_name" required><el-input v-model="productForm.class_name" :disabled="Boolean(annotationStage)" placeholder="模型类别英文名" /></el-form-item>
-          <el-form-item label="价格" prop="unit_price" required><el-input-number v-model="productForm.unit_price" :disabled="Boolean(annotationStage)" :min="0" :precision="2" /></el-form-item>
-          <el-form-item label="商品条码"><el-input v-model="productForm.barcode" :disabled="Boolean(annotationStage)" clearable /></el-form-item>
+          <el-form-item label="商品名称" prop="name" required
+            ><el-input v-model="productForm.name" :disabled="Boolean(annotationStage)"
+          /></el-form-item>
+          <el-form-item label="类别名称" prop="class_name" required
+            ><el-input
+              v-model="productForm.class_name"
+              :disabled="Boolean(annotationStage)"
+              placeholder="模型类别英文名"
+          /></el-form-item>
+          <el-form-item label="价格" prop="unit_price" required
+            ><el-input-number
+              v-model="productForm.unit_price"
+              :disabled="Boolean(annotationStage)"
+              :min="0"
+              :precision="2"
+          /></el-form-item>
+          <el-form-item label="商品条码"
+            ><el-input v-model="productForm.barcode" :disabled="Boolean(annotationStage)" clearable
+          /></el-form-item>
         </div>
-        <el-form-item v-else-if="productForm.mode === 'train_existing'" label="已有商品" prop="existing_product_id" required>
-          <el-select v-model="productForm.existing_product_id" filterable :disabled="Boolean(annotationStage)" placeholder="搜索并选择 train 中已有商品" style="width: 100%">
+        <el-form-item
+          v-else-if="productForm.mode === 'train_existing'"
+          label="已有商品"
+          prop="existing_product_id"
+          required
+        >
+          <el-select
+            v-model="productForm.existing_product_id"
+            filterable
+            :disabled="Boolean(annotationStage)"
+            placeholder="搜索并选择 train 中已有商品"
+            style="width: 100%"
+          >
             <el-option
               v-for="item in availableProducts"
               :key="item.product_id"
@@ -416,7 +629,9 @@
             :class="{ invalid: sampleFolderError }"
           >
             <div class="split-folder-heading">
-              <strong><span v-if="split.required" class="required-star">*</span>{{ split.label }}</strong>
+              <strong
+                ><span v-if="split.required" class="required-star">*</span>{{ split.label }}</strong
+              >
               <span>{{ split.required ? '必填' : '可选' }}</span>
             </div>
             <label class="folder-select-button" :class="{ disabled: Boolean(annotationStage) }">
@@ -436,8 +651,11 @@
             <div class="split-folder-summary">
               <strong>{{ productFolderInfo[split.value].folderName || '未选择' }}</strong>
               <span>
-                {{ productFiles[split.value].length }} 张 · {{ formatBytes(productFolderInfo[split.value].totalBytes) }}
-                <template v-if="productFolderInfo[split.value].ignoredCount"> · 已忽略 {{ productFolderInfo[split.value].ignoredCount }} 个非图片文件</template>
+                {{ productFiles[split.value].length }} 张 ·
+                {{ formatBytes(productFolderInfo[split.value].totalBytes) }}
+                <template v-if="productFolderInfo[split.value].ignoredCount">
+                  · 已忽略 {{ productFolderInfo[split.value].ignoredCount }} 个非图片文件</template
+                >
               </span>
             </div>
             <div v-if="sampleFolderError" class="folder-error">{{ sampleFolderError }}</div>
@@ -445,10 +663,14 @@
         </div>
         <el-alert
           v-if="!annotationStage"
-          :title="productForm.mode === 'scene' ? '上传多商品结账场景' : '上传单一商品的多角度训练图'"
-          :description="productForm.mode === 'scene'
-            ? '只能选择 val 和/或 test 文件夹。请为每个商品手动画框，并从当前 train 商品目录中选择对应商品；不允许出现未知商品。'
-            : '只能选择 train 文件夹。每张图应只有当前这一种商品，可包含该商品的不同拍摄角度；所有检测框必须由用户手工绘制。'"
+          :title="
+            productForm.mode === 'scene' ? '上传多商品结账场景' : '上传单一商品的多角度训练图'
+          "
+          :description="
+            productForm.mode === 'scene'
+              ? '只能选择 val 和/或 test 文件夹。请为每个商品手动画框，并从当前 train 商品目录中选择对应商品；不允许出现未知商品。'
+              : '只能选择 train 文件夹。每张图应只有当前这一种商品，可包含该商品的不同拍摄角度；所有检测框必须由用户手工绘制。'
+          "
           type="info"
           :closable="false"
           show-icon
@@ -464,8 +686,12 @@
           <div class="review-summary">
             <el-tag>{{ annotationSummary.total }} 张图片</el-tag>
             <el-tag type="success">{{ annotationSummary.boxes }} 个框</el-tag>
-            <el-tag v-if="annotationSummary.pending" type="warning">待审核 {{ annotationSummary.pending }}</el-tag>
-            <el-tag v-if="annotationSummary.missing" type="danger">缺少框 {{ annotationSummary.missing }}</el-tag>
+            <el-tag v-if="annotationSummary.pending" type="warning"
+              >待审核 {{ annotationSummary.pending }}</el-tag
+            >
+            <el-tag v-if="annotationSummary.missing" type="danger"
+              >缺少框 {{ annotationSummary.missing }}</el-tag
+            >
           </div>
         </header>
 
@@ -476,7 +702,11 @@
               :key="item.image_id"
               type="button"
               class="annotation-thumbnail"
-              :class="{ active: index === activeAnnotationIndex, pending: !item.reviewed, missing: !item.boxes.length }"
+              :class="{
+                active: index === activeAnnotationIndex,
+                pending: !item.reviewed,
+                missing: !item.boxes.length,
+              }"
               @click="activeAnnotationIndex = index"
             >
               <img :src="item.previewUrl" :alt="item.filename" />
@@ -484,7 +714,10 @@
                 <strong>{{ item.filename }}</strong>
                 <small>{{ splitText(item.split) }} · {{ item.boxes.length }} 个框</small>
               </span>
-              <el-tag size="small" :type="item.reviewed ? 'success' : item.boxes.length ? 'warning' : 'danger'">
+              <el-tag
+                size="small"
+                :type="item.reviewed ? 'success' : item.boxes.length ? 'warning' : 'danger'"
+              >
                 {{ item.reviewed ? '已确认' : item.boxes.length ? '待确认' : '需绘制' }}
               </el-tag>
             </button>
@@ -494,9 +727,14 @@
             <div class="active-image-heading">
               <div>
                 <strong>{{ activeAnnotationImage.filename }}</strong>
-                <span>{{ activeAnnotationImage.width }} × {{ activeAnnotationImage.height }} · {{ splitText(activeAnnotationImage.split) }}</span>
+                <span
+                  >{{ activeAnnotationImage.width }} × {{ activeAnnotationImage.height }} ·
+                  {{ splitText(activeAnnotationImage.split) }}</span
+                >
               </div>
-              <el-tag :type="activeAnnotationImage.reviewed ? 'success' : 'warning'">{{ activeAnnotationImage.reviewed ? '已完成人工标注' : '待人工标注' }}</el-tag>
+              <el-tag :type="activeAnnotationImage.reviewed ? 'success' : 'warning'">{{
+                activeAnnotationImage.reviewed ? '已完成人工标注' : '待人工标注'
+              }}</el-tag>
             </div>
             <DatasetBoxEditor
               :model-value="activeAnnotationImage.boxes"
@@ -507,10 +745,22 @@
               @update:model-value="updateActiveBoxes"
               @change="markActiveAnnotationReviewed"
             />
-            <div v-if="productForm.mode === 'scene' && activeAnnotationImage.boxes.length" class="box-product-assignments">
-              <div v-for="(box, boxIndex) in activeAnnotationImage.boxes" :key="boxIndex" class="box-product-row">
+            <div
+              v-if="productForm.mode === 'scene' && activeAnnotationImage.boxes.length"
+              class="box-product-assignments"
+            >
+              <div
+                v-for="(box, boxIndex) in activeAnnotationImage.boxes"
+                :key="boxIndex"
+                class="box-product-row"
+              >
                 <span>检测框 {{ boxIndex + 1 }}</span>
-                <el-select v-model="box.product_id" filterable placeholder="选择该框中的商品" @change="markBoxProductChanged">
+                <el-select
+                  v-model="box.product_id"
+                  filterable
+                  placeholder="选择该框中的商品"
+                  @change="markBoxProductChanged"
+                >
                   <el-option
                     v-for="item in availableProducts"
                     :key="item.product_id"
@@ -521,8 +771,12 @@
               </div>
             </div>
             <div class="active-review-actions">
-              <span v-if="!activeAnnotationImage.boxes.length">请在图片上拖动鼠标绘制至少一个检测框。</span>
-              <span v-else-if="productForm.mode === 'scene' && activeImageUnassignedBoxes">还有 {{ activeImageUnassignedBoxes }} 个框没有选择商品。</span>
+              <span v-if="!activeAnnotationImage.boxes.length"
+                >请在图片上拖动鼠标绘制至少一个检测框。</span
+              >
+              <span v-else-if="productForm.mode === 'scene' && activeImageUnassignedBoxes"
+                >还有 {{ activeImageUnassignedBoxes }} 个框没有选择商品。</span
+              >
               <span v-else>确认所有框都准确覆盖商品后，点击确认当前图片。</span>
               <el-button
                 type="success"
@@ -537,7 +791,12 @@
       </section>
       <template #footer>
         <el-button @click="addProductVisible = false">取消</el-button>
-        <el-button v-if="annotationStage" :disabled="workspaceSubmitting" @click="restartAnnotationStage">重新选择图片</el-button>
+        <el-button
+          v-if="annotationStage"
+          :disabled="workspaceSubmitting"
+          @click="restartAnnotationStage"
+          >重新选择图片</el-button
+        >
         <el-button
           v-if="!annotationStage"
           type="primary"
@@ -550,7 +809,9 @@
           v-else
           type="primary"
           :loading="workspaceSubmitting"
-          :disabled="annotationSummary.pending > 0 || annotationSummary.missing > 0 || unassignedBoxCount > 0"
+          :disabled="
+            annotationSummary.pending > 0 || annotationSummary.missing > 0 || unassignedBoxCount > 0
+          "
           @click="submitAddProduct"
         >
           确认标注并添加样本
@@ -581,9 +842,19 @@
       <el-table :data="filteredDeleteProducts" border max-height="430" empty-text="没有匹配的商品">
         <el-table-column prop="class_index" label="class_id" width="88" />
         <el-table-column prop="product_id" label="product_id" width="100" />
-        <el-table-column prop="product_key" label="product_key" min-width="180" show-overflow-tooltip />
+        <el-table-column
+          prop="product_key"
+          label="product_key"
+          min-width="180"
+          show-overflow-tooltip
+        />
         <el-table-column prop="class_name" label="类别名" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="display_name" label="商品名称" min-width="140" show-overflow-tooltip />
+        <el-table-column
+          prop="display_name"
+          label="商品名称"
+          min-width="140"
+          show-overflow-tooltip
+        />
         <el-table-column label="操作" width="86" fixed="right">
           <template #default="{ row }">
             <el-button
@@ -648,7 +919,16 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck, Delete, Edit, Lock, Plus, Refresh, Search, UploadFilled } from '@element-plus/icons-vue'
+import {
+  CircleCheck,
+  Delete,
+  Edit,
+  Lock,
+  Plus,
+  Refresh,
+  Search,
+  UploadFilled,
+} from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
 import {
   annotationReviewSummary,
@@ -657,6 +937,7 @@ import {
 } from '@/utils/datasetAnnotationReview'
 import { collectProductFolderFiles } from '@/utils/datasetProductFiles'
 import { canArchiveDataset, canDeriveDataset, isDatasetDraft } from '@/utils/datasetLifecycle'
+import { confirmAction } from '@/utils/messageBox'
 import { beginVisionPetTask, getBackendErrorMessage } from '@/utils/visionPet'
 import { getScenes } from '@/api/history'
 import { getAgentHandoffApi, updateAgentHandoffApi } from '@/api/handoffs'
@@ -795,67 +1076,111 @@ const rules = {
 }
 const productRules = computed(() => ({
   mode: [{ required: true, message: '请选择样本类型', trigger: 'change' }],
-  name: productForm.value.mode === 'train_new' ? [{ required: true, whitespace: true, message: '请输入商品名称', trigger: ['blur', 'change'] }] : [],
-  class_name: productForm.value.mode === 'train_new' ? [{ required: true, whitespace: true, message: '请输入类别名称', trigger: ['blur', 'change'] }] : [],
-  unit_price: productForm.value.mode === 'train_new' ? [{ required: true, type: 'number', message: '请输入价格', trigger: ['blur', 'change'] }] : [],
-  existing_product_id: productForm.value.mode === 'train_existing' ? [{ required: true, message: '请选择已有商品', trigger: 'change' }] : [],
+  name:
+    productForm.value.mode === 'train_new'
+      ? [
+          {
+            required: true,
+            whitespace: true,
+            message: '请输入商品名称',
+            trigger: ['blur', 'change'],
+          },
+        ]
+      : [],
+  class_name:
+    productForm.value.mode === 'train_new'
+      ? [
+          {
+            required: true,
+            whitespace: true,
+            message: '请输入类别名称',
+            trigger: ['blur', 'change'],
+          },
+        ]
+      : [],
+  unit_price:
+    productForm.value.mode === 'train_new'
+      ? [{ required: true, type: 'number', message: '请输入价格', trigger: ['blur', 'change'] }]
+      : [],
+  existing_product_id:
+    productForm.value.mode === 'train_existing'
+      ? [{ required: true, message: '请选择已有商品', trigger: 'change' }]
+      : [],
 }))
 
 const currentDataset = computed(() => rows.value.find((item) => item.is_current))
-const operationFinished = computed(() => ['completed', 'failed'].includes(operationTask.value.status))
+const operationFinished = computed(() =>
+  ['completed', 'failed'].includes(operationTask.value.status),
+)
 const operationProgressStatus = computed(() => {
   if (operationTask.value.status === 'completed') return 'success'
   if (operationTask.value.status === 'failed') return 'exception'
   return undefined
 })
-const operationStatusText = computed(() => ({
-  pending: '等待处理',
-  running: '正在处理',
-  completed: '操作完成',
-  failed: '操作失败',
-}[operationTask.value.status] || '正在处理'))
+const operationStatusText = computed(
+  () =>
+    ({
+      pending: '等待处理',
+      running: '正在处理',
+      completed: '操作完成',
+      failed: '操作失败',
+    })[operationTask.value.status] || '正在处理',
+)
 const annotationSummary = computed(() => annotationReviewSummary(annotationImages.value))
-const activeAnnotationImage = computed(() => annotationImages.value[activeAnnotationIndex.value] || null)
+const activeAnnotationImage = computed(
+  () => annotationImages.value[activeAnnotationIndex.value] || null,
+)
 const availableProducts = computed(() => productDataset.value?.classes || [])
-const sampleSplitOptions = computed(() => (
+const sampleSplitOptions = computed(() =>
   productForm.value.mode === 'scene'
     ? [
         { value: 'val', label: '验证集场景文件夹', required: false },
         { value: 'test', label: '测试集场景文件夹', required: false },
       ]
-    : [{ value: 'train', label: '训练集图片文件夹', required: true }]
-))
+    : [{ value: 'train', label: '训练集图片文件夹', required: true }],
+)
 const sampleFolderError = computed(() => {
   if (productForm.value.mode === 'scene') {
-    return productFiles.value.val.length + productFiles.value.test.length > 0 ? '' : 'val 和 test 至少选择一个非空文件夹'
+    return productFiles.value.val.length + productFiles.value.test.length > 0
+      ? ''
+      : 'val 和 test 至少选择一个非空文件夹'
   }
   return productFiles.value.train.length ? '' : '训练集文件夹至少需要一张图片'
 })
-const unassignedBoxCount = computed(() => (
+const unassignedBoxCount = computed(() =>
   productForm.value.mode === 'scene'
-    ? annotationImages.value.reduce((count, image) => count + image.boxes.filter((box) => !box.product_id).length, 0)
-    : 0
-))
-const activeImageUnassignedBoxes = computed(() => (
+    ? annotationImages.value.reduce(
+        (count, image) => count + image.boxes.filter((box) => !box.product_id).length,
+        0,
+      )
+    : 0,
+)
+const activeImageUnassignedBoxes = computed(() =>
   productForm.value.mode === 'scene'
     ? activeAnnotationImage.value?.boxes.filter((box) => !box.product_id).length || 0
-    : 0
-))
-const canConfirmActiveImage = computed(() => Boolean(
-  activeAnnotationImage.value?.boxes.length && activeImageUnassignedBoxes.value === 0
-))
+    : 0,
+)
+const canConfirmActiveImage = computed(() =>
+  Boolean(activeAnnotationImage.value?.boxes.length && activeImageUnassignedBoxes.value === 0),
+)
 const filteredDeleteProducts = computed(() => {
   const products = deleteProductDataset.value?.classes || []
   const query = productSearch.value.trim().toLowerCase()
   if (!query) return products
-  return products.filter((item) => [
-    item.product_id,
-    item.product_key,
-    item.class_index,
-    item.category_id,
-    item.class_name,
-    item.display_name,
-  ].some((value) => String(value ?? '').toLowerCase().includes(query)))
+  return products.filter((item) =>
+    [
+      item.product_id,
+      item.product_key,
+      item.class_index,
+      item.category_id,
+      item.class_name,
+      item.display_name,
+    ].some((value) =>
+      String(value ?? '')
+        .toLowerCase()
+        .includes(query),
+    ),
+  )
 })
 const statusCount = computed(() => ({
   draft: rows.value.filter((item) => item.status === 'draft').length,
@@ -866,23 +1191,27 @@ const statusCount = computed(() => ({
 }))
 
 function statusText(status) {
-  return {
-    draft: '草稿',
-    pending_train: '待训练',
-    training: '训练中',
-    published: '已发布',
-    archived: '已归档',
-  }[status] || status
+  return (
+    {
+      draft: '草稿',
+      pending_train: '待训练',
+      training: '训练中',
+      published: '已发布',
+      archived: '已归档',
+    }[status] || status
+  )
 }
 
 function statusType(status) {
-  return {
-    draft: 'warning',
-    pending_train: 'primary',
-    training: 'warning',
-    published: 'success',
-    archived: 'info',
-  }[status] || 'info'
+  return (
+    {
+      draft: 'warning',
+      pending_train: 'primary',
+      training: 'warning',
+      published: 'success',
+      archived: 'info',
+    }[status] || 'info'
+  )
 }
 
 function formatTime(value) {
@@ -1076,7 +1405,10 @@ async function runDatasetOperation(title, startTask) {
       }
       task = await getDatasetOperationStatusApi(task.task_id)
       operationTask.value = { title, ...task, progress: Number(task.progress || 0) }
-      petTask.update({ message: `${title}：${task.message || '正在处理'}`, progress: task.progress })
+      petTask.update({
+        message: `${title}：${task.message || '正在处理'}`,
+        progress: task.progress,
+      })
     }
     if (task.status === 'failed') {
       finishPetTask({
@@ -1123,12 +1455,12 @@ function openDeriveDialog(row) {
 
 async function submitDerive() {
   if (!deriveParent.value || !deriveForm.value.version || !deriveForm.value.name) return
-  const result = await runDatasetOperation('创建派生版本', () => (
+  const result = await runDatasetOperation('创建派生版本', () =>
     deriveDatasetVersionTaskApi(deriveParent.value.id, {
       ...deriveForm.value,
       description: deriveForm.value.description || null,
-    })
-  ))
+    }),
+  )
   if (!result?.dataset) return
   deriveVisible.value = false
   ElMessage.success('派生版本已创建，可开始增删商品')
@@ -1159,11 +1491,14 @@ async function resetSampleFiles() {
 function setProductSplitFolder(split, event) {
   const selection = collectProductFolderFiles(event.target.files)
   productFiles.value = { ...productFiles.value, [split]: selection.files }
-  productFolderInfo.value = { ...productFolderInfo.value, [split]: {
-    folderName: selection.folderName,
-    ignoredCount: selection.ignoredCount,
-    totalBytes: selection.totalBytes,
-  } }
+  productFolderInfo.value = {
+    ...productFolderInfo.value,
+    [split]: {
+      folderName: selection.folderName,
+      ignoredCount: selection.ignoredCount,
+      totalBytes: selection.totalBytes,
+    },
+  }
   event.target.value = ''
   if (!selection.totalImages) ElMessage.warning('所选文件夹中没有支持的图片')
 }
@@ -1191,8 +1526,13 @@ async function discardCurrentAnnotationStage() {
 
 async function handleAddProductClosed() {
   await discardCurrentAnnotationStage()
-  if (activeHandoff.value && !['completed', 'cancelled', 'expired'].includes(activeHandoff.value.status)) {
-    await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, { status: 'cancelled' }).catch(() => {})
+  if (
+    activeHandoff.value &&
+    !['completed', 'cancelled', 'expired'].includes(activeHandoff.value.status)
+  ) {
+    await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, { status: 'cancelled' }).catch(
+      () => {},
+    )
   }
   activeHandoff.value = null
   productFiles.value = { train: [], val: [], test: [] }
@@ -1232,11 +1572,16 @@ async function generateProductAnnotations() {
         },
       })
     }
-    activeAnnotationIndex.value = Math.max(0, annotationImages.value.findIndex((item) => !item.reviewed))
+    activeAnnotationIndex.value = Math.max(
+      0,
+      annotationImages.value.findIndex((item) => !item.reviewed),
+    )
     ElMessage.info(`已载入 ${staged.total_images} 张图片，请逐张手工绘制检测框`)
   } catch (error) {
     if (staged?.staging_token) {
-      await discardDatasetProductStageApi(productDataset.value.id, staged.staging_token).catch(() => {})
+      await discardDatasetProductStageApi(productDataset.value.id, staged.staging_token).catch(
+        () => {},
+      )
     }
     throw error
   } finally {
@@ -1263,7 +1608,9 @@ function markBoxProductChanged() {
 function confirmActiveAnnotation() {
   if (!canConfirmActiveImage.value) return
   activeAnnotationImage.value.reviewed = true
-  const nextPending = annotationImages.value.findIndex((item, index) => index > activeAnnotationIndex.value && !item.reviewed)
+  const nextPending = annotationImages.value.findIndex(
+    (item, index) => index > activeAnnotationIndex.value && !item.reviewed,
+  )
   if (nextPending >= 0) activeAnnotationIndex.value = nextPending
 }
 
@@ -1280,7 +1627,11 @@ async function openDeleteProductDialog(dataset) {
 
 async function submitAddProduct() {
   if (!productDataset.value || !annotationStage.value) return
-  if (annotationSummary.value.pending || annotationSummary.value.missing || unassignedBoxCount.value) {
+  if (
+    annotationSummary.value.pending ||
+    annotationSummary.value.missing ||
+    unassignedBoxCount.value
+  ) {
     ElMessage.warning('请先完成所有图片的检测框和商品标注')
     return
   }
@@ -1298,9 +1649,9 @@ async function submitAddProduct() {
       },
     })
   }
-  const result = await runDatasetOperation('添加人工标注样本并更新数据集', () => (
-    commitDatasetProductTaskApi(productDataset.value.id, payload)
-  ))
+  const result = await runDatasetOperation('添加人工标注样本并更新数据集', () =>
+    commitDatasetProductTaskApi(productDataset.value.id, payload),
+  )
   if (!result?.dataset) {
     if (activeHandoff.value) {
       activeHandoff.value = await updateAgentHandoffApi(activeHandoff.value.handoff_uuid, {
@@ -1335,20 +1686,30 @@ async function submitAddProduct() {
 }
 
 async function deleteProductMapping(dataset, mapping) {
-  await ElMessageBox.confirm(
+  const confirmed = await confirmAction(
     `将从派生版本删除 product_id=${mapping.product_id} 的全部标注，并重排后续 class_id。单商品图片会删除；多商品场景仍有其他框时会保留。是否继续？`,
     '删除商品样本',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+    {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      customClass: 'app-confirm-dialog',
+    },
   )
+  if (!confirmed) return
+
   deletingProductId.value = mapping.product_id
   try {
-    const result = await runDatasetOperation(`删除商品 ${mapping.display_name || mapping.class_name}`, () => (
-      deleteDatasetProductTaskApi(dataset.id, mapping.product_id, true)
-    ))
+    const result = await runDatasetOperation(
+      `删除商品 ${mapping.display_name || mapping.class_name}`,
+      () => deleteDatasetProductTaskApi(dataset.id, mapping.product_id, true),
+    )
     if (!result?.dataset) return
     deleteProductDataset.value = result.dataset
     if (detail.value?.id === result.dataset.id) detail.value = result.dataset
-    ElMessage.success(`已删除 ${result.annotations_deleted} 个标注、${result.images_deleted} 张空样本图片并重建索引`)
+    ElMessage.success(
+      `已删除 ${result.annotations_deleted} 个标注、${result.images_deleted} 张空样本图片并重建索引`,
+    )
     await fetchDatasets()
   } finally {
     deletingProductId.value = null
@@ -1446,11 +1807,13 @@ async function validateRow(row) {
 }
 
 async function freezeRow(row) {
-  await ElMessageBox.confirm(
+  const confirmed = await confirmAction(
     `冻结 ${row.version} 后将不能再修改目录、统计和类别映射。是否继续？`,
     '冻结数据集版本',
     { type: 'warning', confirmButtonText: '冻结', cancelButtonText: '取消' },
   )
+  if (!confirmed) return
+
   await freezeDatasetVersionApi(row.id, checkFilesystem.value)
   ElMessage.success('数据集版本已冻结')
   await fetchDatasets()
@@ -1461,17 +1824,26 @@ async function archiveRow(row) {
   if (row.active_model_count > 0) {
     message += `该数据集下还有 ${row.active_model_count} 个活跃模型，归档后会一并归档。`
   }
-  await ElMessageBox.confirm(message, '归档数据集', { type: 'warning' })
+  const confirmed = await confirmAction(message, '归档数据集', { type: 'warning' })
+  if (!confirmed) return
+
   await archiveDatasetVersionApi(row.id)
   ElMessage.success('数据集已归档')
   await fetchDatasets()
 }
 
 async function deleteRow(row) {
-  await ElMessageBox.confirm(`确定删除草稿 ${row.version} 吗？`, '删除草稿', { type: 'warning' })
-  const result = await runDatasetOperation(`删除草稿 ${row.version}`, () => (
-    deleteDatasetVersionTaskApi(row.id)
-  ))
+  const confirmed = await confirmAction(`确定删除草稿 ${row.version} 吗？`, '删除草稿', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+    customClass: 'app-confirm-dialog',
+  })
+  if (!confirmed) return
+
+  const result = await runDatasetOperation(`删除草稿 ${row.version}`, () =>
+    deleteDatasetVersionTaskApi(row.id),
+  )
   if (!result) return
   ElMessage.success('草稿已删除')
   await fetchDatasets()
@@ -1498,14 +1870,17 @@ onMounted(async () => {
     }
     const context = handoff.context || {}
     activeHandoff.value = handoff
-    await openAddProductDialog({ id: context.dataset_id }, {
-      mode: context.mode,
-      existing_product_id: context.existing_product_id,
-      name: context.name || '',
-      class_name: context.class_name || '',
-      unit_price: context.unit_price,
-      barcode: context.barcode || '',
-    })
+    await openAddProductDialog(
+      { id: context.dataset_id },
+      {
+        mode: context.mode,
+        existing_product_id: context.existing_product_id,
+        name: context.name || '',
+        class_name: context.class_name || '',
+        unit_price: context.unit_price,
+        barcode: context.barcode || '',
+      },
+    )
     if (handoff.status === 'ready_for_handoff' || handoff.status === 'failed') {
       activeHandoff.value = await updateAgentHandoffApi(handoffId, { status: 'selecting_files' })
     }
@@ -1545,7 +1920,9 @@ onMounted(async () => {
   flex-shrink: 0;
   gap: 10px;
 
-  :deep(.el-button + .el-button) { margin-left: 0; }
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
+  }
 }
 
 .summary-grid {
@@ -1562,7 +1939,8 @@ onMounted(async () => {
   background: $surface-color;
   box-shadow: $shadow-sm;
 
-  span, small {
+  span,
+  small {
     display: block;
     color: $text-secondary;
   }
@@ -1607,7 +1985,9 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
 
-  :deep(.el-button + .el-button) { margin-left: 0; }
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
+  }
 }
 
 .filters {
@@ -1703,7 +2083,8 @@ onMounted(async () => {
 }
 
 .split-cell {
-  strong, span {
+  strong,
+  span {
     display: block;
   }
 
@@ -1737,7 +2118,10 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background-color 0.18s ease;
 
   &:hover,
   &:focus-visible {
@@ -1877,7 +2261,7 @@ onMounted(async () => {
   color: $primary-color;
   background: $primary-soft;
   cursor: pointer;
-  transition: .2s ease;
+  transition: 0.2s ease;
 
   &:hover {
     border-color: $primary-hover;
@@ -1949,7 +2333,9 @@ onMounted(async () => {
   border: 1px solid $border-color;
   border-radius: 10px;
   background: $surface-color;
-  transition: border-color .2s ease, box-shadow .2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &.invalid {
     border-color: $danger-color;
@@ -1986,7 +2372,8 @@ onMounted(async () => {
   border-radius: 7px;
   background: $surface-muted;
 
-  strong, span {
+  strong,
+  span {
     display: block;
     overflow-wrap: anywhere;
   }
@@ -2106,7 +2493,8 @@ onMounted(async () => {
 .thumbnail-copy {
   min-width: 0;
 
-  strong, small {
+  strong,
+  small {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2137,7 +2525,8 @@ onMounted(async () => {
   gap: 12px;
   margin-bottom: 10px;
 
-  strong, span {
+  strong,
+  span {
     display: block;
   }
 
@@ -2272,7 +2661,8 @@ onMounted(async () => {
     background: color-mix(in srgb, $danger-color 10%, transparent);
   }
 
-  strong, span {
+  strong,
+  span {
     display: block;
   }
 

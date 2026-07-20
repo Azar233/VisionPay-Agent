@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingsPage from '@/views/SettingsPage.vue'
 import { getAgentInstructions, updateAgentInstructions, updateProfile } from '@/api/user'
 
-
 vi.mock('@/api/auth', () => ({
   getUserInfoApi: vi.fn().mockResolvedValue({
     username: 'operator',
@@ -27,7 +26,6 @@ vi.mock('@/api/user', () => ({
   updateProfile: vi.fn(),
   uploadAvatar: vi.fn(),
 }))
-
 
 describe('SettingsPage Agent 自定义指令', () => {
   beforeEach(() => {
@@ -58,7 +56,9 @@ describe('SettingsPage Agent 自定义指令', () => {
     })
     await flushPromises()
 
-    const instructionsTab = wrapper.findAll('button').find((button) => button.text().includes('自定义指令'))
+    const instructionsTab = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('自定义指令'))
     await instructionsTab.trigger('click')
 
     const textarea = wrapper.get('textarea[aria-label="Agent 自定义指令"]')
@@ -89,9 +89,11 @@ describe('SettingsPage Agent 自定义指令', () => {
     await save.trigger('click')
     await flushPromises()
 
-    expect(updateProfile).toHaveBeenCalledWith(expect.objectContaining({
-      nickname: '小蓝',
-      email: 'operator@example.com',
-    }))
+    expect(updateProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nickname: '小蓝',
+        email: 'operator@example.com',
+      }),
+    )
   })
 })

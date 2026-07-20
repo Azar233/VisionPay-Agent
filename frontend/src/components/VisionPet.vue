@@ -134,23 +134,23 @@ const petPositionStyle = computed(() => ({
   transform: `translate3d(${position.value.x}px, ${position.value.y}px, 0)`,
 }))
 
-const bubblePositionStyle = computed(() => (
+const bubblePositionStyle = computed(() =>
   bubblePosition.value
     ? {
         left: `${bubblePosition.value.x}px`,
         top: `${bubblePosition.value.y}px`,
       }
-    : undefined
-))
+    : undefined,
+)
 const hasBubblePosition = computed(() => bubblePosition.value !== null)
 
 // Only dataset background operations provide a numeric progress value.
 // Treat missing legacy/HMR state as no progress so normal chat only shows text.
-const petProgress = computed(() => (
+const petProgress = computed(() =>
   petStore.showProgress && Number.isFinite(petStore.progress)
     ? Math.max(0, Math.min(100, Math.round(petStore.progress)))
-    : null
-))
+    : null,
+)
 
 const spriteStyle = computed(() => {
   const isWorking = petStore.state === 'working'
@@ -169,11 +169,11 @@ const stateLabels = {
   error: '报错',
 }
 
-const ariaLabel = computed(() => (
+const ariaLabel = computed(() =>
   petStore.message
     ? `VisionPay 桌宠：${petStore.message}${petProgress.value !== null ? `，进度 ${petProgress.value}%` : ''}`
-    : `VisionPay 桌宠，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`
-))
+    : `VisionPay 桌宠，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`,
+)
 
 function petBounds() {
   const rect = petRoot.value?.getBoundingClientRect()
@@ -186,8 +186,14 @@ function petBounds() {
 function clampPosition(nextPosition) {
   const { width, height } = petBounds()
   return {
-    x: Math.min(Math.max(EDGE_GAP, nextPosition.x), Math.max(EDGE_GAP, window.innerWidth - width - EDGE_GAP)),
-    y: Math.min(Math.max(EDGE_GAP, nextPosition.y), Math.max(EDGE_GAP, window.innerHeight - height - EDGE_GAP)),
+    x: Math.min(
+      Math.max(EDGE_GAP, nextPosition.x),
+      Math.max(EDGE_GAP, window.innerWidth - width - EDGE_GAP),
+    ),
+    y: Math.min(
+      Math.max(EDGE_GAP, nextPosition.y),
+      Math.max(EDGE_GAP, window.innerHeight - height - EDGE_GAP),
+    ),
   }
 }
 
@@ -222,12 +228,11 @@ function updateBubblePosition() {
   const belowSpace = viewportBottom - belowTopY
   const vertical = aboveSpace >= bubbleHeight || aboveSpace >= belowSpace ? 'above' : 'below'
 
-  const desiredLeft = horizontal === 'right'
-    ? position.value.x + sideInset
-    : position.value.x + petWidth - sideInset - bubbleWidth
-  const desiredTop = vertical === 'below'
-    ? belowTopY
-    : aboveBottomY - bubbleHeight
+  const desiredLeft =
+    horizontal === 'right'
+      ? position.value.x + sideInset
+      : position.value.x + petWidth - sideInset - bubbleWidth
+  const desiredTop = vertical === 'below' ? belowTopY : aboveBottomY - bubbleHeight
   const clampedLeft = Math.min(
     Math.max(viewportLeft, desiredLeft),
     Math.max(viewportLeft, viewportRight - bubbleWidth),
@@ -353,22 +358,31 @@ function keepOnScreen() {
   nextTick(updateBubblePosition)
 }
 
-watch(() => petStore.state, () => scheduleFrame(0))
-watch(() => petStore.sizePercent, () => nextTick(keepOnScreen))
-watch(() => petStore.visible, (visible) => {
-  if (visible) nextTick(keepOnScreen)
-})
-watch(() => petStore.messageId, () => {
-  nextTick(() => {
-    position.value = clampPosition(position.value)
-    observeBubbleSize()
-    updateBubblePosition()
-  })
-})
 watch(
-  [() => position.value.x, () => position.value.y],
-  () => nextTick(updateBubblePosition),
+  () => petStore.state,
+  () => scheduleFrame(0),
 )
+watch(
+  () => petStore.sizePercent,
+  () => nextTick(keepOnScreen),
+)
+watch(
+  () => petStore.visible,
+  (visible) => {
+    if (visible) nextTick(keepOnScreen)
+  },
+)
+watch(
+  () => petStore.messageId,
+  () => {
+    nextTick(() => {
+      position.value = clampPosition(position.value)
+      observeBubbleSize()
+      updateBubblePosition()
+    })
+  },
+)
+watch([() => position.value.x, () => position.value.y], () => nextTick(updateBubblePosition))
 
 onMounted(async () => {
   await nextTick()
@@ -414,7 +428,7 @@ onBeforeUnmount(() => {
   -webkit-user-select: none;
   will-change: transform;
   outline: none;
-  filter: drop-shadow(0 14px 20px rgba(0, 0, 0, .12));
+  filter: drop-shadow(0 14px 20px rgba(0, 0, 0, 0.12));
 }
 
 .vision-pet:focus-visible .pet-stage {
@@ -424,7 +438,7 @@ onBeforeUnmount(() => {
 
 .vision-pet.is-dragging {
   cursor: grabbing;
-  filter: drop-shadow(0 20px 26px rgba(0, 0, 0, .2));
+  filter: drop-shadow(0 20px 26px rgba(0, 0, 0, 0.2));
 }
 
 .pet-stage {
@@ -432,11 +446,15 @@ onBeforeUnmount(() => {
   width: var(--pet-stage-width, 112px);
   height: var(--pet-stage-height, 160px);
   flex: 0 0 var(--pet-stage-height, 160px);
-  transition: transform .2s cubic-bezier(.2, .8, .2, 1);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.vision-pet:hover .pet-stage { transform: translateY(-3px); }
-.vision-pet.is-dragging .pet-stage { transform: scale(1.03) translateY(-5px); }
+.vision-pet:hover .pet-stage {
+  transform: translateY(-3px);
+}
+.vision-pet.is-dragging .pet-stage {
+  transform: scale(1.03) translateY(-5px);
+}
 
 .pet-sprite {
   position: absolute;
@@ -456,7 +474,7 @@ onBeforeUnmount(() => {
   bottom: 4px;
   height: 9px;
   border-radius: 50%;
-  background: rgba(20, 26, 47, .14);
+  background: rgba(20, 26, 47, 0.14);
   filter: blur(5px);
 }
 
@@ -483,17 +501,55 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.pet-message.opens-right { border-radius: 14px 14px 14px 4px; }
-.pet-message.opens-below { border-radius: 4px 14px 14px 14px; }
-.pet-message.opens-right.opens-below { border-radius: 14px 4px 14px 14px; }
-.pet-message.is-positioned { right: auto; bottom: auto; }
+.pet-message.opens-right {
+  border-radius: 14px 14px 14px 4px;
+}
+.pet-message.opens-below {
+  border-radius: 4px 14px 14px 14px;
+}
+.pet-message.opens-right.opens-below {
+  border-radius: 14px 4px 14px 14px;
+}
+.pet-message.is-positioned {
+  right: auto;
+  bottom: auto;
+}
 
-.pet-message-content { min-width: min(172px, calc(100vw - 74px)); max-width: 100%; }
-.pet-message-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.pet-message-heading > span { min-width: 0; overflow-wrap: anywhere; }
-.pet-message-heading strong { color: $primary-color; font-size: 12px; font-variant-numeric: tabular-nums; }
-.pet-progress { width: 100%; height: 4px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--vp-primary) 13%, transparent); }
-.pet-progress span { display: block; height: 100%; border-radius: inherit; background: $primary-color; transition: width .24s ease; }
+.pet-message-content {
+  min-width: min(172px, calc(100vw - 74px));
+  max-width: 100%;
+}
+.pet-message-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pet-message-heading > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pet-message-heading strong {
+  color: $primary-color;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pet-progress {
+  width: 100%;
+  height: 4px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vp-primary) 13%, transparent);
+}
+.pet-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: $primary-color;
+  transition: width 0.24s ease;
+}
 
 .pet-status-dot {
   width: 7px;
@@ -514,15 +570,26 @@ onBeforeUnmount(() => {
 }
 
 .pet-bubble-enter-active,
-.pet-bubble-leave-active { transition: opacity .2s ease, transform .2s ease; }
+.pet-bubble-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
 .pet-bubble-enter-from,
-.pet-bubble-leave-to { opacity: 0; transform: translateY(6px) scale(.98); }
+.pet-bubble-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+}
 
 @media (max-width: 768px) {
-  .pet-message { right: 4px; }
+  .pet-message {
+    right: 4px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pet-stage { transition: none; }
+  .pet-stage {
+    transition: none;
+  }
 }
 </style>

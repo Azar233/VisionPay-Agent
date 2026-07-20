@@ -6,10 +6,10 @@ import MarkdownIt from 'markdown-it'
 
 // 创建 markdown-it 实例，启用 HTML 支持
 const md = new MarkdownIt({
-  html: false,        // 禁用 HTML 标签（安全考虑）
-  linkify: true,      // 自动将 URL 转为链接
-  typographer: true,  // 启用排版优化（如引号替换）
-  breaks: true,       // 将 \n 转为 <br>
+  html: false, // 禁用 HTML 标签（安全考虑）
+  linkify: true, // 自动将 URL 转为链接
+  typographer: true, // 启用排版优化（如引号替换）
+  breaks: true, // 将 \n 转为 <br>
 })
 
 /**
@@ -27,7 +27,8 @@ export function renderMarkdown(text) {
 
   // markdown-it 默认没有表格容器。为横向空间不足的会话内容增加滚动容器，
   // 使较宽的结果表不会挤压聊天列或把单元格拆得难以阅读。
-  return md.render(cleanText)
+  return md
+    .render(cleanText)
     .replace(/<table>/g, '<div class="markdown-table-wrap"><table>')
     .replace(/<\/table>/g, '</table></div>')
 }

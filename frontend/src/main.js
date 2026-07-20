@@ -19,7 +19,7 @@ import App from './App.vue'
 import router from './router'
 import pinia from './stores'
 import { initializeTheme } from '@/composables/useTheme'
-import { setupErrorReporting } from "@/utils/errorReporter";
+import { setupErrorReporting } from '@/utils/errorReporter'
 
 initializeTheme()
 
@@ -27,10 +27,10 @@ initializeTheme()
 const app = createApp(App)
 
 // 注册插件
-setupErrorReporting(app);               // 注册全局错误监控
-app.use(pinia)                          // 状态管理
-app.use(router)                         // 路由
-app.use(ElementPlus, { locale: zhCn })  // UI 组件库（中文语言包）
+setupErrorReporting(app) // 注册全局错误监控
+app.use(pinia) // 状态管理
+app.use(router) // 路由
+app.use(ElementPlus, { locale: zhCn }) // UI 组件库（中文语言包）
 
 // 挂载到 DOM
 app.mount('#app')

@@ -47,7 +47,10 @@ describe('chat attachment queue', () => {
       const file = image(`current-${index}.jpg`)
       return { id: chatAttachmentKey(file), file }
     })
-    const result = prepareChatAttachmentAdditions(current, [image('accepted.jpg'), image('overflow.jpg')])
+    const result = prepareChatAttachmentAdditions(current, [
+      image('accepted.jpg'),
+      image('overflow.jpg'),
+    ])
 
     expect(result.additions.map((file) => file.name)).toEqual(['accepted.jpg'])
     expect(result.overflowCount).toBe(1)

@@ -78,9 +78,13 @@ export function deleteDatasetProductApi(datasetId, productId, deactivateProduct 
 }
 
 export function deleteDatasetProductTaskApi(datasetId, productId, deactivateProduct = true) {
-  return request.post(`/datasets/${datasetId}/products/${productId}/delete-task`, {
-    deactivate_product: deactivateProduct,
-  }, { skipPetError: true })
+  return request.post(
+    `/datasets/${datasetId}/products/${productId}/delete-task`,
+    {
+      deactivate_product: deactivateProduct,
+    },
+    { skipPetError: true },
+  )
 }
 
 export function updateDatasetVersionApi(datasetId, data) {

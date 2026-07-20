@@ -8,8 +8,9 @@ html,
 body {
   width: 100%;
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 15px;
   color: var(--vp-text);
   background: var(--vp-bg);
@@ -21,19 +22,40 @@ body {
 
 input,
 textarea,
-[role="textbox"],
-[contenteditable]:not([contenteditable="false"]) {
+[role='textbox'],
+[contenteditable]:not([contenteditable='false']) {
   caret-color: auto;
 }
 
-#app { width: 100%; height: 100%; }
-a { color: inherit; text-decoration: none; }
-ul, ol { list-style: none; }
-img { max-width: 100%; vertical-align: middle; }
-input, button, textarea { font: inherit; }
-button { -webkit-tap-highlight-color: transparent; }
+#app {
+  width: 100%;
+  height: 100%;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+ul,
+ol {
+  list-style: none;
+}
+img {
+  max-width: 100%;
+  vertical-align: middle;
+}
+input,
+button,
+textarea {
+  font: inherit;
+}
+button {
+  -webkit-tap-highlight-color: transparent;
+}
 
-::selection { color: #fff; background: var(--vp-primary); }
+::selection {
+  color: #fff;
+  background: var(--vp-primary);
+}
 
 :focus-visible {
   outline: 3px solid rgba(43, 127, 255, 0.34);

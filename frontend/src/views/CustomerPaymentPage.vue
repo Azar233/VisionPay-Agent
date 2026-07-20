@@ -4,16 +4,33 @@
       <button type="button" @click="router.push('/checkout')">
         <el-icon><ArrowLeft /></el-icon><span>返回商品确认</span>
       </button>
-      <div class="brand"><span><img src="/favicon.svg" alt="VisionPay" /></span><strong>VisionPay 自助结算</strong></div>
-      <div class="secure-label"><el-icon><Lock /></el-icon>模拟支付环境</div>
+      <div class="brand">
+        <span><img src="/favicon.svg" alt="VisionPay" /></span><strong>VisionPay 自助结算</strong>
+      </div>
+      <div class="secure-label">
+        <el-icon><Lock /></el-icon>模拟支付环境
+      </div>
     </header>
 
     <main class="payment-main">
       <div class="payment-steps" aria-label="结算进度">
-        <div class="done"><span><el-icon><Check /></el-icon></span><b>扫描商品</b></div><i></i>
-        <div class="done"><span><el-icon><Check /></el-icon></span><b>确认清单</b></div><i></i>
+        <div class="done">
+          <span
+            ><el-icon><Check /></el-icon></span
+          ><b>扫描商品</b>
+        </div>
+        <i></i>
+        <div class="done">
+          <span
+            ><el-icon><Check /></el-icon></span
+          ><b>确认清单</b>
+        </div>
+        <i></i>
         <div :class="{ active: paymentStatus === 'pending', done: paymentStatus === 'paid' }">
-          <span><el-icon v-if="paymentStatus === 'paid'"><Check /></el-icon><template v-else>3</template></span><b>完成付款</b>
+          <span
+            ><el-icon v-if="paymentStatus === 'paid'"><Check /></el-icon
+            ><template v-else>3</template></span
+          ><b>完成付款</b>
         </div>
       </div>
 
@@ -26,19 +43,33 @@
 
       <section v-else class="payment-layout card-container">
         <aside class="order-panel">
-          <div class="panel-heading"><span>订单摘要</span><small>{{ orderNumber }}</small></div>
+          <div class="panel-heading">
+            <span>订单摘要</span><small>{{ orderNumber }}</small>
+          </div>
           <div class="order-items">
             <article v-for="item in paymentOrder.items" :key="item.class_id">
               <div class="item-mark">{{ itemMark(item) }}</div>
-              <div><strong>{{ itemName(item) }}</strong><span>数量 x {{ item.count }}</span></div>
+              <div>
+                <strong>{{ itemName(item) }}</strong
+                ><span>数量 x {{ item.count }}</span>
+              </div>
               <b>{{ formatMoney(item.subtotal) }}</b>
             </article>
           </div>
-          <div class="order-count"><span>商品总数</span><strong>{{ paymentOrder.item_count }} 件</strong></div>
-          <div class="order-total"><div><span>应付金额</span><small>金额由服务端商品价格生成</small></div><strong>{{ formatMoney(paymentOrder.amount) }}</strong></div>
+          <div class="order-count">
+            <span>商品总数</span><strong>{{ paymentOrder.item_count }} 件</strong>
+          </div>
+          <div class="order-total">
+            <div><span>应付金额</span><small>金额由服务端商品价格生成</small></div>
+            <strong>{{ formatMoney(paymentOrder.amount) }}</strong>
+          </div>
           <dl class="order-meta">
-            <div><dt>创建时间</dt><dd>{{ formatDate(paymentOrder.created_at) }}</dd></div>
-            <div><dt>支付状态</dt>
+            <div>
+              <dt>创建时间</dt>
+              <dd>{{ formatDate(paymentOrder.created_at) }}</dd>
+            </div>
+            <div>
+              <dt>支付状态</dt>
               <dd
                 class="vp-pill"
                 :class="{
@@ -46,35 +77,58 @@
                   'vp-pill--warning': paymentStatus === 'pending',
                   'vp-pill--danger': paymentStatus === 'expired',
                 }"
-              >{{ statusText }}</dd>
+              >
+                {{ statusText }}
+              </dd>
             </div>
           </dl>
         </aside>
 
         <section class="pay-panel" aria-live="polite">
           <div v-if="paymentStatus === 'paid'" class="result-state success-state">
-            <span class="result-icon"><el-icon><CircleCheckFilled /></el-icon></span>
-            <small>PAYMENT COMPLETE</small><h1>付款成功</h1><strong>{{ formatMoney(paymentOrder.amount) }}</strong>
+            <span class="result-icon"
+              ><el-icon><CircleCheckFilled /></el-icon
+            ></span>
+            <small>PAYMENT COMPLETE</small>
+            <h1>付款成功</h1>
+            <strong>{{ formatMoney(paymentOrder.amount) }}</strong>
             <p>手机端确认结果已同步至当前收银端。</p>
-            <div class="result-reference"><span>订单编号</span><b>{{ orderNumber }}</b></div>
+            <div class="result-reference">
+              <span>订单编号</span><b>{{ orderNumber }}</b>
+            </div>
             <button type="button" @click="startNewCheckout">完成并开始新结算</button>
           </div>
 
           <div v-else-if="paymentStatus === 'expired'" class="result-state expired-state">
-            <span class="result-icon"><el-icon><Clock /></el-icon></span>
-            <small>QR CODE EXPIRED</small><h1>支付二维码已过期</h1><p>为避免订单串单，请生成新的支付二维码。</p>
-            <button type="button" :disabled="regenerating" @click="regenerateOrder">{{ regenerating ? '正在生成' : '重新生成二维码' }}</button>
+            <span class="result-icon"
+              ><el-icon><Clock /></el-icon
+            ></span>
+            <small>QR CODE EXPIRED</small>
+            <h1>支付二维码已过期</h1>
+            <p>为避免订单串单，请生成新的支付二维码。</p>
+            <button type="button" :disabled="regenerating" @click="regenerateOrder">
+              {{ regenerating ? '正在生成' : '重新生成二维码' }}
+            </button>
           </div>
 
           <template v-else>
             <div class="pay-heading">
-              <div><small>模拟扫码支付</small><h1>请使用手机扫描二维码</h1></div>
+              <div>
+                <small>模拟扫码支付</small>
+                <h1>请使用手机扫描二维码</h1>
+              </div>
               <span class="vp-pill vp-pill--warning">等待付款</span>
             </div>
 
             <div class="qr-section">
               <div class="qr-frame">
-                <img v-if="qrDataUrl" :src="qrDataUrl" width="220" height="220" alt="模拟支付二维码" />
+                <img
+                  v-if="qrDataUrl"
+                  :src="qrDataUrl"
+                  width="220"
+                  height="220"
+                  alt="模拟支付二维码"
+                />
                 <el-icon v-else class="qr-loading"><Loading /></el-icon>
               </div>
               <div class="qr-copy">
@@ -85,9 +139,19 @@
               </div>
             </div>
 
-            <div class="waiting-status"><el-icon><Loading /></el-icon><div><strong>正在等待手机端确认</strong><span>页面将自动同步支付结果，无需手动刷新</span></div></div>
-            <a class="test-link" :href="localPaymentUrl" target="_blank" rel="noopener">在本机打开测试付款页</a>
-            <p class="simulation-note"><el-icon><InfoFilled /></el-icon>本功能仅模拟支付状态，不会调用微信、支付宝或产生真实资金交易。</p>
+            <div class="waiting-status">
+              <el-icon><Loading /></el-icon>
+              <div>
+                <strong>正在等待手机端确认</strong><span>页面将自动同步支付结果，无需手动刷新</span>
+              </div>
+            </div>
+            <a class="test-link" :href="localPaymentUrl" target="_blank" rel="noopener"
+              >在本机打开测试付款页</a
+            >
+            <p class="simulation-note">
+              <el-icon><InfoFilled /></el-icon
+              >本功能仅模拟支付状态，不会调用微信、支付宝或产生真实资金交易。
+            </p>
           </template>
         </section>
       </section>
@@ -99,8 +163,21 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
-import { ArrowLeft, Check, CircleCheckFilled, Clock, InfoFilled, Loading, Lock, Warning } from '@element-plus/icons-vue'
-import { createMockPaymentOrderApi, getMockPaymentOrderApi, getMockPaymentStatusApi } from '@/api/checkout'
+import {
+  ArrowLeft,
+  Check,
+  CircleCheckFilled,
+  Clock,
+  InfoFilled,
+  Loading,
+  Lock,
+  Warning,
+} from '@element-plus/icons-vue'
+import {
+  createMockPaymentOrderApi,
+  getMockPaymentOrderApi,
+  getMockPaymentStatusApi,
+} from '@/api/checkout'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,25 +191,59 @@ let statusTimer = null
 let countdownTimer = null
 
 const paymentStatus = computed(() => paymentOrder.value?.status || '')
-const statusText = computed(() => ({ pending: '等待付款', paid: '付款成功', expired: '已过期' })[paymentStatus.value] || '未知')
-const orderNumber = computed(() => paymentOrder.value ? `VP-${paymentOrder.value.order_uuid.slice(0, 8).toUpperCase()}` : '--')
-const paymentPath = computed(() => paymentOrder.value ? `/mock-pay/${paymentOrder.value.payment_token}` : '')
-const publicOrigin = (import.meta.env.VITE_CHECKOUT_PUBLIC_ORIGIN || window.location.origin).replace(/\/$/, '')
+const statusText = computed(
+  () =>
+    ({ pending: '等待付款', paid: '付款成功', expired: '已过期' })[paymentStatus.value] || '未知',
+)
+const orderNumber = computed(() =>
+  paymentOrder.value ? `VP-${paymentOrder.value.order_uuid.slice(0, 8).toUpperCase()}` : '--',
+)
+const paymentPath = computed(() =>
+  paymentOrder.value ? `/mock-pay/${paymentOrder.value.payment_token}` : '',
+)
+const publicOrigin = (
+  import.meta.env.VITE_CHECKOUT_PUBLIC_ORIGIN || window.location.origin
+).replace(/\/$/, '')
 const paymentUrl = computed(() => `${publicOrigin}${paymentPath.value}`)
 const localPaymentUrl = computed(() => `${window.location.origin}${paymentPath.value}`)
-const remainingSeconds = computed(() => Math.max(0, Math.ceil((new Date(paymentOrder.value?.expires_at || 0).getTime() - now.value) / 1000)))
-const countdownText = computed(() => `${String(Math.floor(remainingSeconds.value / 60)).padStart(2, '0')}:${String(remainingSeconds.value % 60).padStart(2, '0')}`)
+const remainingSeconds = computed(() =>
+  Math.max(
+    0,
+    Math.ceil((new Date(paymentOrder.value?.expires_at || 0).getTime() - now.value) / 1000),
+  ),
+)
+const countdownText = computed(
+  () =>
+    `${String(Math.floor(remainingSeconds.value / 60)).padStart(2, '0')}:${String(remainingSeconds.value % 60).padStart(2, '0')}`,
+)
 
-function loadSession(key) { try { return JSON.parse(sessionStorage.getItem(key)) || null } catch { return null } }
-function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
-function formatDate(value) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '--' }
-function itemName(item) { return item.name || item.sku_name || item.class_name || `商品 ${item.class_id}` }
-function itemMark(item) { return itemName(item).slice(0, 2).toUpperCase() }
+function loadSession(key) {
+  try {
+    return JSON.parse(sessionStorage.getItem(key)) || null
+  } catch {
+    return null
+  }
+}
+function formatMoney(value) {
+  return `¥ ${Number(value || 0).toFixed(2)}`
+}
+function formatDate(value) {
+  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '--'
+}
+function itemName(item) {
+  return item.name || item.sku_name || item.class_name || `商品 ${item.class_id}`
+}
+function itemMark(item) {
+  return itemName(item).slice(0, 2).toUpperCase()
+}
 
 async function renderQrCode() {
   if (!paymentPath.value) return
   qrDataUrl.value = await QRCode.toDataURL(paymentUrl.value, {
-    width: 440, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#111827', light: '#ffffff' },
+    width: 440,
+    margin: 2,
+    errorCorrectionLevel: 'M',
+    color: { dark: '#111827', light: '#ffffff' },
   })
 }
 
@@ -146,17 +257,23 @@ async function pollStatus() {
     if (status.status !== 'pending') stopTimers()
   } catch {
     // Keep the current state and retry on the next interval.
-  } finally { polling.value = false }
+  } finally {
+    polling.value = false
+  }
 }
 
 function startTimers() {
   stopTimers()
-  countdownTimer = window.setInterval(() => { now.value = Date.now() }, 1000)
+  countdownTimer = window.setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
   statusTimer = window.setInterval(pollStatus, 1000)
 }
 function stopTimers() {
-  window.clearInterval(statusTimer); window.clearInterval(countdownTimer)
-  statusTimer = null; countdownTimer = null
+  window.clearInterval(statusTimer)
+  window.clearInterval(countdownTimer)
+  statusTimer = null
+  countdownTimer = null
 }
 
 async function regenerateOrder() {
@@ -168,15 +285,21 @@ async function regenerateOrder() {
       cartOrder.value.modelVersionId || null,
     )
     sessionStorage.setItem('visionpay-payment-order', JSON.stringify(paymentOrder.value))
-    router.replace({ path: '/checkout/payment', query: { token: paymentOrder.value.payment_token } })
+    router.replace({
+      path: '/checkout/payment',
+      query: { token: paymentOrder.value.payment_token },
+    })
     now.value = Date.now()
     await renderQrCode()
     startTimers()
-  } finally { regenerating.value = false }
+  } finally {
+    regenerating.value = false
+  }
 }
 
 function startNewCheckout() {
-  sessionStorage.removeItem('visionpay-payment-order'); sessionStorage.removeItem('visionpay-checkout-order')
+  sessionStorage.removeItem('visionpay-payment-order')
+  sessionStorage.removeItem('visionpay-checkout-order')
   router.push('/checkout')
 }
 
@@ -229,7 +352,7 @@ onBeforeUnmount(stopTimers)
     background: transparent;
     cursor: pointer;
     font-size: 14px;
-    transition: color .2s;
+    transition: color 0.2s;
 
     &:hover {
       color: $primary-color;
@@ -335,7 +458,7 @@ onBeforeUnmount(stopTimers)
 
 .payment-layout {
   display: grid;
-  grid-template-columns: minmax(320px, .78fr) minmax(460px, 1.22fr);
+  grid-template-columns: minmax(320px, 0.78fr) minmax(460px, 1.22fr);
   padding: 0;
   overflow: hidden;
 }
@@ -619,7 +742,9 @@ onBeforeUnmount(stopTimers)
   text-decoration: none;
   font-size: 12px;
   font-weight: 700;
-  transition: border-color .2s, background .2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
 
   &:hover {
     border-color: $primary-color;
@@ -696,14 +821,14 @@ onBeforeUnmount(stopTimers)
   background: $primary-color;
   cursor: pointer;
   font-weight: 800;
-  transition: background .2s;
+  transition: background 0.2s;
 
   &:hover {
     background: $primary-hover;
   }
 
   &:disabled {
-    opacity: .55;
+    opacity: 0.55;
     cursor: wait;
   }
 }
@@ -761,7 +886,9 @@ onBeforeUnmount(stopTimers)
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

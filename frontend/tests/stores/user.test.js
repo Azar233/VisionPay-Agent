@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useUserStore } from '@/stores/user'
 
-
 describe('user display name', () => {
   beforeEach(() => {
     localStorage.clear()

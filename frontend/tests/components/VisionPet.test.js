@@ -128,7 +128,9 @@ describe('VisionPet', () => {
 
     expect(useVisionPetStore().state).toBe('working')
     expect(wrapper.attributes('aria-label')).toContain('正在分析任务')
-    expect(wrapper.find('.pet-sprite').attributes('style')).toContain('visionpay-pet-working-v1.png')
+    expect(wrapper.find('.pet-sprite').attributes('style')).toContain(
+      'visionpay-pet-working-v1.png',
+    )
     expect(wrapper.find('.pet-sprite').attributes('style')).toContain('400% 100%')
     expect(wrapper.find('[role="progressbar"]').attributes('aria-valuenow')).toBe('37')
     expect(wrapper.find('.pet-progress span').attributes('style')).toContain('37%')
@@ -172,12 +174,16 @@ describe('VisionPet', () => {
     const listener = (event) => updates.push(event.detail)
     window.addEventListener(VISION_PET_TASK_EVENT, listener)
 
-    expect(notifyVisionPetBackendError({
-      response: { status: 422, data: { message: '参数验证失败' } },
-    })).toBe(false)
-    expect(notifyVisionPetBackendError({
-      response: { status: 503, data: { message: '知识库构建失败' } },
-    })).toBe(true)
+    expect(
+      notifyVisionPetBackendError({
+        response: { status: 422, data: { message: '参数验证失败' } },
+      }),
+    ).toBe(false)
+    expect(
+      notifyVisionPetBackendError({
+        response: { status: 503, data: { message: '知识库构建失败' } },
+      }),
+    ).toBe(true)
     expect(notifyVisionPetBackendError(new Error('网络已断开'))).toBe(true)
 
     window.removeEventListener(VISION_PET_TASK_EVENT, listener)
@@ -217,7 +223,11 @@ describe('VisionPet', () => {
     await wrapper.vm.$nextTick()
     await Promise.resolve()
 
-    const task = beginVisionPetTask({ message: '正在创建派生版本', progress: 0, showProgress: true })
+    const task = beginVisionPetTask({
+      message: '正在创建派生版本',
+      progress: 0,
+      showProgress: true,
+    })
     task.update({ message: '正在复制数据集文件', progress: 64 })
     await wrapper.vm.$nextTick()
 

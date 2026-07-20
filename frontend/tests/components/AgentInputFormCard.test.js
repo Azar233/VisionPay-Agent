@@ -32,8 +32,13 @@ describe('AgentInputFormCard', () => {
           purpose: 'catalog.list_prices',
           fields: [
             {
-              name: 'dataset_version_id', label: '数据集版本 ID', type: 'integer',
-              required: true, minimum: 1, maximum: null, step: null,
+              name: 'dataset_version_id',
+              label: '数据集版本 ID',
+              type: 'integer',
+              required: true,
+              minimum: 1,
+              maximum: null,
+              step: null,
             },
           ],
         },
@@ -58,7 +63,11 @@ describe('AgentInputFormCard', () => {
       fields: [
         { name: 'epochs', label: '训练轮数', type: 'integer', required: true, default: 100 },
         {
-          name: 'optimizer', label: '优化器', type: 'select', required: true, default: 'SGD',
+          name: 'optimizer',
+          label: '优化器',
+          type: 'select',
+          required: true,
+          default: 'SGD',
           options: [{ label: 'SGD', value: 'SGD' }],
         },
       ],
@@ -85,11 +94,17 @@ describe('AgentInputFormCard', () => {
           title: '补充样品参数',
           fields: [
             {
-              name: 'mode', label: '模式', type: 'select', default: 'scene',
+              name: 'mode',
+              label: '模式',
+              type: 'select',
+              default: 'scene',
               options: [{ label: '场景', value: 'scene' }],
             },
             {
-              name: 'name', label: '商品名称', type: 'text', required: true,
+              name: 'name',
+              label: '商品名称',
+              type: 'text',
+              required: true,
               visible_when: { field: 'mode', equals: 'train_new' },
             },
           ],

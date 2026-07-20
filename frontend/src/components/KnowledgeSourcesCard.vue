@@ -6,7 +6,9 @@
       :aria-expanded="expanded"
       @click="expanded = !expanded"
     >
-      <span class="sources-mark"><el-icon><Collection /></el-icon></span>
+      <span class="sources-mark"
+        ><el-icon><Collection /></el-icon
+      ></span>
       <span class="sources-heading">
         <strong>{{ sources.length ? `参考知识 ${sources.length}` : '未找到可靠参考资料' }}</strong>
         <small>{{ summaryText }}</small>
@@ -52,11 +54,13 @@ const props = defineProps({
 })
 
 const expanded = ref(false)
-const sources = computed(() => Array.isArray(props.payload?.sources) ? props.payload.sources : [])
-const retrievals = computed(() => Array.isArray(props.payload?.retrievals) ? props.payload.retrievals : [])
-const rewrittenQuery = computed(() => (
-  retrievals.value.find((item) => item?.rewritten_query)?.rewritten_query || ''
-))
+const sources = computed(() => (Array.isArray(props.payload?.sources) ? props.payload.sources : []))
+const retrievals = computed(() =>
+  Array.isArray(props.payload?.retrievals) ? props.payload.retrievals : [],
+)
+const rewrittenQuery = computed(
+  () => retrievals.value.find((item) => item?.rewritten_query)?.rewritten_query || '',
+)
 const domainSummary = computed(() => {
   const domains = [...new Set(sources.value.map((item) => item.domain).filter(Boolean))]
   return domains.slice(0, 2).join(' · ') || '通用'
@@ -99,7 +103,9 @@ function similarityText(value) {
   text-align: left;
   cursor: pointer;
 }
-.sources-summary:hover { background: color-mix(in srgb, $text-primary 4%, transparent); }
+.sources-summary:hover {
+  background: color-mix(in srgb, $text-primary 4%, transparent);
+}
 .sources-mark {
   width: 32px;
   height: 32px;
@@ -110,9 +116,20 @@ function similarityText(value) {
   color: $success-color;
   background: color-mix(in srgb, $success-color 8%, transparent);
 }
-.sources-heading { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sources-heading strong { font-size: 12px; font-weight: 680; }
-.sources-heading small { color: $text-placeholder; font-size: 9px; }
+.sources-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sources-heading strong {
+  font-size: 12px;
+  font-weight: 680;
+}
+.sources-heading small {
+  color: $text-placeholder;
+  font-size: 9px;
+}
 .source-domains {
   padding: 3px 7px;
   border: 1px solid $border-color;
@@ -121,13 +138,39 @@ function similarityText(value) {
   font-size: 9px;
   text-transform: capitalize;
 }
-.expand-icon { color: $text-placeholder; transition: transform .18s ease; }
-.expand-icon.expanded { transform: rotate(180deg); }
-.sources-body { padding: 0 13px 13px; border-top: 1px solid $border-color; }
-.retrieval-query { padding: 11px 0 9px; }
-.retrieval-query span { color: $text-placeholder; font-size: 9px; font-weight: 650; }
-.retrieval-query p { margin: 4px 0 0; color: $text-secondary; font-size: 10px; line-height: 1.55; }
-.source-list { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.expand-icon {
+  color: $text-placeholder;
+  transition: transform 0.18s ease;
+}
+.expand-icon.expanded {
+  transform: rotate(180deg);
+}
+.sources-body {
+  padding: 0 13px 13px;
+  border-top: 1px solid $border-color;
+}
+.retrieval-query {
+  padding: 11px 0 9px;
+}
+.retrieval-query span {
+  color: $text-placeholder;
+  font-size: 9px;
+  font-weight: 650;
+}
+.retrieval-query p {
+  margin: 4px 0 0;
+  color: $text-secondary;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .source-list li {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr);
@@ -148,25 +191,86 @@ function similarityText(value) {
   font-size: 9px;
   font-weight: 700;
 }
-.source-copy { min-width: 0; }
-.source-title { display: flex; align-items: center; gap: 6px; }
-.source-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 650; text-transform: capitalize; }
-.source-title span { flex: 0 0 auto; color: $success-color; font-size: 8px; }
-.source-title em { margin-left: auto; color: $text-placeholder; font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; }
-.source-copy > small { display: block; margin-top: 3px; overflow: hidden; color: $text-placeholder; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.source-copy > p { margin: 7px 0 0; color: $text-secondary; font-size: 10px; line-height: 1.6; }
-.empty .sources-mark { color: $text-placeholder; border-color: $border-color; background: transparent; }
-.empty-copy { margin: 11px 0 0; color: $text-secondary; font-size: 10px; line-height: 1.6; }
+.source-copy {
+  min-width: 0;
+}
+.source-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.source-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: capitalize;
+}
+.source-title span {
+  flex: 0 0 auto;
+  color: $success-color;
+  font-size: 8px;
+}
+.source-title em {
+  margin-left: auto;
+  color: $text-placeholder;
+  font-size: 9px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.source-copy > small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: $text-placeholder;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-copy > p {
+  margin: 7px 0 0;
+  color: $text-secondary;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.empty .sources-mark {
+  color: $text-placeholder;
+  border-color: $border-color;
+  background: transparent;
+}
+.empty-copy {
+  margin: 11px 0 0;
+  color: $text-secondary;
+  font-size: 10px;
+  line-height: 1.6;
+}
 
-:global(html.dark) .knowledge-sources-card { background: rgba(255,255,255,.025); border-color: rgba(255,255,255,.1); }
-:global(html.dark) .sources-summary:hover { background: rgba(255,255,255,.035); }
+:global(html.dark) .knowledge-sources-card {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+:global(html.dark) .sources-summary:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
 :global(html.dark) .sources-body,
-:global(html.dark) .source-list li { border-color: rgba(255,255,255,.1); }
-:global(html.dark) .source-list li { background: rgba(255,255,255,.035); }
-:global(html.dark) .source-index { background: rgba(255,255,255,.06); }
+:global(html.dark) .source-list li {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+:global(html.dark) .source-list li {
+  background: rgba(255, 255, 255, 0.035);
+}
+:global(html.dark) .source-index {
+  background: rgba(255, 255, 255, 0.06);
+}
 
 @media (max-width: 640px) {
-  .sources-summary { grid-template-columns: 32px minmax(0, 1fr) 18px; }
-  .source-domains { display: none; }
+  .sources-summary {
+    grid-template-columns: 32px minmax(0, 1fr) 18px;
+  }
+  .source-domains {
+    display: none;
+  }
 }
 </style>

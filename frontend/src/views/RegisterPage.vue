@@ -25,18 +25,10 @@
         @submit.prevent="handleRegister"
       >
         <el-form-item prop="username">
-          <el-input
-            v-model="registerForm.username"
-            placeholder="请输入用户名"
-            prefix-icon="User"
-          />
+          <el-input v-model="registerForm.username" placeholder="请输入用户名" prefix-icon="User" />
         </el-form-item>
         <el-form-item prop="email">
-          <el-input
-            v-model="registerForm.email"
-            placeholder="请输入邮箱"
-            prefix-icon="Message"
-          />
+          <el-input v-model="registerForm.email" placeholder="请输入邮箱" prefix-icon="Message" />
         </el-form-item>
         <el-form-item prop="password">
           <el-input
@@ -58,12 +50,7 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button
-            type="primary"
-            class="register-btn"
-            :loading="loading"
-            @click="handleRegister"
-          >
+          <el-button type="primary" class="register-btn" :loading="loading" @click="handleRegister">
             创建账号
           </el-button>
         </el-form-item>
@@ -155,7 +142,7 @@ async function handleRegister() {
   gap: 64px;
   padding: 48px max(32px, calc((100vw - 1120px) / 2));
   background:
-    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, .1), transparent 28%),
+    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, 0.1), transparent 28%),
     linear-gradient(180deg, $surface-color, $bg-color 72%);
 }
 
@@ -169,7 +156,7 @@ async function handleRegister() {
     font-weight: 600;
     line-height: 1.04;
     color: $text-primary;
-    letter-spacing: -.05em;
+    letter-spacing: -0.05em;
   }
 
   p {
@@ -214,7 +201,7 @@ async function handleRegister() {
   background: color-mix(in srgb, $surface-color 82%, transparent);
   border: 1px solid $border-color;
   border-radius: $border-radius-lg;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .1);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(24px) saturate(130%);
 }
 

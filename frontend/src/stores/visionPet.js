@@ -41,10 +41,13 @@ export const useVisionPetStore = defineStore('vision-pet', {
   actions: {
     savePreferences() {
       try {
-        globalThis.localStorage?.setItem(VISION_PET_PREFERENCES_KEY, JSON.stringify({
-          visible: this.visible,
-          sizePercent: this.sizePercent,
-        }))
+        globalThis.localStorage?.setItem(
+          VISION_PET_PREFERENCES_KEY,
+          JSON.stringify({
+            visible: this.visible,
+            sizePercent: this.sizePercent,
+          }),
+        )
       } catch {
         // Preference persistence is best-effort; the in-memory setting still applies.
       }
@@ -69,9 +72,10 @@ export const useVisionPetStore = defineStore('vision-pet', {
       this.setState(state)
       this.message = String(message || '')
       const numericProgress = Number(progress)
-      this.progress = progress !== null && progress !== '' && Number.isFinite(numericProgress)
-        ? Math.max(0, Math.min(100, Math.round(numericProgress)))
-        : null
+      this.progress =
+        progress !== null && progress !== '' && Number.isFinite(numericProgress)
+          ? Math.max(0, Math.min(100, Math.round(numericProgress)))
+          : null
       this.showProgress = Boolean(showProgress)
       this.messageId += 1
     },

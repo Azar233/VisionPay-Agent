@@ -12,4 +12,3 @@ export function canArchiveDataset(status) {
 export function canDeriveDataset(status) {
   return DERIVABLE_STATUSES.has(status)
 }
-

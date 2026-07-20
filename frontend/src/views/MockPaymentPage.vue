@@ -1,51 +1,101 @@
 <template>
   <div class="mock-pay-page">
     <header class="mobile-header">
-      <div class="brand"><span><img src="/favicon.svg" alt="VisionPay" /></span><strong>VisionPay</strong></div>
+      <div class="brand">
+        <span><img src="/favicon.svg" alt="VisionPay" /></span><strong>VisionPay</strong>
+      </div>
       <span class="demo-badge">模拟支付</span>
     </header>
 
     <main class="mobile-main" aria-live="polite">
-      <section v-if="loading" class="state-panel"><el-icon class="spin"><Loading /></el-icon><h1>正在读取订单</h1></section>
+      <section v-if="loading" class="state-panel">
+        <el-icon class="spin"><Loading /></el-icon>
+        <h1>正在读取订单</h1>
+      </section>
 
       <section v-else-if="loadError" class="state-panel error-state">
-        <el-icon><Warning /></el-icon><h1>{{ loadError }}</h1><p>请返回收银端重新生成二维码。</p>
+        <el-icon><Warning /></el-icon>
+        <h1>{{ loadError }}</h1>
+        <p>请返回收银端重新生成二维码。</p>
       </section>
 
       <section v-else-if="order.status === 'paid'" class="state-panel success-state">
-        <span><el-icon><CircleCheckFilled /></el-icon></span><small>PAYMENT COMPLETE</small><h1>模拟付款成功</h1>
-        <strong>{{ formatMoney(order.amount) }}</strong><p>收银端将在数秒内自动同步结果。</p>
-        <div class="success-order"><span>订单编号</span><b>{{ orderNumber }}</b></div>
+        <span
+          ><el-icon><CircleCheckFilled /></el-icon></span
+        ><small>PAYMENT COMPLETE</small>
+        <h1>模拟付款成功</h1>
+        <strong>{{ formatMoney(order.amount) }}</strong>
+        <p>收银端将在数秒内自动同步结果。</p>
+        <div class="success-order">
+          <span>订单编号</span><b>{{ orderNumber }}</b>
+        </div>
       </section>
 
       <section v-else-if="order.status === 'expired'" class="state-panel error-state">
-        <el-icon><Clock /></el-icon><h1>二维码已过期</h1><p>请返回收银端重新生成支付二维码。</p>
+        <el-icon><Clock /></el-icon>
+        <h1>二维码已过期</h1>
+        <p>请返回收银端重新生成支付二维码。</p>
       </section>
 
       <section v-else class="payment-shell card-container">
-        <div class="amount-section"><small>待支付金额</small><strong>{{ formatMoney(order.amount) }}</strong><span>{{ countdownText }} 后二维码失效</span></div>
+        <div class="amount-section">
+          <small>待支付金额</small><strong>{{ formatMoney(order.amount) }}</strong
+          ><span>{{ countdownText }} 后二维码失效</span>
+        </div>
 
         <div class="order-section">
-          <div class="section-title"><h1>订单明细</h1><span>{{ order.item_count }} 件商品</span></div>
+          <div class="section-title">
+            <h1>订单明细</h1>
+            <span>{{ order.item_count }} 件商品</span>
+          </div>
           <article v-for="item in order.items" :key="item.class_id">
-            <div><strong>{{ itemName(item) }}</strong><span>{{ formatMoney(item.unit_price) }} x {{ item.count }}</span></div><b>{{ formatMoney(item.subtotal) }}</b>
+            <div>
+              <strong>{{ itemName(item) }}</strong
+              ><span>{{ formatMoney(item.unit_price) }} x {{ item.count }}</span>
+            </div>
+            <b>{{ formatMoney(item.subtotal) }}</b>
           </article>
-          <div class="order-number"><span>订单编号</span><b>{{ orderNumber }}</b></div>
+          <div class="order-number">
+            <span>订单编号</span><b>{{ orderNumber }}</b>
+          </div>
         </div>
 
         <fieldset class="method-section">
           <legend>选择模拟支付方式</legend>
           <div>
-            <button type="button" :class="{ active: paymentMethod === 'wechat' }" :aria-pressed="paymentMethod === 'wechat'" @click="paymentMethod = 'wechat'"><el-icon><ChatDotRound /></el-icon><span>微信支付</span><i><el-icon v-if="paymentMethod === 'wechat'"><Check /></el-icon></i></button>
-            <button type="button" :class="{ active: paymentMethod === 'alipay' }" :aria-pressed="paymentMethod === 'alipay'" @click="paymentMethod = 'alipay'"><el-icon><Wallet /></el-icon><span>支付宝</span><i><el-icon v-if="paymentMethod === 'alipay'"><Check /></el-icon></i></button>
+            <button
+              type="button"
+              :class="{ active: paymentMethod === 'wechat' }"
+              :aria-pressed="paymentMethod === 'wechat'"
+              @click="paymentMethod = 'wechat'"
+            >
+              <el-icon><ChatDotRound /></el-icon><span>微信支付</span
+              ><i
+                ><el-icon v-if="paymentMethod === 'wechat'"><Check /></el-icon
+              ></i>
+            </button>
+            <button
+              type="button"
+              :class="{ active: paymentMethod === 'alipay' }"
+              :aria-pressed="paymentMethod === 'alipay'"
+              @click="paymentMethod = 'alipay'"
+            >
+              <el-icon><Wallet /></el-icon><span>支付宝</span
+              ><i
+                ><el-icon v-if="paymentMethod === 'alipay'"><Check /></el-icon
+              ></i>
+            </button>
           </div>
         </fieldset>
 
         <div v-if="confirmError" class="confirm-error" role="alert">{{ confirmError }}</div>
         <button class="confirm-button" type="button" :disabled="submitting" @click="confirmPayment">
-          <el-icon v-if="submitting" class="spin"><Loading /></el-icon>{{ submitting ? '正在确认' : `确认模拟支付 ${formatMoney(order.amount)}` }}
+          <el-icon v-if="submitting" class="spin"><Loading /></el-icon
+          >{{ submitting ? '正在确认' : `确认模拟支付 ${formatMoney(order.amount)}` }}
         </button>
-        <p class="simulation-note"><el-icon><InfoFilled /></el-icon>演示环境不会调用真实支付渠道，也不会产生资金交易。</p>
+        <p class="simulation-note">
+          <el-icon><InfoFilled /></el-icon>演示环境不会调用真实支付渠道，也不会产生资金交易。
+        </p>
       </section>
     </main>
   </div>
@@ -54,7 +104,16 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Check, CircleCheckFilled, Clock, InfoFilled, Loading, Wallet, Warning } from '@element-plus/icons-vue'
+import {
+  ChatDotRound,
+  Check,
+  CircleCheckFilled,
+  Clock,
+  InfoFilled,
+  Loading,
+  Wallet,
+  Warning,
+} from '@element-plus/icons-vue'
 import { confirmMockPaymentApi, getMockPaymentOrderApi } from '@/api/checkout'
 
 const route = useRoute()
@@ -67,22 +126,38 @@ const paymentMethod = ref('wechat')
 const now = ref(Date.now())
 let countdownTimer = null
 
-const orderNumber = computed(() => order.value ? `VP-${order.value.order_uuid.slice(0, 8).toUpperCase()}` : '--')
-const remainingSeconds = computed(() => Math.max(0, Math.ceil((new Date(order.value?.expires_at || 0).getTime() - now.value) / 1000)))
-const countdownText = computed(() => `${String(Math.floor(remainingSeconds.value / 60)).padStart(2, '0')}:${String(remainingSeconds.value % 60).padStart(2, '0')}`)
+const orderNumber = computed(() =>
+  order.value ? `VP-${order.value.order_uuid.slice(0, 8).toUpperCase()}` : '--',
+)
+const remainingSeconds = computed(() =>
+  Math.max(0, Math.ceil((new Date(order.value?.expires_at || 0).getTime() - now.value) / 1000)),
+)
+const countdownText = computed(
+  () =>
+    `${String(Math.floor(remainingSeconds.value / 60)).padStart(2, '0')}:${String(remainingSeconds.value % 60).padStart(2, '0')}`,
+)
 
-function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
-function itemName(item) { return item.name || item.sku_name || item.class_name || `商品 ${item.class_id}` }
+function formatMoney(value) {
+  return `¥ ${Number(value || 0).toFixed(2)}`
+}
+function itemName(item) {
+  return item.name || item.sku_name || item.class_name || `商品 ${item.class_id}`
+}
 
 async function loadOrder() {
   loading.value = true
   loadError.value = ''
   try {
     order.value = await getMockPaymentOrderApi(route.params.token)
-    if (order.value.status === 'pending') countdownTimer = window.setInterval(() => { now.value = Date.now() }, 1000)
+    if (order.value.status === 'pending')
+      countdownTimer = window.setInterval(() => {
+        now.value = Date.now()
+      }, 1000)
   } catch (error) {
     loadError.value = error.response?.status === 404 ? '支付订单不存在' : '暂时无法读取订单'
-  } finally { loading.value = false }
+  } finally {
+    loading.value = false
+  }
 }
 
 async function confirmPayment() {
@@ -95,7 +170,9 @@ async function confirmPayment() {
   } catch (error) {
     if (error.response?.status === 410) order.value = { ...order.value, status: 'expired' }
     else confirmError.value = '付款确认失败，请检查网络后重试。'
-  } finally { submitting.value = false }
+  } finally {
+    submitting.value = false
+  }
 }
 
 onMounted(loadOrder)
@@ -301,7 +378,10 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
     color: $text-primary;
     background: $surface-color;
     cursor: pointer;
-    transition: border-color .2s, color .2s, background .2s;
+    transition:
+      border-color 0.2s,
+      color 0.2s,
+      background 0.2s;
 
     &.active {
       border: 2px solid $primary-color;
@@ -351,14 +431,14 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
   cursor: pointer;
   font-size: 15px;
   font-weight: 800;
-  transition: background .2s;
+  transition: background 0.2s;
 
   &:active {
     background: $primary-hover;
   }
 
   &:disabled {
-    opacity: .62;
+    opacity: 0.62;
     cursor: wait;
   }
 }
@@ -468,7 +548,9 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

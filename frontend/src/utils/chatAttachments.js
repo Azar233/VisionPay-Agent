@@ -3,10 +3,19 @@ export const CHAT_ATTACHMENT_MAX_COUNT = 30
 const CHAT_ATTACHMENT_PATTERN = /\.(jpe?g|png|bmp|webp|zip|mp4|avi|mov|mkv)$/i
 
 export function chatAttachmentKey(file) {
-  return [file?.name || '', Number(file?.size || 0), Number(file?.lastModified || 0), file?.type || ''].join('::')
+  return [
+    file?.name || '',
+    Number(file?.size || 0),
+    Number(file?.lastModified || 0),
+    file?.type || '',
+  ].join('::')
 }
 
-export function prepareChatAttachmentAdditions(currentItems, fileList, maxCount = CHAT_ATTACHMENT_MAX_COUNT) {
+export function prepareChatAttachmentAdditions(
+  currentItems,
+  fileList,
+  maxCount = CHAT_ATTACHMENT_MAX_COUNT,
+) {
   const existingKeys = new Set((currentItems || []).map((item) => chatAttachmentKey(item.file)))
   const additions = []
   let unsupportedCount = 0

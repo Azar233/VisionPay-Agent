@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  canArchiveDataset,
-  canDeriveDataset,
-  isDatasetDraft,
-} from '@/utils/datasetLifecycle'
+import { canArchiveDataset, canDeriveDataset, isDatasetDraft } from '@/utils/datasetLifecycle'
 
 describe('dataset lifecycle actions', () => {
   it.each([
@@ -19,4 +15,3 @@ describe('dataset lifecycle actions', () => {
     expect(canDeriveDataset(status)).toBe(derive)
   })
 })
-

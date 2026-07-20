@@ -54,7 +54,6 @@ export function downloadTrainingResultsApi(taskUuid) {
   })
 }
 
-
 export function validateTrainingTaskApi(taskId, data) {
   return request.post(`/training/validate/${taskId}`, data, { timeout: 0 })
 }

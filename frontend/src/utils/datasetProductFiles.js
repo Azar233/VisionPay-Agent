@@ -29,7 +29,9 @@ export function collectProductFolderFiles(fileList) {
   const allFiles = Array.from(fileList || [])
   const files = allFiles
     .filter(isImage)
-    .sort((left, right) => relativePath(left).localeCompare(relativePath(right), undefined, { numeric: true }))
+    .sort((left, right) =>
+      relativePath(left).localeCompare(relativePath(right), undefined, { numeric: true }),
+    )
   const firstPath = relativePath(files[0] || allFiles[0])
 
   return {
@@ -45,7 +47,9 @@ export function partitionProductFolderFiles(fileList) {
   const allFiles = Array.from(fileList || [])
   const images = allFiles
     .filter(isImage)
-    .sort((left, right) => relativePath(left).localeCompare(relativePath(right), undefined, { numeric: true }))
+    .sort((left, right) =>
+      relativePath(left).localeCompare(relativePath(right), undefined, { numeric: true }),
+    )
   const folderName = relativePath(images[0]).split('/')[0] || ''
   const files = { train: [], val: [], test: [] }
   const hasExplicitSplit = images.some((file) => explicitSplit(file))
