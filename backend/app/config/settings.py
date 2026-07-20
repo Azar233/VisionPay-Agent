@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     IP_WEBCAM_URL: str = "http://10.172.52.70:8080"
     CAMERA_CONFIDENCE: float = 0.30
     CAMERA_IOU: float = 0.45
-    CAMERA_IMAGE_SIZE: int = 512
+    CAMERA_IMAGE_SIZE: int = 640
     CAMERA_TARGET_FPS: float = 25.0
     CAMERA_JPEG_QUALITY: int = 62
     CAMERA_OUTPUT_MAX_WIDTH: int = 960
