@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 from app.api.camera import configured_ip_webcam_url, normalize_ip_webcam_url
 from app.config.settings import settings
 from app.services.detection_service import DetectionServiceError, detection_service
+from app.services.realtime_stabilizer import RealtimeDetectionStabilizer
 from app.services.track_aggregator import TrackRegistry
 
 router = APIRouter(prefix="/api/detection", tags=["商品检测"])
@@ -323,6 +324,9 @@ async def camera_detection_ws(websocket: WebSocket):
         control_task = asyncio.create_task(_camera_control(websocket, stopped, reset_scan))
         frame_count = 0
         newly_confirmed: list[dict[str, Any]] = []
+        # 累计模式用 ByteTrack 做跨帧 ID 去重；瞬时模式回退到轻量的
+        # predict + IoU/EMA 稳定器，避免 track 的额外开销拖低帧率。
+        accumulate = options["accumulate"]
 
         def _new_registry() -> TrackRegistry:
             return TrackRegistry(
@@ -339,7 +343,15 @@ async def camera_detection_ws(websocket: WebSocket):
                 ),
             )
 
-        registry = _new_registry()
+        def _new_stabilizer() -> RealtimeDetectionStabilizer:
+            return RealtimeDetectionStabilizer(
+                min_hits=settings.CAMERA_STABILITY_MIN_HITS,
+                max_misses=settings.CAMERA_STABILITY_MAX_MISSES,
+                iou_threshold=settings.CAMERA_STABILITY_IOU,
+            )
+
+        registry = _new_registry() if accumulate else None
+        stabilizer = None if accumulate else _new_stabilizer()
         previous_result_at = time.perf_counter()
         frame_interval = 1 / max(0.5, settings.CAMERA_TARGET_FPS)
         last_sequence = 0
@@ -367,21 +379,25 @@ async def camera_detection_ws(websocket: WebSocket):
                 jpeg_quality=settings.CAMERA_JPEG_QUALITY,
                 output_max_width=settings.CAMERA_OUTPUT_MAX_WIDTH,
                 finalize=False,
-                tracking=True,
+                tracking=accumulate,
             )
             if reset_scan.is_set():
-                registry = _new_registry()
-                newly_confirmed.clear()
+                if registry is not None:
+                    registry = _new_registry()
+                    newly_confirmed.clear()
+                if stabilizer is not None:
+                    stabilizer = _new_stabilizer()
                 reset_scan.clear()
-            registry.update(sequence, time.perf_counter(), raw_result["detections"])
-            stable_detections = registry.active_tracks()
-            accumulate = options["accumulate"]
-            price_detections = None
-            if accumulate:
+            if registry is not None:
+                registry.update(sequence, time.perf_counter(), raw_result["detections"])
+                stable_detections = registry.active_tracks()
                 price_detections = [
                     {"class_id": record.class_id, "class_name": record.class_name}
                     for record in registry.confirmed_tracks()
                 ]
+            else:
+                stable_detections = stabilizer.update(raw_result["detections"])
+                price_detections = None
             result = await run_in_threadpool(
                 detection_service.finalize_realtime_frame,
                 frame,
@@ -393,8 +409,6 @@ async def camera_detection_ws(websocket: WebSocket):
             )
             frame_count += 1
             now = time.perf_counter()
-            confirmed_batch = list(newly_confirmed)
-            newly_confirmed.clear()
             result.update(
                 {
                     "type": "result",
@@ -405,11 +419,18 @@ async def camera_detection_ws(websocket: WebSocket):
                     "source_frame_sequence": sequence,
                     "raw_object_count": len(raw_result["detections"]),
                     "temporal_stabilized": True,
-                    "scan_total_objects": registry.total_unique,
-                    "scan_class_counts": registry.dedup_class_counts(),
-                    "new_confirmed": confirmed_batch,
                 }
             )
+            if registry is not None:
+                confirmed_batch = list(newly_confirmed)
+                newly_confirmed.clear()
+                result.update(
+                    {
+                        "scan_total_objects": registry.total_unique,
+                        "scan_class_counts": registry.dedup_class_counts(),
+                        "new_confirmed": confirmed_batch,
+                    }
+                )
             previous_result_at = now
             await websocket.send_json(result)
             remaining = frame_interval - (time.perf_counter() - cycle_started)
