@@ -2,7 +2,6 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import KnowledgeSourcesCard from '@/components/KnowledgeSourcesCard.vue'
 
-
 describe('KnowledgeSourcesCard', () => {
   it('shows structured sources and expands retrieval details', async () => {
     const wrapper = mount(KnowledgeSourcesCard, {

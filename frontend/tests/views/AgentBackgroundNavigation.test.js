@@ -91,7 +91,13 @@ describe('ChatPage background navigation', () => {
 
   it('turns off the agent activity indicator as soon as the response completes', async () => {
     const agentStore = useAgentStore()
-    const response = { role: 'assistant', content: '', loading: true, agent: 'dataset', parallelAgents: [] }
+    const response = {
+      role: 'assistant',
+      content: '',
+      loading: true,
+      agent: 'dataset',
+      parallelAgents: [],
+    }
     agentStore.messages = [response]
     agentStore.isLoading = true
 

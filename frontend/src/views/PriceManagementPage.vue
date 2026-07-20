@@ -23,17 +23,16 @@
           <div class="dataset-option">
             <span>{{ datasetOptionLabel(dataset) }}</span>
             <span v-if="dataset.is_current" class="vp-pill vp-pill--success">当前</span>
-            <span
-              v-else
-              :class="['vp-pill', `vp-pill--${datasetStatusType(dataset.status)}` ]"
-            >
+            <span v-else :class="['vp-pill', `vp-pill--${datasetStatusType(dataset.status)}`]">
               {{ datasetStatusText(dataset.status) }}
             </span>
           </div>
         </el-option>
       </el-select>
       <div v-if="selectedDataset" class="selected-dataset-summary">
-        <span class="vp-pill vp-pill--primary">{{ selectedDataset.scene_name || `场景 #${selectedDataset.scene_id}` }}</span>
+        <span class="vp-pill vp-pill--primary">{{
+          selectedDataset.scene_name || `场景 #${selectedDataset.scene_id}`
+        }}</span>
         <strong>{{ selectedDataset.version }}</strong>
         <span>{{ selectedDataset.name }}</span>
         <span class="summary-count">{{ selectedDataset.class_count }} 种商品</span>
@@ -42,10 +41,7 @@
     </section>
 
     <section v-if="!selectedDatasetId" class="card-container empty-card">
-      <el-empty
-        description="请选择数据集版本后再管理价目表"
-        :image-size="120"
-      />
+      <el-empty description="请选择数据集版本后再管理价目表" :image-size="120" />
     </section>
 
     <template v-else>
@@ -78,7 +74,9 @@
           <el-table-column prop="name" label="商品信息" min-width="210">
             <template #default="{ row }">
               <div class="product-identity">
-                <strong :title="row.name || row.display_name || '-'">{{ row.name || row.display_name || '-' }}</strong>
+                <strong :title="row.name || row.display_name || '-'">{{
+                  row.name || row.display_name || '-'
+                }}</strong>
                 <span :title="row.class_name">{{ row.class_name || '未命名类别' }}</span>
               </div>
             </template>
@@ -87,13 +85,24 @@
             <template #default="{ row }">{{ row.class_index }}</template>
           </el-table-column>
           <el-table-column prop="product_id" label="product_id" min-width="110" />
-          <el-table-column prop="product_key" label="product_key" min-width="190" show-overflow-tooltip>
+          <el-table-column
+            prop="product_key"
+            label="product_key"
+            min-width="190"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">{{ row.product_key || '-' }}</template>
           </el-table-column>
           <el-table-column prop="barcode" label="商品条码" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">{{ row.barcode || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="unit_price" label="销售价格" sortable="custom" min-width="130" align="right">
+          <el-table-column
+            prop="unit_price"
+            label="销售价格"
+            sortable="custom"
+            min-width="130"
+            align="right"
+          >
             <template #default="{ row }">
               <div v-if="row.has_price" class="price-cell">
                 <strong>{{ formatPrice(row.unit_price) }}</strong>
@@ -105,7 +114,12 @@
           <el-table-column prop="updated_at" label="更新时间" min-width="170">
             <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
           </el-table-column>
-          <el-table-column label="操作" :width="isCatalogOnly ? 112 : 190" fixed="right" align="center">
+          <el-table-column
+            label="操作"
+            :width="isCatalogOnly ? 112 : 190"
+            fixed="right"
+            align="center"
+          >
             <template #default="{ row }">
               <div class="table-actions vp-table-action-safe-area">
                 <el-button
@@ -212,7 +226,7 @@
                 v-if="item.url"
                 :src="item.url"
                 :alt="`${samplePreviewProduct?.name || '商品'} · ${item.filename}`"
-              >
+              />
               <span v-else-if="item.error">图片加载失败</span>
             </div>
             <div class="sample-preview-card-meta">
@@ -227,8 +241,8 @@
       <template #footer>
         <div class="sample-preview-footer">
           <span class="sample-preview-meta">
-            product_id {{ samplePreviewProduct?.product_id }} ·
-            已加载 {{ samplePreviewLoadedCount }} / {{ samplePreviewItems.length }} 张
+            product_id {{ samplePreviewProduct?.product_id }} · 已加载
+            {{ samplePreviewLoadedCount }} / {{ samplePreviewItems.length }} 张
           </span>
           <el-button @click="samplePreviewVisible = false">关闭</el-button>
         </div>
@@ -270,17 +284,21 @@ const formRef = ref(null)
 const form = ref(emptyForm())
 
 const formRules = {
-  unit_price: [{ required: true, type: 'number', message: '请输入单价', trigger: ['blur', 'change'] }],
-  currency: [{ required: true, whitespace: true, message: '请输入货币', trigger: ['blur', 'change'] }],
+  unit_price: [
+    { required: true, type: 'number', message: '请输入单价', trigger: ['blur', 'change'] },
+  ],
+  currency: [
+    { required: true, whitespace: true, message: '请输入货币', trigger: ['blur', 'change'] },
+  ],
 }
 
-const selectedDataset = computed(() => (
-  datasetVersions.value.find((item) => item.id === selectedDatasetId.value) || null
-))
+const selectedDataset = computed(
+  () => datasetVersions.value.find((item) => item.id === selectedDatasetId.value) || null,
+)
 const isCatalogOnly = computed(() => Boolean(selectedDataset.value?.extra_metadata?.catalog_only))
-const samplePreviewLoadedCount = computed(() => (
-  samplePreviewItems.value.filter((item) => Boolean(item.url)).length
-))
+const samplePreviewLoadedCount = computed(
+  () => samplePreviewItems.value.filter((item) => Boolean(item.url)).length,
+)
 
 const sortedPriceList = computed(() => {
   const { prop, order } = sortState.value
@@ -308,23 +326,27 @@ function datasetOptionLabel(dataset) {
 }
 
 function datasetStatusText(status) {
-  return {
-    draft: '草稿',
-    pending_train: '待训练',
-    training: '训练中',
-    published: '已发布',
-    archived: '已归档',
-  }[status] || status
+  return (
+    {
+      draft: '草稿',
+      pending_train: '待训练',
+      training: '训练中',
+      published: '已发布',
+      archived: '已归档',
+    }[status] || status
+  )
 }
 
 function datasetStatusType(status) {
-  return {
-    draft: 'warning',
-    pending_train: 'primary',
-    training: 'warning',
-    published: 'success',
-    archived: 'info',
-  }[status] || 'info'
+  return (
+    {
+      draft: 'warning',
+      pending_train: 'primary',
+      training: 'warning',
+      published: 'success',
+      archived: 'info',
+    }[status] || 'info'
+  )
 }
 
 function formatPrice(value) {
@@ -445,10 +467,7 @@ async function openSamplePreview(row) {
   samplePreviewLoading.value = true
   samplePreviewVisible.value = true
   try {
-    const response = await getDatasetProductImagesApi(
-      selectedDatasetId.value,
-      row.product_id,
-    )
+    const response = await getDatasetProductImagesApi(selectedDatasetId.value, row.product_id)
     if (requestId !== samplePreviewRequestId.value || !samplePreviewVisible.value) return
     samplePreviewItems.value = (response.items || []).map((item) => ({
       ...item,
@@ -566,11 +585,19 @@ async function autoSelectDefaultModelDataset() {
   color: $text-secondary;
   font-size: 13px;
 
-  strong { color: $text-primary; font-size: 14px; }
+  strong {
+    color: $text-primary;
+    font-size: 14px;
+  }
 }
 
-.required-star { margin-right: 3px; color: $danger-color; }
-.dataset-selector { width: min(720px, 100%); }
+.required-star {
+  margin-right: 3px;
+  color: $danger-color;
+}
+.dataset-selector {
+  width: min(720px, 100%);
+}
 .dataset-option {
   display: flex;
   align-items: center;
@@ -587,8 +614,13 @@ async function autoSelectDefaultModelDataset() {
   color: $text-secondary;
   font-size: 13px;
 
-  strong { color: $text-primary; font-size: 14px; }
-  .summary-count { color: $text-secondary; }
+  strong {
+    color: $text-primary;
+    font-size: 14px;
+  }
+  .summary-count {
+    color: $text-secondary;
+  }
 }
 
 .catalog-only-note {
@@ -624,8 +656,16 @@ async function autoSelectDefaultModelDataset() {
   background: $surface-color;
 }
 
-.scope-hint { color: $text-secondary; font-size: 13px; }
-.table-actions { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.scope-hint {
+  color: $text-secondary;
+  font-size: 13px;
+}
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 .row-action {
   min-width: 78px;
   max-width: 100%;
@@ -634,7 +674,9 @@ async function autoSelectDefaultModelDataset() {
   border-radius: $border-radius-sm;
   font-weight: 500;
 
-  :deep(.el-icon) { flex: 0 0 auto; }
+  :deep(.el-icon) {
+    flex: 0 0 auto;
+  }
 }
 .image-action {
   color: $text-regular;
@@ -684,8 +726,14 @@ async function autoSelectDefaultModelDataset() {
   font-size: 12.5px;
 }
 
-.price-cell { align-items: flex-end; }
-.price-cell strong { color: $text-primary; font-size: 15px; font-weight: 700; }
+.price-cell {
+  align-items: flex-end;
+}
+.price-cell strong {
+  color: $text-primary;
+  font-size: 15px;
+  font-weight: 700;
+}
 
 :deep(.el-table) {
   --el-table-header-bg-color: #{$surface-muted};
@@ -728,7 +776,10 @@ async function autoSelectDefaultModelDataset() {
   gap: 16px;
   border-top: 1px solid $border-color;
 
-  > span { color: $text-secondary; font-size: 12px; }
+  > span {
+    color: $text-secondary;
+    font-size: 12px;
+  }
 }
 
 .sample-preview {
@@ -803,9 +854,18 @@ async function autoSelectDefaultModelDataset() {
   border-radius: 999px;
   background: $surface-muted;
 
-  &--train { color: $primary-color; background: $primary-soft; }
-  &--val { color: $success-color; background: var(--vp-success-bg); }
-  &--test { color: $warning-color; background: var(--vp-warning-bg); }
+  &--train {
+    color: $primary-color;
+    background: $primary-soft;
+  }
+  &--val {
+    color: $success-color;
+    background: var(--vp-success-bg);
+  }
+  &--test {
+    color: $warning-color;
+    background: var(--vp-warning-bg);
+  }
 }
 
 .sample-preview-footer {
@@ -821,17 +881,35 @@ async function autoSelectDefaultModelDataset() {
 }
 
 @media (max-width: 760px) {
-  .price-management-page { padding: 16px; }
-  .page-header { align-items: flex-start; flex-direction: column; }
+  .price-management-page {
+    padding: 16px;
+  }
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .scope-copy,
   .selected-dataset-summary,
-  .pagination-row { align-items: flex-start; flex-direction: column; }
+  .pagination-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 
-  .pagination-row { padding: 14px; }
+  .pagination-row {
+    padding: 14px;
+  }
 
-  .sample-preview { padding: 10px; }
-  .sample-preview-grid { grid-template-columns: 1fr; gap: 10px; }
-  .sample-preview-footer { align-items: flex-start; flex-direction: column; }
+  .sample-preview {
+    padding: 10px;
+  }
+  .sample-preview-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .sample-preview-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 
   .row-action {
     width: 32px;
@@ -841,6 +919,8 @@ async function autoSelectDefaultModelDataset() {
     padding: 0;
   }
 
-  .row-action-label { display: none; }
+  .row-action-label {
+    display: none;
+  }
 }
 </style>

@@ -4,12 +4,29 @@ import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import DashboardPage from '@/views/DashboardPage.vue'
-import { getClassDistribution, getModelUsage, getStatistics, getTrend, getTypeDistribution } from '@/api/dashboard'
+import {
+  getClassDistribution,
+  getModelUsage,
+  getStatistics,
+  getTrend,
+  getTypeDistribution,
+} from '@/api/dashboard'
 
-const { chart } = vi.hoisted(() => ({ chart: { setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() } }))
-vi.mock('echarts/core', () => ({ getInstanceByDom: vi.fn(() => null), init: vi.fn(() => chart), use: vi.fn() }))
+const { chart } = vi.hoisted(() => ({
+  chart: { setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() },
+}))
+vi.mock('echarts/core', () => ({
+  getInstanceByDom: vi.fn(() => null),
+  init: vi.fn(() => chart),
+  use: vi.fn(),
+}))
 vi.mock('echarts/charts', () => ({ BarChart: {}, LineChart: {}, PieChart: {} }))
-vi.mock('echarts/components', () => ({ GraphicComponent: {}, GridComponent: {}, LegendComponent: {}, TooltipComponent: {} }))
+vi.mock('echarts/components', () => ({
+  GraphicComponent: {},
+  GridComponent: {},
+  LegendComponent: {},
+  TooltipComponent: {},
+}))
 vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }))
 vi.mock('@/api/dashboard', () => ({
   getClassDistribution: vi.fn(),
@@ -22,20 +39,48 @@ vi.mock('@/api/dashboard', () => ({
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
-    getStatistics.mockResolvedValue({ total_tasks: 2, total_images: 3, total_objects: 4, avg_inference_time: 20, growth: {} })
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    getStatistics.mockResolvedValue({
+      total_tasks: 2,
+      total_images: 3,
+      total_objects: 4,
+      avg_inference_time: 20,
+      growth: {},
+    })
     getTrend.mockResolvedValue({ trend: [], granularity: 'day' })
     getClassDistribution.mockResolvedValue({ distribution: [] })
     getTypeDistribution.mockResolvedValue({ distribution: [] })
     getModelUsage.mockResolvedValue({
-      summary: { total_calls: 2, total_turns: 1, total_tokens: 120, avg_latency_ms: 900, success_rate: 100 },
+      summary: {
+        total_calls: 2,
+        total_turns: 1,
+        total_tokens: 120,
+        avg_latency_ms: 900,
+        success_rate: 100,
+      },
       trend: [],
       agent_distribution: [{ name: 'Dataset Agent', agent: 'dataset', value: 2 }],
-      recent: [{
-        id: 1, created_at: '2026-07-18T12:00:00', model_name: 'deepseek-chat', agent: 'dataset',
-        agent_label: 'Dataset Agent', call_count: 2, input_tokens: 100, output_tokens: 20,
-        total_tokens: 120, latency_ms: 900, status: 'completed',
-      }],
+      recent: [
+        {
+          id: 1,
+          created_at: '2026-07-18T12:00:00',
+          model_name: 'deepseek-chat',
+          agent: 'dataset',
+          agent_label: 'Dataset Agent',
+          call_count: 2,
+          input_tokens: 100,
+          output_tokens: 20,
+          total_tokens: 120,
+          latency_ms: 900,
+          status: 'completed',
+        },
+      ],
     })
   })
 
@@ -49,14 +94,29 @@ describe('DashboardPage', () => {
     expect(wrapper.text()).toContain('Dataset Agent')
     expect(wrapper.findAll('.el-tabs__item')).toHaveLength(2)
     expect(getModelUsage).toHaveBeenCalledWith(30, 8)
-    expect(chart.setOption.mock.calls.some(([option]) => option.legend?.orient === 'vertical')).toBe(true)
-    expect(chart.setOption.mock.calls.some(([option]) => option.series?.[0]?.center?.[0] === '30%')).toBe(true)
-    expect(chart.setOption.mock.calls.some(([option]) => option.series?.[0]?.showEmptyCircle === false && option.series?.[0]?.data?.length === 0)).toBe(true)
+    expect(
+      chart.setOption.mock.calls.some(([option]) => option.legend?.orient === 'vertical'),
+    ).toBe(true)
+    expect(
+      chart.setOption.mock.calls.some(([option]) => option.series?.[0]?.center?.[0] === '30%'),
+    ).toBe(true)
+    expect(
+      chart.setOption.mock.calls.some(
+        ([option]) =>
+          option.series?.[0]?.showEmptyCircle === false && option.series?.[0]?.data?.length === 0,
+      ),
+    ).toBe(true)
   })
 
   it('renders empty Agent usage without the ECharts placeholder ring', async () => {
     getModelUsage.mockResolvedValue({
-      summary: { total_calls: 0, total_turns: 0, total_tokens: 0, avg_latency_ms: 0, success_rate: 0 },
+      summary: {
+        total_calls: 0,
+        total_turns: 0,
+        total_tokens: 0,
+        avg_latency_ms: 0,
+        success_rate: 0,
+      },
       trend: [],
       agent_distribution: [],
       recent: [],
@@ -68,13 +128,14 @@ describe('DashboardPage', () => {
     await wrapper.findAll('.el-tabs__item')[1].trigger('click')
     await flushPromises()
 
-    const emptyPieCall = chart.setOption.mock.calls.find(([option]) => (
-      option.legend?.show === false
-      && option.series?.[0]?.type === 'pie'
-      && option.series?.[0]?.showEmptyCircle === false
-      && option.series?.[0]?.stillShowZeroSum === false
-      && option.series?.[0]?.data?.length === 0
-    ))
+    const emptyPieCall = chart.setOption.mock.calls.find(
+      ([option]) =>
+        option.legend?.show === false &&
+        option.series?.[0]?.type === 'pie' &&
+        option.series?.[0]?.showEmptyCircle === false &&
+        option.series?.[0]?.stillShowZeroSum === false &&
+        option.series?.[0]?.data?.length === 0,
+    )
     expect(emptyPieCall).toBeTruthy()
   })
 

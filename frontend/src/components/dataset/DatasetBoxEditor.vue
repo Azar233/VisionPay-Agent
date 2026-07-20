@@ -3,7 +3,9 @@
     <div class="editor-toolbar">
       <span>拖动空白处绘制新框；拖动框或四角可调整位置。</span>
       <div>
-        <el-button size="small" :disabled="selectedIndex < 0" @click="removeSelected">删除选中框</el-button>
+        <el-button size="small" :disabled="selectedIndex < 0" @click="removeSelected"
+          >删除选中框</el-button
+        >
         <el-button size="small" :disabled="!boxes.length" @click="clearBoxes">清空重画</el-button>
       </div>
     </div>
@@ -20,7 +22,14 @@
         @pointercancel="finishDrag"
       >
         <image :href="imageUrl" x="0" y="0" :width="imageWidth" :height="imageHeight" />
-        <rect class="draw-surface" x="0" y="0" :width="imageWidth" :height="imageHeight" @pointerdown="startDraw" />
+        <rect
+          class="draw-surface"
+          x="0"
+          y="0"
+          :width="imageWidth"
+          :height="imageHeight"
+          @pointerdown="startDraw"
+        />
         <g v-for="(box, index) in boxes" :key="index" class="box-layer">
           <rect
             class="annotation-box"
@@ -43,8 +52,16 @@
             />
           </g>
           <g class="box-label" :transform="`translate(${box.x1} ${Math.max(labelHeight, box.y1)})`">
-            <rect :x="0" :y="-labelHeight" :width="labelWidth(index, box)" :height="labelHeight" rx="3" />
-            <text :x="labelHeight * 0.28" :y="-labelHeight * 0.28" :font-size="labelHeight * 0.55">{{ boxLabel(index, box) }}</text>
+            <rect
+              :x="0"
+              :y="-labelHeight"
+              :width="labelWidth(index, box)"
+              :height="labelHeight"
+              rx="3"
+            />
+            <text :x="labelHeight * 0.28" :y="-labelHeight * 0.28" :font-size="labelHeight * 0.55">
+              {{ boxLabel(index, box) }}
+            </text>
           </g>
         </g>
       </svg>
@@ -68,17 +85,29 @@ const svgRef = ref(null)
 const selectedIndex = ref(-1)
 const dragState = ref(null)
 const boxes = computed(() => props.modelValue)
-const handleRadius = computed(() => Math.max(5, Math.min(props.imageWidth, props.imageHeight) * 0.012))
-const labelHeight = computed(() => Math.max(18, Math.min(props.imageWidth, props.imageHeight) * 0.045))
+const handleRadius = computed(() =>
+  Math.max(5, Math.min(props.imageWidth, props.imageHeight) * 0.012),
+)
+const labelHeight = computed(() =>
+  Math.max(18, Math.min(props.imageWidth, props.imageHeight) * 0.045),
+)
 
 function productName(productId) {
   const product = props.productOptions.find((item) => Number(item.product_id) === Number(productId))
   return product?.display_name || product?.class_name || ''
 }
-function boxLabel(index, box) { return productName(box.product_id) || `目标 ${index + 1}` }
-function labelWidth(index, box) { return Math.max(labelHeight.value * 3.2, boxLabel(index, box).length * labelHeight.value * 0.72) }
-function cloneBoxes() { return boxes.value.map((item) => ({ ...item })) }
-function updateBoxes(next) { emit('update:modelValue', next) }
+function boxLabel(index, box) {
+  return productName(box.product_id) || `目标 ${index + 1}`
+}
+function labelWidth(index, box) {
+  return Math.max(labelHeight.value * 3.2, boxLabel(index, box).length * labelHeight.value * 0.72)
+}
+function cloneBoxes() {
+  return boxes.value.map((item) => ({ ...item }))
+}
+function updateBoxes(next) {
+  emit('update:modelValue', next)
+}
 function point(event) {
   const svg = svgRef.value
   const cursor = svg.createSVGPoint()
@@ -90,7 +119,9 @@ function point(event) {
     y: Math.max(0, Math.min(props.imageHeight, transformed.y)),
   }
 }
-function capture(event) { svgRef.value?.setPointerCapture?.(event.pointerId) }
+function capture(event) {
+  svgRef.value?.setPointerCapture?.(event.pointerId)
+}
 function startDraw(event) {
   const start = point(event)
   const next = cloneBoxes()
@@ -102,7 +133,12 @@ function startDraw(event) {
 }
 function startMove(event, index) {
   selectedIndex.value = index
-  dragState.value = { type: 'move', index, start: point(event), original: { ...boxes.value[index] } }
+  dragState.value = {
+    type: 'move',
+    index,
+    start: point(event),
+    original: { ...boxes.value[index] },
+  }
   capture(event)
 }
 function startResize(event, index, position) {
@@ -119,14 +155,22 @@ function continueDrag(event) {
   if (state.type === 'draw') {
     next[state.index] = {
       ...next[state.index],
-      x1: Math.min(state.start.x, current.x), y1: Math.min(state.start.y, current.y),
-      x2: Math.max(state.start.x, current.x), y2: Math.max(state.start.y, current.y),
+      x1: Math.min(state.start.x, current.x),
+      y1: Math.min(state.start.y, current.y),
+      x2: Math.max(state.start.x, current.x),
+      y2: Math.max(state.start.y, current.y),
     }
   } else if (state.type === 'move') {
     const width = state.original.x2 - state.original.x1
     const height = state.original.y2 - state.original.y1
-    const x1 = Math.max(0, Math.min(props.imageWidth - width, state.original.x1 + current.x - state.start.x))
-    const y1 = Math.max(0, Math.min(props.imageHeight - height, state.original.y1 + current.y - state.start.y))
+    const x1 = Math.max(
+      0,
+      Math.min(props.imageWidth - width, state.original.x1 + current.x - state.start.x),
+    )
+    const y1 = Math.max(
+      0,
+      Math.min(props.imageHeight - height, state.original.y1 + current.y - state.start.y),
+    )
     next[state.index] = { ...state.original, x1, y1, x2: x1 + width, y2: y1 + height }
   } else {
     const resized = { ...state.original }
@@ -153,8 +197,10 @@ function finishDrag() {
 }
 function handles(box) {
   return [
-    { position: 'nw', x: box.x1, y: box.y1 }, { position: 'ne', x: box.x2, y: box.y1 },
-    { position: 'sw', x: box.x1, y: box.y2 }, { position: 'se', x: box.x2, y: box.y2 },
+    { position: 'nw', x: box.x1, y: box.y1 },
+    { position: 'ne', x: box.x2, y: box.y1 },
+    { position: 'sw', x: box.x1, y: box.y2 },
+    { position: 'se', x: box.x2, y: box.y2 },
   ]
 }
 function removeSelected() {
@@ -165,21 +211,83 @@ function removeSelected() {
   updateBoxes(next)
   emit('change')
 }
-function clearBoxes() { selectedIndex.value = -1; updateBoxes([]); emit('change') }
+function clearBoxes() {
+  selectedIndex.value = -1
+  updateBoxes([])
+  emit('change')
+}
 </script>
 
 <style scoped lang="scss">
-.box-editor { min-width: 0; }
-.editor-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.editor-toolbar span { color: $text-secondary; font-size: 12px; line-height: 1.5; }
-.editor-toolbar div { display: flex; flex: 0 0 auto; gap: 6px; }
-.canvas-shell { display: flex; align-items: center; justify-content: center; min-height: 300px; overflow: hidden; border: 1px solid $border-color; border-radius: 10px; background: #151922; }
-.annotation-canvas { display: block; width: 100%; max-height: min(56vh, 560px); touch-action: none; user-select: none; }
-.draw-surface { fill: transparent; cursor: crosshair; }
-.annotation-box { fill: rgba(47, 111, 223, 0.12); stroke: #4f8aef; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
-.annotation-box.selected { fill: rgba(39, 132, 84, 0.14); stroke: #35a66c; stroke-width: 3; }
-.resize-handle { fill: #fff; stroke: #278454; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
-.box-label { pointer-events: none; }
-.box-label rect { fill: #2f6fdf; opacity: 0.92; }
-.box-label text { fill: #fff; font-weight: 600; }
+.box-editor {
+  min-width: 0;
+}
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.editor-toolbar span {
+  color: $text-secondary;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.editor-toolbar div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.canvas-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  overflow: hidden;
+  border: 1px solid $border-color;
+  border-radius: 10px;
+  background: #151922;
+}
+.annotation-canvas {
+  display: block;
+  width: 100%;
+  max-height: min(56vh, 560px);
+  touch-action: none;
+  user-select: none;
+}
+.draw-surface {
+  fill: transparent;
+  cursor: crosshair;
+}
+.annotation-box {
+  fill: rgba(47, 111, 223, 0.12);
+  stroke: #4f8aef;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: move;
+}
+.annotation-box.selected {
+  fill: rgba(39, 132, 84, 0.14);
+  stroke: #35a66c;
+  stroke-width: 3;
+}
+.resize-handle {
+  fill: #fff;
+  stroke: #278454;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: nwse-resize;
+}
+.box-label {
+  pointer-events: none;
+}
+.box-label rect {
+  fill: #2f6fdf;
+  opacity: 0.92;
+}
+.box-label text {
+  fill: #fff;
+  font-weight: 600;
+}
 </style>

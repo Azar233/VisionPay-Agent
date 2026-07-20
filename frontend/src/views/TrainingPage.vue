@@ -5,9 +5,7 @@
         <h1 class="vp-page-title">模型训练与监控</h1>
       </div>
       <div class="page-actions">
-        <el-button :icon="Upload" @click="openImportDialog">
-          导入离线结果
-        </el-button>
+        <el-button :icon="Upload" @click="openImportDialog"> 导入离线结果 </el-button>
         <el-button type="primary" :icon="Plus" @click="openCreateTrainingDialog">
           新建训练任务
         </el-button>
@@ -43,7 +41,11 @@
         <el-button
           type="primary"
           :loading="switchingModelVersionId === selectedModelVersionId"
-          :disabled="!selectedModelVersion || selectedModelVersion.is_default || !selectedModelVersion.file_exists"
+          :disabled="
+            !selectedModelVersion ||
+            selectedModelVersion.is_default ||
+            !selectedModelVersion.file_exists
+          "
           @click="switchDetectionModel"
         >
           {{ selectedModelVersion?.is_default ? '当前检测版本' : '切换检测版本' }}
@@ -69,25 +71,49 @@
               size="small"
               :icon="Delete"
               @click="archiveModel(selectedModelVersion)"
-            >归档模型</el-button>
+              >归档模型</el-button
+            >
           </div>
         </div>
         <div class="model-version-grid">
-          <div><span>所属场景</span><strong>{{ selectedModelVersion.scene_name || `#${selectedModelVersion.scene_id}` }}</strong></div>
-          <div><span>数据集版本</span><strong>{{ selectedModelVersion.dataset_version || 'Legacy 未登记' }}</strong></div>
-          <div><span>训练任务</span><strong>{{ selectedModelVersion.training_task_uuid || '内置正式模型' }}</strong></div>
-          <div><span>模型大小</span><strong>{{ formatFileSize(selectedModelVersion.file_size) }}</strong></div>
-          <div><span>训练参数</span><strong>{{ modelParameterSummary(selectedModelVersion) }}</strong></div>
-          <div><span>训练结果</span><strong>{{ modelResultSummary(selectedModelVersion) }}</strong></div>
+          <div>
+            <span>所属场景</span
+            ><strong>{{
+              selectedModelVersion.scene_name || `#${selectedModelVersion.scene_id}`
+            }}</strong>
+          </div>
+          <div>
+            <span>数据集版本</span
+            ><strong>{{ selectedModelVersion.dataset_version || 'Legacy 未登记' }}</strong>
+          </div>
+          <div>
+            <span>训练任务</span
+            ><strong>{{ selectedModelVersion.training_task_uuid || '内置正式模型' }}</strong>
+          </div>
+          <div>
+            <span>模型大小</span
+            ><strong>{{ formatFileSize(selectedModelVersion.file_size) }}</strong>
+          </div>
+          <div>
+            <span>训练参数</span><strong>{{ modelParameterSummary(selectedModelVersion) }}</strong>
+          </div>
+          <div>
+            <span>训练结果</span><strong>{{ modelResultSummary(selectedModelVersion) }}</strong>
+          </div>
         </div>
         <div class="model-path-row">
           <span>best.pt</span>
           <code>{{ selectedModelVersion.model_path }}</code>
-          <span class="vp-pill" :class="selectedModelVersion.file_exists ? 'vp-pill--success' : 'vp-pill--danger'">
+          <span
+            class="vp-pill"
+            :class="selectedModelVersion.file_exists ? 'vp-pill--success' : 'vp-pill--danger'"
+          >
             {{ selectedModelVersion.file_exists ? '文件可用' : '文件缺失' }}
           </span>
         </div>
-        <p v-if="selectedModelVersion.description" class="model-description">{{ selectedModelVersion.description }}</p>
+        <p v-if="selectedModelVersion.description" class="model-description">
+          {{ selectedModelVersion.description }}
+        </p>
       </div>
       <el-empty v-else-if="!loadingModelVersions" description="暂无可用的检测模型" />
     </section>
@@ -127,7 +153,10 @@
         </el-table-column>
         <el-table-column label="训练状态" width="120">
           <template #default="{ row }">
-            <span class="vp-pill" :class="`vp-pill--${datasetTrainingStatusType(row.training_status)}`">
+            <span
+              class="vp-pill"
+              :class="`vp-pill--${datasetTrainingStatusType(row.training_status)}`"
+            >
               {{ datasetTrainingStatusText(row.training_status) }}
             </span>
           </template>
@@ -138,7 +167,9 @@
           </template>
         </el-table-column>
         <el-table-column label="内容指纹" min-width="150">
-          <template #default="{ row }"><code>{{ shortHash(row.content_hash) }}</code></template>
+          <template #default="{ row }"
+            ><code>{{ shortHash(row.content_hash) }}</code></template
+          >
         </el-table-column>
         <el-table-column label="操作" width="132" fixed="right" align="center">
           <template #default="{ row }">
@@ -147,7 +178,8 @@
                 class="vp-table-action-button is-primary-action train-version-button"
                 size="small"
                 @click="trainDataset(row)"
-              >训练此版本</el-button>
+                >训练此版本</el-button
+              >
             </div>
           </template>
         </el-table-column>
@@ -234,48 +266,55 @@
                 size="small"
                 :icon="Monitor"
                 @click="selectTask(row)"
-              >监控</el-button>
+                >监控</el-button
+              >
               <el-button
                 v-if="row.status === 'running'"
                 class="task-action-button is-danger-action"
                 size="small"
                 :icon="VideoPause"
                 @click="stopTask(row.id)"
-              >停止</el-button>
+                >停止</el-button
+              >
               <el-button
                 class="task-action-button"
                 size="small"
                 :icon="Document"
                 @click="openLogDrawer(row)"
-              >日志</el-button>
+                >日志</el-button
+              >
               <el-button
                 v-if="row.status === 'completed'"
                 class="task-action-button is-success-action"
                 size="small"
                 :icon="DataAnalysis"
                 @click="openEvalDrawer(row)"
-              >评估</el-button>
+                >评估</el-button
+              >
               <el-button
                 v-if="row.status === 'completed'"
                 class="task-action-button is-primary-action"
                 size="small"
                 :icon="Upload"
                 @click="openExportDialog(row)"
-              >导出</el-button>
+                >导出</el-button
+              >
               <el-button
                 v-if="row.status === 'completed'"
                 class="task-action-button"
                 size="small"
                 :icon="Download"
                 @click="downloadWeights(row)"
-              >权重</el-button>
+                >权重</el-button
+              >
               <el-button
                 v-if="row.status === 'completed'"
                 class="task-action-button"
                 size="small"
                 :icon="Tickets"
                 @click="downloadResults(row.task_uuid)"
-              >结果</el-button>
+                >结果</el-button
+              >
             </div>
           </template>
         </el-table-column>
@@ -310,8 +349,14 @@
           :stroke-width="16"
         />
         <div class="live-progress-meta">
-          <span>Epoch {{ liveProgress?.epoch ?? (selectedTask.current_epoch || 0) }}/{{ selectedTask.epochs || 0 }}</span>
-          <span v-if="liveProgress?.total_batches">Batch {{ liveProgress.batch || 0 }}/{{ liveProgress.total_batches }}</span>
+          <span
+            >Epoch {{ liveProgress?.epoch ?? (selectedTask.current_epoch || 0) }}/{{
+              selectedTask.epochs || 0
+            }}</span
+          >
+          <span v-if="liveProgress?.total_batches"
+            >Batch {{ liveProgress.batch || 0 }}/{{ liveProgress.total_batches }}</span
+          >
           <span>Elapsed {{ liveProgress?.elapsed_text || '-' }}</span>
           <span>ETA {{ liveProgress?.eta_text || '-' }}</span>
           <span>{{ liveProgress?.rate_text || '--it/s' }}</span>
@@ -360,7 +405,11 @@
         </el-form-item>
 
         <el-form-item label="检测场景">
-          <el-input-number v-model="trainForm.scene_id" :min="1" :disabled="Boolean(trainForm.dataset_version_id)" />
+          <el-input-number
+            v-model="trainForm.scene_id"
+            :min="1"
+            :disabled="Boolean(trainForm.dataset_version_id)"
+          />
         </el-form-item>
 
         <el-form-item label="基础模型">
@@ -406,7 +455,9 @@
                 :value="option.value"
               />
             </el-select>
-            <p class="form-tip">多卡训练使用 Ultralytics DDP；batch_size 是总 batch，会分摊到每张 GPU。</p>
+            <p class="form-tip">
+              多卡训练使用 Ultralytics DDP；batch_size 是总 batch，会分摊到每张 GPU。
+            </p>
           </div>
         </el-form-item>
 
@@ -440,9 +491,7 @@
 
       <template #footer>
         <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="createTask">
-          启动训练
-        </el-button>
+        <el-button type="primary" :loading="creating" @click="createTask"> 启动训练 </el-button>
       </template>
     </el-dialog>
 
@@ -471,7 +520,11 @@
           </el-select>
         </el-form-item>
         <el-form-item label="检测场景">
-          <el-input-number v-model="importForm.scene_id" :min="1" :disabled="Boolean(importForm.dataset_version_id)" />
+          <el-input-number
+            v-model="importForm.scene_id"
+            :min="1"
+            :disabled="Boolean(importForm.dataset_version_id)"
+          />
         </el-form-item>
         <el-form-item label="训练输出目录">
           <el-input
@@ -531,9 +584,7 @@
         </div>
         <div class="log-actions">
           <el-switch v-model="autoRefreshLog" active-text="Auto refresh" />
-          <el-button size="small" :loading="loadingLog" @click="refreshLog">
-            Refresh
-          </el-button>
+          <el-button size="small" :loading="loadingLog" @click="refreshLog"> Refresh </el-button>
         </div>
       </div>
 
@@ -640,12 +691,9 @@
 
       <template #footer>
         <el-button @click="showExportDialog = false">取消</el-button>
-        <el-button type="primary" :loading="exporting" @click="submitExport">
-          导出
-        </el-button>
+        <el-button type="primary" :loading="exporting" @click="submitExport"> 导出 </el-button>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
@@ -665,7 +713,12 @@ import {
   VideoPause,
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
-import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components'
+import {
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
+} from 'echarts/components'
 import { LineChart } from 'echarts/charts'
 import { CanvasRenderer } from 'echarts/renderers'
 import {
@@ -687,7 +740,14 @@ import {
 } from '@/api/training'
 import { getDatasetVersionsApi } from '@/api/datasets'
 
-echarts.use([TitleComponent, TooltipComponent, LegendComponent, GridComponent, LineChart, CanvasRenderer])
+echarts.use([
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent,
+  LineChart,
+  CanvasRenderer,
+])
 
 const taskList = ref([])
 const loadingTasks = ref(false)
@@ -777,21 +837,25 @@ const trainForm = ref({
 })
 
 const trainableDatasets = computed(() =>
-  datasetList.value.filter((dataset) => (
-    (dataset.status === 'pending_train' || dataset.status === 'published') && !dataset.extra_metadata?.catalog_only
-  ))
+  datasetList.value.filter(
+    (dataset) =>
+      (dataset.status === 'pending_train' || dataset.status === 'published') &&
+      !dataset.extra_metadata?.catalog_only,
+  ),
 )
 const importableDatasets = computed(() =>
-  datasetList.value.filter((dataset) => ['pending_train', 'training', 'published', 'archived'].includes(dataset.status))
+  datasetList.value.filter((dataset) =>
+    ['pending_train', 'training', 'published', 'archived'].includes(dataset.status),
+  ),
 )
 const selectedTrainDataset = computed(() =>
-  datasetList.value.find((dataset) => dataset.id === trainForm.value.dataset_version_id)
+  datasetList.value.find((dataset) => dataset.id === trainForm.value.dataset_version_id),
 )
 const selectedImportDataset = computed(() =>
-  datasetList.value.find((dataset) => dataset.id === importForm.value.dataset_version_id)
+  datasetList.value.find((dataset) => dataset.id === importForm.value.dataset_version_id),
 )
-const selectedModelVersion = computed(() =>
-  modelVersionList.value.find((model) => model.id === selectedModelVersionId.value) || null
+const selectedModelVersion = computed(
+  () => modelVersionList.value.find((model) => model.id === selectedModelVersionId.value) || null,
 )
 
 const metricCards = computed(() => {
@@ -818,21 +882,25 @@ const liveProgressPercent = computed(() => {
 
 const liveProgressTitle = computed(() => {
   const phase = liveProgress.value?.phase || selectedTask.value?.status || 'pending'
-  const label = {
-    pending: '等待中',
-    train: '训练中',
-    running: '训练中',
-    completed: '训练完成',
-    failed: '训练失败',
-    cancelled: '已取消',
-  }[phase] || phase
+  const label =
+    {
+      pending: '等待中',
+      train: '训练中',
+      running: '训练中',
+      completed: '训练完成',
+      failed: '训练失败',
+      cancelled: '已取消',
+    }[phase] || phase
   return label
 })
 
-const showTqdmLine = computed(() => (
-  Boolean(liveProgress.value?.tqdm_line)
-  && ['pending', 'running', 'train'].includes(selectedTask.value?.status || liveProgress.value?.phase)
-))
+const showTqdmLine = computed(
+  () =>
+    Boolean(liveProgress.value?.tqdm_line) &&
+    ['pending', 'running', 'train'].includes(
+      selectedTask.value?.status || liveProgress.value?.phase,
+    ),
+)
 
 const logText = computed(() => logLines.value.join('\n'))
 const logDrawerTitle = computed(() => `Training Log - ${logTask.value?.task_uuid || '-'}`)
@@ -862,17 +930,19 @@ const weakClassRows = computed(() => {
 })
 
 const artifactRows = computed(() =>
-  Object.entries(evalReport.value?.artifacts || {}).map(([name, path]) => ({ name, path }))
+  Object.entries(evalReport.value?.artifacts || {}).map(([name, path]) => ({ name, path })),
 )
 
 function statusType(status) {
-  return {
-    pending: 'info',
-    running: 'warning',
-    completed: 'success',
-    failed: 'danger',
-    cancelled: 'info',
-  }[status] || 'info'
+  return (
+    {
+      pending: 'info',
+      running: 'warning',
+      completed: 'success',
+      failed: 'danger',
+      cancelled: 'info',
+    }[status] || 'info'
+  )
 }
 
 function progressStatus(status) {
@@ -889,33 +959,43 @@ function taskProgress(task) {
 }
 
 function statusText(status) {
-  return {
-    pending: '等待中',
-    running: '训练中',
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已取消',
-  }[status] || status || '-'
+  return (
+    {
+      pending: '等待中',
+      running: '训练中',
+      completed: '已完成',
+      failed: '失败',
+      cancelled: '已取消',
+    }[status] ||
+    status ||
+    '-'
+  )
 }
 
 function datasetTrainingStatusText(status) {
-  return {
-    untrained: '未训练',
-    queued: '排队中',
-    training: '训练中',
-    trained: '已训练',
-    failed: '训练失败',
-  }[status] || status || '-'
+  return (
+    {
+      untrained: '未训练',
+      queued: '排队中',
+      training: '训练中',
+      trained: '已训练',
+      failed: '训练失败',
+    }[status] ||
+    status ||
+    '-'
+  )
 }
 
 function datasetTrainingStatusType(status) {
-  return {
-    untrained: 'info',
-    queued: 'warning',
-    training: 'warning',
-    trained: 'success',
-    failed: 'danger',
-  }[status] || 'info'
+  return (
+    {
+      untrained: 'info',
+      queued: 'warning',
+      training: 'warning',
+      trained: 'success',
+      failed: 'danger',
+    }[status] || 'info'
+  )
 }
 
 function shortHash(value) {
@@ -936,7 +1016,7 @@ function formatFileSize(value) {
   if (!bytes) return '-'
   const units = ['B', 'KB', 'MB', 'GB']
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  return `${(bytes / (1024 ** index)).toFixed(index ? 1 : 0)} ${units[index]}`
+  return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`
 }
 
 function modelVersionOptionLabel(model) {
@@ -971,7 +1051,7 @@ function defaultVersion() {
   const date = new Date()
   const pad = (value) => String(value).padStart(2, '0')
   return `v${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(
-    date.getHours()
+    date.getHours(),
   )}${pad(date.getMinutes())}${pad(date.getSeconds())}`
 }
 
@@ -992,13 +1072,14 @@ async function fetchModelVersions() {
   try {
     const response = await getDetectionModelVersionsApi()
     modelVersionList.value = response.items || []
-    const selectedStillExists = modelVersionList.value.some((item) => item.id === selectedModelVersionId.value)
+    const selectedStillExists = modelVersionList.value.some(
+      (item) => item.id === selectedModelVersionId.value,
+    )
     if (!selectedStillExists) {
-      selectedModelVersionId.value = (
-        modelVersionList.value.find((item) => item.is_default)?.id
-        || modelVersionList.value[0]?.id
-        || null
-      )
+      selectedModelVersionId.value =
+        modelVersionList.value.find((item) => item.is_default)?.id ||
+        modelVersionList.value[0]?.id ||
+        null
     }
   } catch {
     modelVersionList.value = []
@@ -1066,7 +1147,8 @@ function openCreateTrainingDialog() {
     return
   }
   if (!trainForm.value.dataset_version_id) {
-    const preferred = trainableDatasets.value.find((item) => item.is_current) || trainableDatasets.value[0]
+    const preferred =
+      trainableDatasets.value.find((item) => item.is_current) || trainableDatasets.value[0]
     trainForm.value.dataset_version_id = preferred.id
     trainForm.value.scene_id = preferred.scene_id
   }
@@ -1079,7 +1161,8 @@ function openImportDialog() {
     return
   }
   if (!importForm.value.dataset_version_id) {
-    const preferred = importableDatasets.value.find((item) => item.is_current) || importableDatasets.value[0]
+    const preferred =
+      importableDatasets.value.find((item) => item.is_current) || importableDatasets.value[0]
     importForm.value.dataset_version_id = preferred.id
     importForm.value.scene_id = preferred.scene_id
   }
@@ -1251,7 +1334,6 @@ async function createTask() {
     creating.value = false
   }
 }
-
 
 async function submitImportRun() {
   if (!importForm.value.dataset_version_id) {
@@ -1542,7 +1624,9 @@ onBeforeUnmount(() => {
     font-size: 20px;
   }
 
-  > .vp-pill { flex: 0 0 auto; }
+  > .vp-pill {
+    flex: 0 0 auto;
+  }
 }
 
 .model-version-actions {
@@ -1646,7 +1730,10 @@ onBeforeUnmount(() => {
 
   code {
     color: $text-secondary;
-    font: 12px/1.4 Consolas, 'Courier New', monospace;
+    font:
+      12px/1.4 Consolas,
+      'Courier New',
+      monospace;
   }
 }
 
@@ -1745,7 +1832,10 @@ onBeforeUnmount(() => {
   color: $text-regular;
   background: $bg-color-dark;
   border-radius: $border-radius-sm;
-  font: 12px/1.6 Consolas, 'Courier New', monospace;
+  font:
+    12px/1.6 Consolas,
+    'Courier New',
+    monospace;
 }
 
 .eval-toolbar,
@@ -1831,10 +1921,18 @@ onBeforeUnmount(() => {
   gap: 10px;
   width: 100%;
 
-  &.is-running { --task-progress-color: #0071e3; }
-  &.is-completed { --task-progress-color: #34c759; }
-  &.is-failed { --task-progress-color: #ff453a; }
-  &.is-cancelled { --task-progress-color: #8e8e93; }
+  &.is-running {
+    --task-progress-color: #0071e3;
+  }
+  &.is-completed {
+    --task-progress-color: #34c759;
+  }
+  &.is-failed {
+    --task-progress-color: #ff453a;
+  }
+  &.is-cancelled {
+    --task-progress-color: #8e8e93;
+  }
 
   strong {
     color: $text-secondary;
@@ -1844,9 +1942,15 @@ onBeforeUnmount(() => {
     text-align: right;
   }
 
-  &.is-running strong { color: $primary-color; }
-  &.is-completed strong { color: $success-color; }
-  &.is-failed strong { color: $danger-color; }
+  &.is-running strong {
+    color: $primary-color;
+  }
+  &.is-completed strong {
+    color: $success-color;
+  }
+  &.is-failed strong {
+    color: $danger-color;
+  }
 }
 
 .task-progress-track {
@@ -1863,9 +1967,13 @@ onBeforeUnmount(() => {
     display: block;
     min-width: 0;
     border-radius: inherit;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--task-progress-color) 82%, #fff), var(--task-progress-color));
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--task-progress-color) 82%, #fff),
+      var(--task-progress-color)
+    );
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-progress-color) 12%, transparent);
-    transition: width .35s ease;
+    transition: width 0.35s ease;
   }
 }
 
@@ -1893,7 +2001,10 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-  transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background-color 0.18s ease;
 
   &:hover,
   &:focus-visible {
@@ -1983,7 +2094,10 @@ onBeforeUnmount(() => {
   color: $text-regular;
   background: $bg-color-dark;
   border-radius: $border-radius-sm;
-  font: 12px/1.5 Consolas, 'Courier New', monospace;
+  font:
+    12px/1.5 Consolas,
+    'Courier New',
+    monospace;
 }
 
 .metric-grid {
@@ -2053,7 +2167,7 @@ onBeforeUnmount(() => {
 .task-table :deep(td.task-actions-column) {
   z-index: 3;
   background: $surface-color;
-  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, .55);
+  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, 0.55);
 }
 
 .task-table :deep(.el-table__row:hover > td.task-actions-column) {
@@ -2070,7 +2184,7 @@ onBeforeUnmount(() => {
 
 :global(html.dark) .task-table :deep(th.task-actions-column-header),
 :global(html.dark) .task-table :deep(td.task-actions-column) {
-  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, .85);
+  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, 0.85);
 }
 
 @media (max-width: 1100px) {

@@ -44,9 +44,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="amount" label="金额" width="120">
-          <template #default="{ row }">
-            ¥ {{ Number(row.amount).toFixed(2) }}
-          </template>
+          <template #default="{ row }"> ¥ {{ Number(row.amount).toFixed(2) }} </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
@@ -83,13 +81,11 @@
                 type="warning"
                 :icon="CircleClose"
                 @click="closeOrder(row)"
-              >结束支付</el-button>
-              <el-button
-                size="small"
-                type="danger"
-                :icon="Delete"
-                @click="deleteOrder(row)"
-              >删除</el-button>
+                >结束支付</el-button
+              >
+              <el-button size="small" type="danger" :icon="Delete" @click="deleteOrder(row)"
+                >删除</el-button
+              >
             </div>
           </template>
         </el-table-column>
@@ -107,11 +103,19 @@
       </div>
     </div>
 
-    <el-dialog v-model="detailVisible" title="订单详情" width="560px" append-to-body destroy-on-close>
+    <el-dialog
+      v-model="detailVisible"
+      title="订单详情"
+      width="560px"
+      append-to-body
+      destroy-on-close
+    >
       <el-skeleton v-if="detailLoading" :rows="6" animated />
       <div v-else-if="detailOrder" class="detail-body">
         <div class="detail-meta">
-          <div><span>订单编号</span><b>{{ orderNumber(detailOrder.order_uuid) }}</b></div>
+          <div>
+            <span>订单编号</span><b>{{ orderNumber(detailOrder.order_uuid) }}</b>
+          </div>
           <div>
             <span>订单状态</span>
             <span
@@ -121,12 +125,21 @@
                 'vp-pill--warning': detailOrder.status === 'pending',
                 'vp-pill--danger': detailOrder.status === 'expired',
               }"
-            >{{ statusText(detailOrder.status) }}</span>
+              >{{ statusText(detailOrder.status) }}</span
+            >
           </div>
-          <div><span>商品总数</span><b>{{ detailOrder.item_count }} 件</b></div>
-          <div><span>应付金额</span><b>¥ {{ Number(detailOrder.amount).toFixed(2) }}</b></div>
-          <div><span>创建时间</span><b>{{ formatTime(detailOrder.created_at) }}</b></div>
-          <div><span>支付时间</span><b>{{ formatTime(detailOrder.paid_at) }}</b></div>
+          <div>
+            <span>商品总数</span><b>{{ detailOrder.item_count }} 件</b>
+          </div>
+          <div>
+            <span>应付金额</span><b>¥ {{ Number(detailOrder.amount).toFixed(2) }}</b>
+          </div>
+          <div>
+            <span>创建时间</span><b>{{ formatTime(detailOrder.created_at) }}</b>
+          </div>
+          <div>
+            <span>支付时间</span><b>{{ formatTime(detailOrder.paid_at) }}</b>
+          </div>
         </div>
         <el-divider />
         <h4>商品明细</h4>
@@ -273,7 +286,12 @@ async function deleteOrder(row) {
     await ElMessageBox.confirm(
       `确定删除订单 ${orderNumber(row.order_uuid)} 吗？删除后无法恢复。`,
       '删除确认',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        customClass: 'app-confirm-dialog',
+      },
     )
   } catch {
     return

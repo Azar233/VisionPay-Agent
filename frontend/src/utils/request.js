@@ -12,8 +12,8 @@ import { getBackendErrorMessage, notifyVisionPetBackendError } from '@/utils/vis
 
 // ── 创建 Axios 实例 ──────────────────────────────────
 const request = axios.create({
-  baseURL: '/api',          // 配合 Vite proxy，实际请求转发到后端
-  timeout: 30000,           // 请求超时 30 秒
+  baseURL: '/api', // 配合 Vite proxy，实际请求转发到后端
+  timeout: 30000, // 请求超时 30 秒
   // 不设置默认 Content-Type，让 Axios 根据请求体自动选择：
   // 普通对象 -> application/json，FormData -> multipart/form-data（浏览器自动加 boundary）
 })
@@ -30,7 +30,7 @@ request.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error)
-  }
+  },
 )
 
 // ── 响应拦截器 ──────────────────────────────────────
@@ -80,7 +80,7 @@ request.interceptors.response.use(
       ElMessage.error('网络连接异常，请检查后端服务是否启动')
     }
     return Promise.reject(error)
-  }
+  },
 )
 
 export default request

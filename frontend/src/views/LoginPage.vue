@@ -7,7 +7,9 @@
       <div class="chat-preview">
         <header>
           <span class="preview-icon"><img src="/favicon.svg" alt="" /></span>
-          <div><strong>VisionPay 智能助理</strong><small><i></i> 已就绪</small></div>
+          <div>
+            <strong>VisionPay 智能助理</strong><small><i></i> 已就绪</small>
+          </div>
         </header>
         <div class="preview-body">
           <p class="bubble user">识别这批收银台商品</p>
@@ -31,11 +33,7 @@
         @submit.prevent="handleLogin"
       >
         <el-form-item prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            prefix-icon="User"
-          />
+          <el-input v-model="loginForm.username" placeholder="请输入用户名" prefix-icon="User" />
         </el-form-item>
         <el-form-item prop="password">
           <el-input
@@ -48,12 +46,7 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button
-            type="primary"
-            class="login-btn"
-            :loading="loading"
-            @click="handleLogin"
-          >
+          <el-button type="primary" class="login-btn" :loading="loading" @click="handleLogin">
             登录
           </el-button>
         </el-form-item>
@@ -130,7 +123,7 @@ async function handleLogin() {
   gap: 64px;
   padding: 48px max(32px, calc((100vw - 1120px) / 2));
   background:
-    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, .1), transparent 28%),
+    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, 0.1), transparent 28%),
     linear-gradient(180deg, $surface-color, $bg-color 72%);
 }
 
@@ -144,7 +137,7 @@ async function handleLogin() {
     font-weight: 600;
     line-height: 1.02;
     color: $text-primary;
-    letter-spacing: -.055em;
+    letter-spacing: -0.055em;
   }
 
   p {
@@ -163,7 +156,7 @@ async function handleLogin() {
   border: 1px solid $border-color;
   border-radius: $border-radius-lg;
   background: $surface-color;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .1);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(20px);
 
   header {
@@ -203,7 +196,11 @@ async function handleLogin() {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(145deg, $primary-color, color-mix(in srgb, $primary-color 70%, #1f6fe0));
+  background: linear-gradient(
+    145deg,
+    $primary-color,
+    color-mix(in srgb, $primary-color 70%, #1f6fe0)
+  );
 
   img {
     width: 24px;
@@ -255,11 +252,11 @@ async function handleLogin() {
   }
 
   i:nth-child(2) {
-    animation-delay: .16s;
+    animation-delay: 0.16s;
   }
 
   i:nth-child(3) {
-    animation-delay: .32s;
+    animation-delay: 0.32s;
   }
 }
 
@@ -269,7 +266,7 @@ async function handleLogin() {
   background: color-mix(in srgb, $surface-color 82%, transparent);
   border: 1px solid $border-color;
   border-radius: $border-radius-lg;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .1);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(24px) saturate(130%);
 }
 
@@ -318,8 +315,16 @@ async function handleLogin() {
 }
 
 @keyframes authPulse {
-  0%, 70%, 100% { opacity: .35; transform: translateY(0); }
-  35% { opacity: 1; transform: translateY(-2px); }
+  0%,
+  70%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 
 @media (max-width: 980px) {

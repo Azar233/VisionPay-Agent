@@ -37,7 +37,12 @@ describe('partitionProductFolderFiles', () => {
   })
 
   it('ignores non-image files and keeps very small folders train-only', () => {
-    const textFile = { name: 'notes.txt', webkitRelativePath: 'cola/notes.txt', type: 'text/plain', size: 20 }
+    const textFile = {
+      name: 'notes.txt',
+      webkitRelativePath: 'cola/notes.txt',
+      type: 'text/plain',
+      size: 20,
+    }
     const result = partitionProductFolderFiles([file('cola/a.jpg'), textFile])
 
     expect(result.totalImages).toBe(1)
@@ -63,7 +68,12 @@ describe('collectProductFolderFiles', () => {
   })
 
   it('ignores non-images and allows an empty selection', () => {
-    const textFile = { name: 'notes.txt', webkitRelativePath: 'val/notes.txt', type: 'text/plain', size: 20 }
+    const textFile = {
+      name: 'notes.txt',
+      webkitRelativePath: 'val/notes.txt',
+      type: 'text/plain',
+      size: 20,
+    }
     const result = collectProductFolderFiles([textFile])
     const empty = collectProductFolderFiles([])
 

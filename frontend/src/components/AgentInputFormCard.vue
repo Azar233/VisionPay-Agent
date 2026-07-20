@@ -1,8 +1,12 @@
 <template>
   <section class="agent-input-form">
     <div class="form-heading">
-      <div class="form-mark"><el-icon><EditPen /></el-icon></div>
-      <div><span>需要补充的信息</span><strong>{{ normalizedForm.title }}</strong></div>
+      <div class="form-mark">
+        <el-icon><EditPen /></el-icon>
+      </div>
+      <div>
+        <span>需要补充的信息</span><strong>{{ normalizedForm.title }}</strong>
+      </div>
     </div>
     <p v-if="normalizedForm.description">{{ normalizedForm.description }}</p>
 
@@ -41,7 +45,12 @@
           :placeholder="field.placeholder || '请选择'"
           clearable
         >
-          <el-option v-for="option in field.options" :key="String(option.value)" :label="option.label" :value="option.value" />
+          <el-option
+            v-for="option in field.options"
+            :key="String(option.value)"
+            :label="option.label"
+            :value="option.value"
+          />
         </el-select>
         <el-switch
           v-else-if="field.type === 'boolean'"
@@ -97,27 +106,81 @@ function legacyDatasetForm(form) {
     purpose: 'dataset.add_samples',
     submit_label: '继续创建交接',
     fields: [
-      { name: 'dataset_id', label: '草稿数据集 ID', type: 'integer', required: true, minimum: 1, default: defaults.dataset_id, placeholder: '例如：6' },
-      { name: 'mode', label: '添加模式', type: 'select', required: true, default: defaults.mode || 'train_new', options: [
-        { label: '新建商品训练图', value: 'train_new' },
-        { label: '已有商品训练图', value: 'train_existing' },
-        { label: 'val/test 结账场景', value: 'scene' },
-      ] },
-      { name: 'name', label: '商品名称', type: 'text', required: true, placeholder: '例如：可口可乐零度 500ml', visible_when: { field: 'mode', equals: 'train_new' } },
-      { name: 'class_name', label: '类别英文名', type: 'text', required: true, placeholder: '例如：coca_cola_zero', visible_when: { field: 'mode', equals: 'train_new' } },
-      { name: 'unit_price', label: '价格（元）', type: 'number', required: true, minimum: 0, step: 0.5, visible_when: { field: 'mode', equals: 'train_new' } },
-      { name: 'barcode', label: '条码', type: 'text', required: false, visible_when: { field: 'mode', equals: 'train_new' } },
-      { name: 'existing_product_id', label: '已有商品 ID', type: 'integer', required: true, minimum: 1, visible_when: { field: 'mode', equals: 'train_existing' } },
+      {
+        name: 'dataset_id',
+        label: '草稿数据集 ID',
+        type: 'integer',
+        required: true,
+        minimum: 1,
+        default: defaults.dataset_id,
+        placeholder: '例如：6',
+      },
+      {
+        name: 'mode',
+        label: '添加模式',
+        type: 'select',
+        required: true,
+        default: defaults.mode || 'train_new',
+        options: [
+          { label: '新建商品训练图', value: 'train_new' },
+          { label: '已有商品训练图', value: 'train_existing' },
+          { label: 'val/test 结账场景', value: 'scene' },
+        ],
+      },
+      {
+        name: 'name',
+        label: '商品名称',
+        type: 'text',
+        required: true,
+        placeholder: '例如：可口可乐零度 500ml',
+        visible_when: { field: 'mode', equals: 'train_new' },
+      },
+      {
+        name: 'class_name',
+        label: '类别英文名',
+        type: 'text',
+        required: true,
+        placeholder: '例如：coca_cola_zero',
+        visible_when: { field: 'mode', equals: 'train_new' },
+      },
+      {
+        name: 'unit_price',
+        label: '价格（元）',
+        type: 'number',
+        required: true,
+        minimum: 0,
+        step: 0.5,
+        visible_when: { field: 'mode', equals: 'train_new' },
+      },
+      {
+        name: 'barcode',
+        label: '条码',
+        type: 'text',
+        required: false,
+        visible_when: { field: 'mode', equals: 'train_new' },
+      },
+      {
+        name: 'existing_product_id',
+        label: '已有商品 ID',
+        type: 'integer',
+        required: true,
+        minimum: 1,
+        visible_when: { field: 'mode', equals: 'train_existing' },
+      },
     ],
   }
 }
 
-const normalizedForm = computed(() => props.form.form_type === 'dataset_add_samples' ? legacyDatasetForm(props.form) : props.form)
+const normalizedForm = computed(() =>
+  props.form.form_type === 'dataset_add_samples' ? legacyDatasetForm(props.form) : props.form,
+)
 const agentLabel = computed(() => agentNames[normalizedForm.value.agent] || '当前 Agent')
-const visibleFields = computed(() => (normalizedForm.value.fields || []).filter((field) => {
-  const rule = field.visible_when
-  return !rule || values[rule.field] === rule.equals
-}))
+const visibleFields = computed(() =>
+  (normalizedForm.value.fields || []).filter((field) => {
+    const rule = field.visible_when
+    return !rule || values[rule.field] === rule.equals
+  }),
+)
 
 function hydrate(form) {
   Object.keys(values).forEach((key) => delete values[key])
@@ -133,7 +196,9 @@ function hydrate(form) {
 watch(normalizedForm, hydrate, { immediate: true, deep: true })
 
 function isMissing(value) {
-  return value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)
+  return (
+    value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)
+  )
 }
 
 function numberInputProps(field) {
@@ -148,7 +213,9 @@ function numberInputProps(field) {
 }
 
 function submit() {
-  const missing = visibleFields.value.find((field) => field.required && isMissing(values[field.name]))
+  const missing = visibleFields.value.find(
+    (field) => field.required && isMissing(values[field.name]),
+  )
   if (missing) return ElMessage.warning(`请填写${missing.label}`)
   const submittedValues = {}
   for (const field of visibleFields.value) {
@@ -161,23 +228,121 @@ function submit() {
 </script>
 
 <style lang="scss" scoped>
-.agent-input-form { margin-top: 16px; padding: 17px; background: $surface-color; border: 1px solid $border-color; border-radius: $border-radius-md; box-shadow: $shadow-sm; }
-.form-heading { display: flex; align-items: center; gap: 10px; }
-.form-mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: #fff; background: linear-gradient(145deg, $primary-color, $primary-hover); }
-.form-heading div:last-child { display: flex; flex-direction: column; gap: 2px; }
-.form-heading span { color: $primary-color; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
-.form-heading strong { color: $text-primary; font-size: 14px; }
-.agent-input-form > p { margin: 12px 0; color: $text-secondary; font-size: 12px; line-height: 1.65; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-top: 13px; }
-.form-grid label { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.form-grid label.wide { grid-column: 1 / -1; }
-.form-grid label > span { color: $text-secondary; font-size: 11px; font-weight: 700; }
-.form-grid b { margin-left: 4px; color: $danger-color; font-size: 9px; }
-.form-grid em { margin-left: 4px; color: $text-placeholder; font-size: 9px; font-style: normal; font-weight: 500; }
-.form-grid small { color: $text-placeholder; font-size: 9px; line-height: 1.5; }
-.form-grid :deep(.el-input-number), .form-grid :deep(.el-select), .form-grid :deep(.el-date-editor) { width: 100%; }
-.form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 13px; border-top: 1px solid $border-color; }
-.form-actions > span { color: $text-placeholder; font-size: 10px; line-height: 1.5; }
-.form-actions .el-button { flex: 0 0 auto; }
-@media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; }.form-grid label.wide { grid-column: auto; }.form-actions { align-items: flex-start; flex-direction: column; }.form-actions .el-button { width: 100%; } }
+.agent-input-form {
+  margin-top: 16px;
+  padding: 17px;
+  background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+}
+.form-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.form-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(145deg, $primary-color, $primary-hover);
+}
+.form-heading div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.form-heading span {
+  color: $primary-color;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.form-heading strong {
+  color: $text-primary;
+  font-size: 14px;
+}
+.agent-input-form > p {
+  margin: 12px 0;
+  color: $text-secondary;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 13px;
+}
+.form-grid label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-grid label.wide {
+  grid-column: 1 / -1;
+}
+.form-grid label > span {
+  color: $text-secondary;
+  font-size: 11px;
+  font-weight: 700;
+}
+.form-grid b {
+  margin-left: 4px;
+  color: $danger-color;
+  font-size: 9px;
+}
+.form-grid em {
+  margin-left: 4px;
+  color: $text-placeholder;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 500;
+}
+.form-grid small {
+  color: $text-placeholder;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.form-grid :deep(.el-input-number),
+.form-grid :deep(.el-select),
+.form-grid :deep(.el-date-editor) {
+  width: 100%;
+}
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid $border-color;
+}
+.form-actions > span {
+  color: $text-placeholder;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.form-actions .el-button {
+  flex: 0 0 auto;
+}
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-grid label.wide {
+    grid-column: auto;
+  }
+  .form-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .form-actions .el-button {
+    width: 100%;
+  }
+}
 </style>

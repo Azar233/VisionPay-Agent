@@ -16,13 +16,30 @@
     <main class="checkout-main">
       <section class="capture-section card-container">
         <div class="section-heading">
-          <div><span>步骤 1</span><h1>扫描您的商品</h1></div>
-          <button type="button" class="reset-button" @click="resetDemo"><el-icon><Refresh /></el-icon>重新扫描</button>
+          <div>
+            <span>步骤 1</span>
+            <h1>扫描您的商品</h1>
+          </div>
+          <button type="button" class="reset-button" @click="resetDemo">
+            <el-icon><Refresh /></el-icon>重新扫描
+          </button>
         </div>
 
         <div class="source-tabs" role="tablist">
-          <button type="button" :class="{ active: sourceMode === 'camera' }" @click="selectSource('camera')"><el-icon><Camera /></el-icon>Webcam</button>
-          <button type="button" :class="{ active: sourceMode === 'upload' }" @click="selectSource('upload')"><el-icon><UploadFilled /></el-icon>图片上传</button>
+          <button
+            type="button"
+            :class="{ active: sourceMode === 'camera' }"
+            @click="selectSource('camera')"
+          >
+            <el-icon><Camera /></el-icon>Webcam
+          </button>
+          <button
+            type="button"
+            :class="{ active: sourceMode === 'upload' }"
+            @click="selectSource('upload')"
+          >
+            <el-icon><UploadFilled /></el-icon>图片上传
+          </button>
         </div>
 
         <div v-if="sourceMode === 'camera'" class="camera-stage">
@@ -35,7 +52,12 @@
           />
         </div>
 
-        <div v-show="sourceMode === 'upload'" class="upload-stage" @dragover.prevent @drop.prevent="handleDrop">
+        <div
+          v-show="sourceMode === 'upload'"
+          class="upload-stage"
+          @dragover.prevent
+          @drop.prevent="handleDrop"
+        >
           <input ref="uploadInputRef" type="file" accept="image/*" hidden @change="handleUpload" />
           <img v-if="previewUrl" :src="uploadDisplayImage" :alt="uploadImageAlt" />
           <template v-else>
@@ -43,54 +65,123 @@
             <strong>拖入或选择一张商品图片</strong>
             <span>支持 JPG、PNG、WEBP</span>
           </template>
-          <button v-if="!selectedUploadFile" type="button" class="select-image-button" @click="openUploadPicker">选择图片</button>
+          <button
+            v-if="!selectedUploadFile"
+            type="button"
+            class="select-image-button"
+            @click="openUploadPicker"
+          >
+            选择图片
+          </button>
           <div v-else class="upload-actions">
-            <button type="button" class="secondary" :disabled="detecting" @click="openUploadPicker">重新选择</button>
-            <button type="button" class="primary" :disabled="detecting" @click="startUploadDetection">
+            <button type="button" class="secondary" :disabled="detecting" @click="openUploadPicker">
+              重新选择
+            </button>
+            <button
+              type="button"
+              class="primary"
+              :disabled="detecting"
+              @click="startUploadDetection"
+            >
               {{ uploadDetectionButtonText }}
             </button>
           </div>
         </div>
 
         <div class="capture-footer">
-          <div><span>识别状态</span><strong class="status-pill">{{ detectionStatus }}</strong></div>
-          <div><span>画面内商品</span><strong>{{ totalItems }} 件</strong></div>
-          <div><span>平均置信度</span><strong>{{ averageConfidence }}</strong></div>
+          <div>
+            <span>识别状态</span><strong class="status-pill">{{ detectionStatus }}</strong>
+          </div>
+          <div>
+            <span>画面内商品</span><strong>{{ totalItems }} 件</strong>
+          </div>
+          <div>
+            <span>平均置信度</span><strong>{{ averageConfidence }}</strong>
+          </div>
         </div>
       </section>
 
       <section class="basket-section card-container">
         <div class="basket-heading">
-          <div><span>步骤 2</span><h2>确认商品清单</h2></div>
+          <div>
+            <span>步骤 2</span>
+            <h2>确认商品清单</h2>
+          </div>
           <strong class="item-count-pill">{{ totalItems }} 件</strong>
         </div>
 
-        <div v-if="products.length && !pricingComplete" class="price-notice"><el-icon><InfoFilled /></el-icon><span>{{ unpricedItems }} 件商品尚未配置价格，请先在价目表中补齐后再结算。</span></div>
-        <div v-else-if="detectionError" class="price-notice"><el-icon><InfoFilled /></el-icon><span>{{ detectionError }}</span></div>
+        <div v-if="products.length && !pricingComplete" class="price-notice">
+          <el-icon><InfoFilled /></el-icon
+          ><span>{{ unpricedItems }} 件商品尚未配置价格，请先在价目表中补齐后再结算。</span>
+        </div>
+        <div v-else-if="detectionError" class="price-notice">
+          <el-icon><InfoFilled /></el-icon><span>{{ detectionError }}</span>
+        </div>
 
         <div class="product-list">
           <article v-for="item in products" :key="item.classId" class="product-item">
-            <div class="product-thumb"><span>{{ item.short }}</span></div>
+            <div class="product-thumb">
+              <span>{{ item.short }}</span>
+            </div>
             <div class="product-copy">
               <strong>{{ item.name }}</strong>
               <span>{{ item.category }} · 置信度 {{ item.confidence }}</span>
-              <b v-if="item.hasPrice">{{ formatMoney(item.unitPrice) }} / 件 · 小计 {{ formatMoney(item.unitPrice * item.quantity) }}</b>
+              <b v-if="item.hasPrice"
+                >{{ formatMoney(item.unitPrice) }} / 件 · 小计
+                {{ formatMoney(item.unitPrice * item.quantity) }}</b
+              >
               <b v-else>价格未配置</b>
             </div>
             <div class="quantity-control">
-              <button type="button" :disabled="item.quantity <= 1 || pricing" @click="changeQuantity(item, -1)"><el-icon><Minus /></el-icon></button>
+              <button
+                type="button"
+                :disabled="item.quantity <= 1 || pricing"
+                @click="changeQuantity(item, -1)"
+              >
+                <el-icon><Minus /></el-icon>
+              </button>
               <span>{{ item.quantity }}</span>
-              <button type="button" :disabled="pricing" @click="changeQuantity(item, 1)"><el-icon><Plus /></el-icon></button>
+              <button type="button" :disabled="pricing" @click="changeQuantity(item, 1)">
+                <el-icon><Plus /></el-icon>
+              </button>
             </div>
-            <button type="button" class="remove-button" aria-label="移除商品" @click="removeProduct(item.classId)"><el-icon><Delete /></el-icon></button>
+            <button
+              type="button"
+              class="remove-button"
+              aria-label="移除商品"
+              @click="removeProduct(item.classId)"
+            >
+              <el-icon><Delete /></el-icon>
+            </button>
           </article>
 
-          <div v-if="!products.length" class="empty-basket"><el-icon><ShoppingCart /></el-icon><strong>暂未识别到商品</strong><span>请重新扫描或上传商品图片</span></div>
+          <div v-if="!products.length" class="empty-basket">
+            <el-icon><ShoppingCart /></el-icon><strong>暂未识别到商品</strong
+            ><span>请重新扫描或上传商品图片</span>
+          </div>
         </div>
 
         <footer class="settlement-panel">
-          <div class="settlement-summary"><span>应付金额</span><strong>{{ formatMoney(totalPrice) }}</strong><small>{{ pricing ? '正在重新计价' : pricingComplete ? '价格已由服务端按当前数量计算' : '总价不含未定价商品' }}</small></div>
-          <button type="button" :disabled="!products.length || !pricingComplete || detecting || pricing || creatingOrder" @click="goToPayment"><span>{{ creatingOrder ? '正在创建支付订单' : '确认商品并去结算' }}</span><el-icon><ArrowRight /></el-icon></button>
+          <div class="settlement-summary">
+            <span>应付金额</span><strong>{{ formatMoney(totalPrice) }}</strong
+            ><small>{{
+              pricing
+                ? '正在重新计价'
+                : pricingComplete
+                  ? '价格已由服务端按当前数量计算'
+                  : '总价不含未定价商品'
+            }}</small>
+          </div>
+          <button
+            type="button"
+            :disabled="
+              !products.length || !pricingComplete || detecting || pricing || creatingOrder
+            "
+            @click="goToPayment"
+          >
+            <span>{{ creatingOrder ? '正在创建支付订单' : '确认商品并去结算' }}</span
+            ><el-icon><ArrowRight /></el-icon>
+          </button>
           <p>继续即表示您已确认以上商品和数量</p>
         </footer>
       </section>
@@ -102,7 +193,18 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Camera, Delete, InfoFilled, List, Minus, Plus, Refresh, ShoppingCart, UploadFilled } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  Camera,
+  Delete,
+  InfoFilled,
+  List,
+  Minus,
+  Plus,
+  Refresh,
+  ShoppingCart,
+  UploadFilled,
+} from '@element-plus/icons-vue'
 import { calculateCheckoutApi, createMockPaymentOrderApi, detectCheckoutApi } from '@/api/checkout'
 import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
 
@@ -130,7 +232,9 @@ const confidenceMemory = {}
 const totalItems = computed(() => products.value.reduce((sum, item) => sum + item.quantity, 0))
 const totalPrice = computed(() => Number(checkoutSummary.value?.total_price || 0))
 const unpricedItems = computed(() => Number(checkoutSummary.value?.unpriced_objects || 0))
-const pricingComplete = computed(() => products.value.length > 0 && checkoutSummary.value?.pricing_complete === true)
+const pricingComplete = computed(
+  () => products.value.length > 0 && checkoutSummary.value?.pricing_complete === true,
+)
 const detectionStatus = computed(() => {
   if (sourceMode.value === 'camera') {
     if (cameraState.value.running) return '实时识别中'
@@ -151,11 +255,13 @@ const uploadDisplayImage = computed(() => {
   if (detectionResult.value?.source !== 'upload') return previewUrl.value
   return detectionResult.value.items?.[0]?.annotated_image || previewUrl.value
 })
-const uploadImageAlt = computed(() => detectionResult.value?.source === 'upload' ? '商品检测标注结果' : '待识别商品预览')
+const uploadImageAlt = computed(() =>
+  detectionResult.value?.source === 'upload' ? '商品检测标注结果' : '待识别商品预览',
+)
 const averageConfidence = computed(() => {
   const detections = detectionResult.value?.items?.flatMap((item) => item.detections || []) || []
   if (!detections.length) return '--'
-  return `${(detections.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / detections.length * 100).toFixed(1)}%`
+  return `${((detections.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / detections.length) * 100).toFixed(1)}%`
 })
 
 function productsFromDetection(detections, priceSummary) {
@@ -167,7 +273,9 @@ function productsFromDetection(detections, priceSummary) {
   }
   return (priceSummary?.items || []).map((item) => {
     const values = confidences.get(item.class_id) || []
-    const confidence = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
+    const confidence = values.length
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
+      : 0
     const displayName = item.name || item.sku_name || item.class_name || `商品 ${item.class_id}`
     return {
       classId: item.class_id,
@@ -201,21 +309,26 @@ function applyRealtimeDetection(result) {
   }
   // 累计模式：服务端扫描计数为基准，手动调整以增量叠加，移除的类别在重置前隐藏。
   for (const detection of item.detections) {
-    const values = confidenceMemory[detection.class_id] || (confidenceMemory[detection.class_id] = [])
+    const values =
+      confidenceMemory[detection.class_id] || (confidenceMemory[detection.class_id] = [])
     values.push(Number(detection.confidence || 0))
     if (values.length > 5) values.shift()
   }
   const scanSummary = result.price_summary
-  const nextProducts = productsFromDetection(item.detections, scanSummary)
-    .filter((product) => !removedClasses.value.has(product.classId))
+  const nextProducts = productsFromDetection(item.detections, scanSummary).filter(
+    (product) => !removedClasses.value.has(product.classId),
+  )
   let adjusted = false
   for (const product of nextProducts) {
     const remembered = confidenceMemory[product.classId]
     if (remembered?.length) {
-      product.confidence = `${(remembered.reduce((sum, value) => sum + value, 0) / remembered.length * 100).toFixed(1)}%`
+      product.confidence = `${((remembered.reduce((sum, value) => sum + value, 0) / remembered.length) * 100).toFixed(1)}%`
     }
     const delta = manualDeltas.value[product.classId] || 0
-    if (delta) { product.quantity = Math.max(1, product.quantity + delta); adjusted = true }
+    if (delta) {
+      product.quantity = Math.max(1, product.quantity + delta)
+      adjusted = true
+    }
   }
   products.value = nextProducts
   if (adjusted) {
@@ -284,14 +397,22 @@ async function startUploadDetection() {
 function openUploadPicker() {
   if (!detecting.value) uploadInputRef.value?.click()
 }
-function handleUpload(event) { selectUploadImage(event.target.files?.[0]); event.target.value = '' }
+function handleUpload(event) {
+  selectUploadImage(event.target.files?.[0])
+  event.target.value = ''
+}
 function handleDrop(event) {
   if (!detecting.value) selectUploadImage(event.dataTransfer.files?.[0])
 }
 async function recalculateCart() {
   const sequence = ++pricingSequence
   if (!products.value.length) {
-    checkoutSummary.value = { total_price: 0, pricing_complete: true, unpriced_objects: 0, items: [] }
+    checkoutSummary.value = {
+      total_price: 0,
+      pricing_complete: true,
+      unpriced_objects: 0,
+      items: [],
+    }
     return
   }
   pricing.value = true
@@ -317,9 +438,11 @@ async function changeQuantity(item, delta) {
   item.quantity = Math.max(1, Math.min(99, item.quantity + delta))
   if (item.quantity === previous) return
   const applied = item.quantity - previous
-  if (sourceMode.value === 'camera') manualDeltas.value[item.classId] = (manualDeltas.value[item.classId] || 0) + applied
-  try { await recalculateCart() }
-  catch {
+  if (sourceMode.value === 'camera')
+    manualDeltas.value[item.classId] = (manualDeltas.value[item.classId] || 0) + applied
+  try {
+    await recalculateCart()
+  } catch {
     if (sourceMode.value === 'camera') manualDeltas.value[item.classId] -= applied
     item.quantity = previous
   }
@@ -332,8 +455,9 @@ async function removeProduct(classId) {
     removedClasses.value.add(classId)
     delete manualDeltas.value[classId]
   }
-  try { await recalculateCart() }
-  catch {
+  try {
+    await recalculateCart()
+  } catch {
     products.value = previous
     if (sourceMode.value === 'camera') {
       removedClasses.value.delete(classId)
@@ -341,10 +465,38 @@ async function removeProduct(classId) {
     }
   }
 }
-function resetDemo() { detectionSequence++; pricingSequence++; detecting.value = false; pricing.value = false; products.value = []; detectionResult.value = null; checkoutSummary.value = null; activeModelVersionId.value = null; detectionError.value = ''; selectedUploadFile.value = null; manualDeltas.value = {}; removedClasses.value = new Set(); Object.keys(confidenceMemory).forEach((key) => delete confidenceMemory[key]); if (sourceMode.value === 'camera') { cameraDetectionRef.value?.resetScan(); cameraDetectionRef.value?.start() } else selectSource('camera'); if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); previewUrl.value = '' }
-function formatMoney(value) { return `¥ ${Number(value || 0).toFixed(2)}` }
+function resetDemo() {
+  detectionSequence++
+  pricingSequence++
+  detecting.value = false
+  pricing.value = false
+  products.value = []
+  detectionResult.value = null
+  checkoutSummary.value = null
+  activeModelVersionId.value = null
+  detectionError.value = ''
+  selectedUploadFile.value = null
+  manualDeltas.value = {}
+  removedClasses.value = new Set()
+  Object.keys(confidenceMemory).forEach((key) => delete confidenceMemory[key])
+  if (sourceMode.value === 'camera') {
+    cameraDetectionRef.value?.resetScan()
+    cameraDetectionRef.value?.start()
+  } else selectSource('camera')
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = ''
+}
+function formatMoney(value) {
+  return `¥ ${Number(value || 0).toFixed(2)}`
+}
 async function goToPayment() {
-  const order = { items: products.value, itemCount: totalItems.value, totalPrice: totalPrice.value, currency: 'CNY', modelVersionId: activeModelVersionId.value }
+  const order = {
+    items: products.value,
+    itemCount: totalItems.value,
+    totalPrice: totalPrice.value,
+    currency: 'CNY',
+    modelVersionId: activeModelVersionId.value,
+  }
   sessionStorage.setItem('visionpay-checkout-order', JSON.stringify(order))
   creatingOrder.value = true
   try {
@@ -371,7 +523,12 @@ function selectSource(mode) {
   Object.keys(confidenceMemory).forEach((key) => delete confidenceMemory[key])
   sourceMode.value = mode
 }
-onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.value) URL.revokeObjectURL(previewUrl.value); cameraDetectionRef.value?.stop() })
+onBeforeUnmount(() => {
+  detectionSequence++
+  pricingSequence++
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  cameraDetectionRef.value?.stop()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -444,7 +601,10 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
   background: $surface-color;
   cursor: pointer;
   font-size: 12px;
-  transition: border-color .2s, color .2s, background .2s;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
 
   &:hover {
     border-color: $primary-color;
@@ -486,7 +646,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
 .checkout-main {
   min-height: calc(100vh - 74px);
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(390px, .65fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(390px, 0.65fr);
   // 保留一条窄灰缝，避免白块之间隔得太远。
   gap: 12px;
   padding: 12px;
@@ -530,7 +690,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     color: $primary-color;
     font-size: 10px;
     font-weight: 800;
-    letter-spacing: .08em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
@@ -539,7 +699,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     margin: 0;
     color: $text-primary;
     font-size: 23px;
-    letter-spacing: -.02em;
+    letter-spacing: -0.02em;
   }
 }
 
@@ -568,7 +728,10 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
   background: $surface-color;
   cursor: pointer;
   font-size: 12px;
-  transition: border-color .2s, color .2s, background .2s;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    background 0.2s;
 
   &:hover {
     border-color: $primary-color;
@@ -599,7 +762,9 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     background: $surface-color;
     cursor: pointer;
     font-size: 13px;
-    transition: color .2s, background .2s;
+    transition:
+      color 0.2s,
+      background 0.2s;
 
     &:last-child {
       border-right: 0;
@@ -653,7 +818,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     background: $primary-color;
     cursor: pointer;
     font-size: 13px;
-    transition: background .2s;
+    transition: background 0.2s;
 
     &:hover {
       background: $primary-hover;
@@ -661,7 +826,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
 
     &:disabled {
       cursor: not-allowed;
-      opacity: .58;
+      opacity: 0.58;
     }
   }
 
@@ -843,7 +1008,9 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
     color: $text-secondary;
     background: $surface-muted;
     cursor: pointer;
-    transition: color .2s, background .2s;
+    transition:
+      color 0.2s,
+      background 0.2s;
 
     &:hover:not(:disabled) {
       color: $primary-color;
@@ -871,7 +1038,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
   color: $text-secondary;
   background: transparent;
   cursor: pointer;
-  transition: color .2s;
+  transition: color 0.2s;
 
   &:hover {
     color: $danger-color;
@@ -945,7 +1112,7 @@ onBeforeUnmount(() => { detectionSequence++; pricingSequence++; if (previewUrl.v
   cursor: pointer;
   font-size: 15px;
   font-weight: 800;
-  transition: background .2s;
+  transition: background 0.2s;
 
   &:hover {
     background: $primary-hover;

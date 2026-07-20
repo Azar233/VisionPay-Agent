@@ -31,11 +31,13 @@ export function notifyVisionPetTaskProgress({ status = '', state, ...detail } = 
   notifyVisionPetTask({
     ...detail,
     status,
-    state: state || (
-      WORKING_TASK_STATUSES.has(normalizedStatus)
+    state:
+      state ||
+      (WORKING_TASK_STATUSES.has(normalizedStatus)
         ? 'working'
-        : ERROR_TASK_STATUSES.has(normalizedStatus) ? 'error' : 'idle'
-    ),
+        : ERROR_TASK_STATUSES.has(normalizedStatus)
+          ? 'error'
+          : 'idle'),
   })
 }
 
@@ -50,7 +52,12 @@ export function getBackendErrorMessage(error, fallback = '后端服务异常') {
 
 export function isUnexpectedBackendError(error) {
   if (!error || error.config?.skipPetError) return false
-  if (error.name === 'AbortError' || error.name === 'CanceledError' || error.code === 'ERR_CANCELED') return false
+  if (
+    error.name === 'AbortError' ||
+    error.name === 'CanceledError' ||
+    error.code === 'ERR_CANCELED'
+  )
+    return false
   if (!error.response) return true
   return Number(error.response.status) >= 500
 }
@@ -75,7 +82,12 @@ function latestActiveTask() {
  * idle after every active lease has finished, which prevents overlapping
  * requests from resetting each other's working state.
  */
-export function beginVisionPetTask({ id, message = '正在处理任务', progress = null, showProgress = false } = {}) {
+export function beginVisionPetTask({
+  id,
+  message = '正在处理任务',
+  progress = null,
+  showProgress = false,
+} = {}) {
   const taskId = id || `pet-task-${++taskSequence}`
   const task = { id: taskId, message: String(message || '正在处理任务'), progress, showProgress }
   activeTasks.set(taskId, task)

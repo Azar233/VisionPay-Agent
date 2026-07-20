@@ -4,9 +4,15 @@ import HistoryPage from '@/views/HistoryPage.vue'
 import { getHistoryOverview } from '@/api/history'
 
 vi.mock('@/api/history', () => ({
-  deleteTask: vi.fn(), getAgentCallDetail: vi.fn(), getAgentCallList: vi.fn(),
-  getHistoryOverview: vi.fn(), getModelHistoryDetail: vi.fn(), getModelHistoryList: vi.fn(),
-  getScenes: vi.fn(), getTaskDetail: vi.fn(), getTaskList: vi.fn(),
+  deleteTask: vi.fn(),
+  getAgentCallDetail: vi.fn(),
+  getAgentCallList: vi.fn(),
+  getHistoryOverview: vi.fn(),
+  getModelHistoryDetail: vi.fn(),
+  getModelHistoryList: vi.fn(),
+  getScenes: vi.fn(),
+  getTaskDetail: vi.fn(),
+  getTaskList: vi.fn(),
 }))
 
 const tabsStub = {
@@ -37,9 +43,18 @@ describe('HistoryPage', () => {
         stubs: {
           ElTabs: tabsStub,
           ElTabPane: paneStub,
-          DetectionHistoryPanel: { name: 'DetectionHistoryPanel', template: '<div data-test="detection-panel" />' },
-          AgentHistoryPanel: { name: 'AgentHistoryPanel', template: '<div data-test="agent-panel" />' },
-          ModelHistoryPanel: { name: 'ModelHistoryPanel', template: '<div data-test="model-panel" />' },
+          DetectionHistoryPanel: {
+            name: 'DetectionHistoryPanel',
+            template: '<div data-test="detection-panel" />',
+          },
+          AgentHistoryPanel: {
+            name: 'AgentHistoryPanel',
+            template: '<div data-test="agent-panel" />',
+          },
+          ModelHistoryPanel: {
+            name: 'ModelHistoryPanel',
+            template: '<div data-test="model-panel" />',
+          },
         },
       },
     })
@@ -59,9 +74,18 @@ describe('HistoryPage', () => {
         stubs: {
           ElTabs: tabsStub,
           ElTabPane: paneStub,
-          DetectionHistoryPanel: { name: 'DetectionHistoryPanel', template: '<div data-test="detection-panel" />' },
-          AgentHistoryPanel: { name: 'AgentHistoryPanel', template: '<div data-test="agent-panel" />' },
-          ModelHistoryPanel: { name: 'ModelHistoryPanel', template: '<div data-test="model-panel" />' },
+          DetectionHistoryPanel: {
+            name: 'DetectionHistoryPanel',
+            template: '<div data-test="detection-panel" />',
+          },
+          AgentHistoryPanel: {
+            name: 'AgentHistoryPanel',
+            template: '<div data-test="agent-panel" />',
+          },
+          ModelHistoryPanel: {
+            name: 'ModelHistoryPanel',
+            template: '<div data-test="model-panel" />',
+          },
         },
       },
     })

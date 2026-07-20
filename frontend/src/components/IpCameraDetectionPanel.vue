@@ -18,7 +18,12 @@
         clearable
         @change="saveCameraUrl"
       />
-      <button type="button" class="mode-toggle" :disabled="active" @click="accumulate = !accumulate">
+      <button
+        type="button"
+        class="mode-toggle"
+        :disabled="active"
+        @click="accumulate = !accumulate"
+      >
         <span>{{ accumulate ? '累计模式' : '瞬时模式' }}</span>
         <span :class="['mode-switch', { active: accumulate }]" aria-hidden="true"><i></i></span>
       </button>
@@ -35,24 +40,48 @@
     </div>
 
     <div class="camera-metrics">
-      <div><span>{{ accumulate ? '已扫累计' : '当前商品' }}</span><strong>{{ accumulate ? (result.scan_total_objects ?? 0) : (result.object_count || 0) }}</strong></div>
-      <div><span>{{ accumulate ? '画面内' : '采集到画面' }}</span><strong>{{ accumulate ? (result.object_count || 0) : Number(result.pipeline_latency_ms || 0).toFixed(0) + ' ms' }}</strong></div>
-      <div><span>处理帧率</span><strong>{{ Number(result.fps || 0).toFixed(1) }} FPS</strong></div>
-      <div><span>推理耗时</span><strong>{{ Number(result.inference_time_ms || 0).toFixed(0) }} ms</strong></div>
+      <div>
+        <span>{{ accumulate ? '已扫累计' : '当前商品' }}</span
+        ><strong>{{
+          accumulate ? (result.scan_total_objects ?? 0) : result.object_count || 0
+        }}</strong>
+      </div>
+      <div>
+        <span>{{ accumulate ? '画面内' : '采集到画面' }}</span
+        ><strong>{{
+          accumulate
+            ? result.object_count || 0
+            : Number(result.pipeline_latency_ms || 0).toFixed(0) + ' ms'
+        }}</strong>
+      </div>
+      <div>
+        <span>处理帧率</span><strong>{{ Number(result.fps || 0).toFixed(1) }} FPS</strong>
+      </div>
+      <div>
+        <span>推理耗时</span
+        ><strong>{{ Number(result.inference_time_ms || 0).toFixed(0) }} ms</strong>
+      </div>
     </div>
 
     <div v-if="classes.length" class="camera-classes">
-      <span v-for="item in classes" :key="item.name">{{ item.name }} <b>{{ item.count }}</b></span>
+      <span v-for="item in classes" :key="item.name"
+        >{{ item.name }} <b>{{ item.count }}</b></span
+      >
     </div>
     <p v-if="error" class="camera-error">{{ error }}</p>
 
     <footer class="camera-actions">
       <div>
         <span>{{ modelInfo }}</span>
-        <small>{{ runtimeInfo }} · 已处理 {{ result.frame_count || 0 }} 帧 · 主动丢弃 {{ result.dropped_frames || 0 }} 个旧帧</small>
+        <small
+          >{{ runtimeInfo }} · 已处理 {{ result.frame_count || 0 }} 帧 · 主动丢弃
+          {{ result.dropped_frames || 0 }} 个旧帧</small
+        >
       </div>
       <div class="action-group">
-        <el-button v-if="!active" type="primary" :loading="loading" @click="start">开始检测</el-button>
+        <el-button v-if="!active" type="primary" :loading="loading" @click="start"
+          >开始检测</el-button
+        >
         <el-button v-else type="danger" plain @click="stop">停止检测</el-button>
       </div>
     </footer>
@@ -65,7 +94,7 @@ import { VideoCamera } from '@element-plus/icons-vue'
 
 const props = defineProps({
   sceneId: { type: Number, default: undefined },
-  conf: { type: Number, default: 0.30 },
+  conf: { type: Number, default: 0.3 },
   iou: { type: Number, default: 0.45 },
   autoStart: { type: Boolean, default: false },
   compact: { type: Boolean, default: false },
@@ -94,7 +123,11 @@ let pendingFrame = ''
 let renderingFrame = false
 let renderGeneration = 0
 
-const classes = computed(() => Object.entries((accumulate.value ? result.value.scan_class_counts : result.value.class_counts) || {}).map(([name, count]) => ({ name, count })))
+const classes = computed(() =>
+  Object.entries(
+    (accumulate.value ? result.value.scan_class_counts : result.value.class_counts) || {},
+  ).map(([name, count]) => ({ name, count })),
+)
 
 function saveCameraUrl() {
   const value = cameraUrl.value.trim()
@@ -109,7 +142,13 @@ function socketUrl() {
 
 function setStatus(value) {
   statusText.value = value
-  emit('status', { active: active.value, running: running.value, loading: loading.value, error: error.value, text: value })
+  emit('status', {
+    active: active.value,
+    running: running.value,
+    loading: loading.value,
+    error: error.value,
+    text: value,
+  })
 }
 
 function decodeFrame(base64) {
@@ -165,15 +204,17 @@ function connect() {
   socket = new WebSocket(socketUrl())
   socket.onopen = () => {
     setStatus('正在加载模型')
-    socket.send(JSON.stringify({
-      type: 'config',
-      mode: 'cuda',
-      conf: props.conf,
-      iou: props.iou,
-      scene_id: props.sceneId || null,
-      camera_url: cameraUrl.value.trim(),
-      accumulate: accumulate.value,
-    }))
+    socket.send(
+      JSON.stringify({
+        type: 'config',
+        mode: 'cuda',
+        conf: props.conf,
+        iou: props.iou,
+        scene_id: props.sceneId || null,
+        camera_url: cameraUrl.value.trim(),
+        accumulate: accumulate.value,
+      }),
+    )
   }
   socket.onmessage = async (event) => {
     const message = JSON.parse(event.data)
@@ -230,7 +271,7 @@ function connect() {
       return
     }
     if (reconnectAttempts < 3) {
-      const delay = 800 * (2 ** reconnectAttempts)
+      const delay = 800 * 2 ** reconnectAttempts
       reconnectAttempts += 1
       setStatus(`连接中断，${reconnectAttempts}/3 次重连`)
       reconnectTimer = window.setTimeout(connect, delay)
@@ -274,7 +315,9 @@ function resetScan() {
   result.value = {}
 }
 
-onMounted(() => { if (props.autoStart) start() })
+onMounted(() => {
+  if (props.autoStart) start()
+})
 onBeforeUnmount(stop)
 defineExpose({ start, stop, resetScan })
 </script>
@@ -356,7 +399,7 @@ defineExpose({ start, stop, resetScan })
     cursor: pointer;
 
     &:disabled {
-      opacity: .5;
+      opacity: 0.5;
       cursor: not-allowed;
     }
   }
@@ -369,15 +412,15 @@ defineExpose({ start, stop, resetScan })
     padding: 2px;
     border-radius: 999px;
     background: #d2d2d7;
-    transition: background .25s ease;
+    transition: background 0.25s ease;
 
     i {
       width: 14px;
       height: 14px;
       border-radius: 50%;
       background: #fff;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
-      transition: transform .25s cubic-bezier(.2, .8, .2, 1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
     &.active {
@@ -447,7 +490,7 @@ defineExpose({ start, stop, resetScan })
   background: $danger-color;
   font-size: 9px;
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 
 .camera-metrics {
@@ -584,7 +627,7 @@ defineExpose({ start, stop, resetScan })
     border-right: 0;
   }
 
-  .camera-metrics > div:nth-child(-n+2) {
+  .camera-metrics > div:nth-child(-n + 2) {
     border-bottom: 1px solid $border-color;
   }
 }

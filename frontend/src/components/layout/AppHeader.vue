@@ -42,8 +42,12 @@
               <span class="theme-menu-label">{{ themeLabel }}</span>
               <span :class="['theme-switch', { active: isDark }]" aria-hidden="true"><i></i></span>
             </el-dropdown-item>
-            <el-dropdown-item command="profile"><el-icon><User /></el-icon>个人中心</el-dropdown-item>
-            <el-dropdown-item command="logout" divided><el-icon><SwitchButton /></el-icon>退出登录</el-dropdown-item>
+            <el-dropdown-item command="profile"
+              ><el-icon><User /></el-icon>个人中心</el-dropdown-item
+            >
+            <el-dropdown-item command="logout" divided
+              ><el-icon><SwitchButton /></el-icon>退出登录</el-dropdown-item
+            >
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -78,9 +82,16 @@ function handleCommand(command) {
   }
   if (command === 'logout') {
     ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
-      confirmButtonText: '退出', cancelButtonText: '取消', type: 'warning',
-      customClass: 'logout-confirm-dialog',
-    }).then(() => { userStore.logout(); router.push('/login') }).catch(() => {})
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+      customClass: 'app-confirm-dialog',
+    })
+      .then(() => {
+        userStore.logout()
+        router.push('/login')
+      })
+      .catch(() => {})
   }
 }
 </script>
@@ -125,9 +136,11 @@ function handleCommand(command) {
   background: transparent;
   font-size: 12px;
   cursor: pointer;
-  transition: color .2s ease;
+  transition: color 0.2s ease;
 
-  &:hover { color: $primary-color; }
+  &:hover {
+    color: $primary-color;
+  }
 }
 
 .page-info-text {
@@ -137,7 +150,11 @@ function handleCommand(command) {
   line-height: 1.7;
 }
 
-.header-right, .user-info { display: flex; align-items: center; }
+.header-right,
+.user-info {
+  display: flex;
+  align-items: center;
+}
 
 .user-info {
   gap: 8px;
@@ -146,11 +163,17 @@ function handleCommand(command) {
   color: $text-secondary;
   cursor: pointer;
   border-radius: 999px;
-  transition: background .2s ease;
+  transition: background 0.2s ease;
 
-  &:hover { background: var(--vp-sidebar-active-bg); }
+  &:hover {
+    background: var(--vp-sidebar-active-bg);
+  }
 }
-.username { color: $text-primary; font-size: 14px; font-weight: 500; }
+.username {
+  color: $text-primary;
+  font-size: 14px;
+  font-weight: 500;
+}
 
 :global(.user-menu-popper.el-popper) {
   width: 208px !important;
@@ -163,7 +186,9 @@ function handleCommand(command) {
   background: var(--vp-surface) !important;
   box-shadow: var(--vp-shadow-lg) !important;
 }
-:global(.user-menu-popper .el-popper__arrow) { display: none !important; }
+:global(.user-menu-popper .el-popper__arrow) {
+  display: none !important;
+}
 :global(.user-menu-popper .el-dropdown-menu) {
   width: 100%;
   min-width: 0;
@@ -192,8 +217,13 @@ function handleCommand(command) {
   margin-top: 4px;
   border-top-color: var(--vp-border);
 }
-:global(.user-menu-popper .theme-menu-item) { display: grid; grid-template-columns: 17px minmax(0, 1fr) auto; }
-:global(.user-menu-popper .theme-menu-label) { white-space: nowrap; }
+:global(.user-menu-popper .theme-menu-item) {
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr) auto;
+}
+:global(.user-menu-popper .theme-menu-label) {
+  white-space: nowrap;
+}
 :global(.user-menu-popper .theme-switch) {
   width: 32px;
   height: 18px;
@@ -202,21 +232,29 @@ function handleCommand(command) {
   padding: 2px;
   border-radius: 999px;
   background: #d2d2d7;
-  transition: background .25s ease;
+  transition: background 0.25s ease;
 }
 :global(.user-menu-popper .theme-switch i) {
   width: 14px;
   height: 14px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
-  transition: transform .25s cubic-bezier(.2, .8, .2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-:global(.user-menu-popper .theme-switch.active) { background: var(--vp-primary); }
-:global(.user-menu-popper .theme-switch.active i) { transform: translateX(14px); }
+:global(.user-menu-popper .theme-switch.active) {
+  background: var(--vp-primary);
+}
+:global(.user-menu-popper .theme-switch.active i) {
+  transform: translateX(14px);
+}
 
 @media (max-width: 720px) {
-  .app-header { padding: 0 16px; }
-  .username { display: none; }
+  .app-header {
+    padding: 0 16px;
+  }
+  .username {
+    display: none;
+  }
 }
 </style>
