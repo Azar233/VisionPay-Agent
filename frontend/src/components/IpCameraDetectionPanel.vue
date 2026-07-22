@@ -5,7 +5,7 @@
         <i :class="{ live: running }"></i>
         <span>{{ statusText }}</span>
       </div>
-      <small>IP WEBCAM · YOLO · CPU</small>
+      <small>IP WEBCAM · YOLO · {{ deviceLabel }}</small>
     </header>
 
     <div class="camera-address">
@@ -110,7 +110,8 @@ const hasFrame = ref(false)
 const error = ref('')
 const statusText = ref('等待启动')
 const modelInfo = ref('模型将在连接后加载')
-const runtimeInfo = ref('CPU 低延迟模式')
+const runtimeInfo = ref('等待连接')
+const deviceLabel = ref('CPU')
 const result = ref({})
 const defaultCameraUrl = 'http://127.0.0.1:18080'
 const cameraUrl = ref(window.localStorage.getItem('visionpay-ip-webcam-url') || defaultCameraUrl)
@@ -224,7 +225,8 @@ function connect() {
       loading.value = false
       running.value = true
       modelInfo.value = `${message.model} · ${message.scene}`
-      runtimeInfo.value = `${message.image_size} × ${message.image_size} · 目标 ${Number(message.target_fps).toFixed(1)} FPS · ${accumulate.value ? '累计计数' : '瞬时计数'}`
+      deviceLabel.value = (message.device || message.mode || 'CPU').toUpperCase()
+      runtimeInfo.value = `${message.image_size} × ${message.image_size} · 目标 ${Number(message.target_fps).toFixed(1)} FPS · ${deviceLabel.value} · ${accumulate.value ? '累计计数' : '瞬时计数'}`
       setStatus('实时识别中')
       return
     }
