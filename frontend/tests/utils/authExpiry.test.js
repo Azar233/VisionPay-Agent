@@ -36,8 +36,8 @@ describe('auth expiry handling', () => {
     expect(localStorage.getItem('vp_agent_user')).toBeNull()
     expect(replace).toHaveBeenCalledOnce()
     expect(replace).toHaveBeenCalledWith({
-      path: '/login',
-      query: { redirect: '/dashboard?range=7d' },
+      path: '/welcome',
+      query: { entry: 'core', redirect: '/dashboard?range=7d' },
     })
   })
 

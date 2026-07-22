@@ -625,6 +625,11 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   justify-content: space-between;
   gap: 20px;
 
+  > div {
+    width: 100%;
+    min-width: 0;
+  }
+
   h1 {
     margin: 10px 0 0;
     color: $text-primary;
@@ -635,11 +640,12 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   }
 
   p {
-    max-width: 560px;
+    max-width: none;
     margin: 12px 0 0;
     color: $text-secondary;
     font-size: 16px;
     line-height: 1.6;
+    white-space: nowrap;
   }
 }
 
@@ -1222,6 +1228,9 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   }
   .page-header h1 {
     font-size: 30px;
+  }
+  .page-header p {
+    white-space: normal;
   }
   .settings-content {
     padding: 24px;
