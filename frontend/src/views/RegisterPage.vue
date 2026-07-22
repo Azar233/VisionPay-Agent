@@ -57,7 +57,7 @@
       </el-form>
       <div class="register-footer">
         <span>已有账号？</span>
-        <router-link to="/login">立即登录</router-link>
+        <router-link :to="{ path: '/welcome', query: { entry: 'core' } }">立即登录</router-link>
       </div>
     </div>
   </div>
@@ -122,7 +122,7 @@ async function handleRegister() {
       password: registerForm.password,
     })
     ElMessage.success('注册成功，请登录')
-    router.push('/login')
+    router.push({ path: '/welcome', query: { entry: 'core' } })
   } catch {
     // 错误已在 Axios 拦截器中统一处理
   } finally {

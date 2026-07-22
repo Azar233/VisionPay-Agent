@@ -34,8 +34,8 @@ describe('streamChat', () => {
       expect.objectContaining({ message: '登录已过期，请重新登录' }),
     )
     expect(replace).toHaveBeenCalledWith({
-      path: '/login',
-      query: { redirect: '/chat' },
+      path: '/welcome',
+      query: { entry: 'core', redirect: '/chat' },
     })
   })
 

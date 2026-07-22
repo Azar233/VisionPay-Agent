@@ -19,10 +19,10 @@ export function handleAuthExpired({ clearSession, redirectPath } = {}) {
   localStorage.removeItem(USER_KEY)
 
   const currentRoute = router.currentRoute.value
-  if (currentRoute.path !== '/login') {
+  if (currentRoute.path !== '/welcome' || currentRoute.query?.entry !== 'core') {
     const target = redirectPath || currentRoute.fullPath || '/'
     ElMessage.error('登录已过期，请重新登录')
-    router.replace({ path: '/login', query: { redirect: target } })
+    router.replace({ path: '/welcome', query: { entry: 'core', redirect: target } })
   }
 
   return true

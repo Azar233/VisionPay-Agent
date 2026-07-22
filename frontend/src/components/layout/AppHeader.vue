@@ -89,7 +89,7 @@ function handleCommand(command) {
     })
       .then(() => {
         userStore.logout()
-        router.push('/login')
+        router.push({ path: '/welcome', query: { entry: 'core' } })
       })
       .catch(() => {})
   }

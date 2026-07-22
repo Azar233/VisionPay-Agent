@@ -4,7 +4,7 @@ const routes = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/LoginPage.vue'),
+    redirect: (to) => ({ path: '/welcome', query: { ...to.query, entry: 'core' } }),
     meta: { title: '登录', requiresAuth: false, hideVisionPet: true },
   },
   {
@@ -12,6 +12,12 @@ const routes = [
     name: 'Register',
     component: () => import('@/views/RegisterPage.vue'),
     meta: { title: '注册', requiresAuth: false, hideVisionPet: true },
+  },
+  {
+    path: '/welcome',
+    name: 'VisionJourney',
+    component: () => import('@/views/VisionJourneyPage.vue'),
+    meta: { title: 'Vision', requiresAuth: false, hideVisionPet: true },
   },
   {
     path: '/',
@@ -101,7 +107,7 @@ const routes = [
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/login',
+    redirect: { path: '/welcome', query: { entry: 'core' } },
   },
 ]
 
@@ -110,16 +116,20 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
-  document.title = to.meta.title
-    ? `${to.meta.title} - VisionPay Agent Platform`
-    : 'VisionPay Agent Platform'
-
-  const token = localStorage.getItem('vp_agent_token')
+export function resolveAuthNavigation(to, token = localStorage.getItem('vp_agent_token')) {
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth !== false)
 
   if (requiresAuth && !token) {
-    return { path: '/login', query: { redirect: to.fullPath } }
+    return { path: '/welcome', query: { redirect: to.fullPath, entry: 'awakening' } }
+  }
+
+  if (
+    to.name === 'VisionJourney' &&
+    token &&
+    to.query.entry !== 'core' &&
+    to.query.entry !== 'replay'
+  ) {
+    return { path: '/welcome', query: { ...to.query, entry: 'core' } }
   }
 
   if ((to.path === '/login' || to.path === '/register') && token) {
@@ -127,6 +137,14 @@ router.beforeEach((to) => {
   }
 
   return true
+}
+
+router.beforeEach((to) => {
+  document.title = to.meta.title
+    ? `${to.meta.title} - VisionPay Agent Platform`
+    : 'VisionPay Agent Platform'
+
+  return resolveAuthNavigation(to)
 })
 
 export default router

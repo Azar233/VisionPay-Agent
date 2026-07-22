@@ -43,3 +43,39 @@ $shadow-sm: var(--vp-shadow-sm);
 $shadow-md: var(--vp-shadow-md);
 $shadow-lg: var(--vp-shadow-lg);
 $ring-primary: var(--vp-ring);
+
+// Vision Journey identity and motion tokens.
+$agent-detection: var(--vp-agent-detection);
+$agent-dataset: var(--vp-agent-dataset);
+$agent-training: var(--vp-agent-training);
+$agent-catalog: var(--vp-agent-catalog);
+$agent-knowledge: var(--vp-agent-knowledge);
+$motion-fast: var(--vp-motion-fast);
+$motion-base: var(--vp-motion-base);
+$motion-scene: var(--vp-motion-scene);
+$ease-vision-out: var(--vp-ease-vision-out);
+
+// Vision Journey background and chrome tokens.
+$vj-bg: var(--vp-vj-bg);
+$vj-star-1: var(--vp-vj-star-1);
+$vj-star-2: var(--vp-vj-star-2);
+$vj-star-3: var(--vp-vj-star-3);
+$vj-header-text: var(--vp-vj-header-text);
+$vj-header-accent: var(--vp-vj-header-accent);
+$vj-scroll-hint: var(--vp-vj-scroll-hint);
+$vj-nav-bg: var(--vp-vj-nav-bg);
+$vj-nav-border: var(--vp-vj-nav-border);
+$vj-nav-text: var(--vp-vj-nav-text);
+$vj-progress-text: var(--vp-vj-progress-text);
+$vj-progress-text-active: var(--vp-vj-progress-text-active);
+$vj-glass-border: var(--vp-vj-glass-border);
+$vj-glass-bg: var(--vp-vj-glass-bg);
+$vj-text-soft: var(--vp-vj-text-soft);
+$vj-agent-rail: var(--vp-vj-agent-rail);
+$vj-agent-panel-bg: var(--vp-vj-agent-panel-bg);
+$vj-agent-panel-text: var(--vp-vj-agent-panel-text);
+$vj-agent-panel-text-active: var(--vp-vj-agent-panel-text-active);
+$vj-dot: var(--vp-vj-dot);
+$vj-scan-bg-1: var(--vp-vj-scan-bg-1);
+$vj-scan-bg-2: var(--vp-vj-scan-bg-2);
+$vj-star-opacity: var(--vp-vj-star-opacity);

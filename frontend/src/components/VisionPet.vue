@@ -172,8 +172,8 @@ const stateLabels = {
 
 const ariaLabel = computed(() =>
   petStore.message
-    ? `VisionPay 桌宠：${petStore.message}${petProgress.value !== null ? `，进度 ${petProgress.value}%` : ''}`
-    : `VisionPay 桌宠，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`,
+    ? `Vico：${petStore.message}${petProgress.value !== null ? `，进度 ${petProgress.value}%` : ''}`
+    : `Vico，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`,
 )
 
 function petBounds() {
@@ -395,7 +395,7 @@ onMounted(async () => {
   window.addEventListener('blur', endDrag)
   window.addEventListener(VISION_PET_TASK_EVENT, handleTaskEvent)
 
-  petStore.notify({ state: 'idle', message: 'VisionPay 已就绪，拖动我试试' })
+  petStore.notify({ state: 'idle', message: 'Vico 已就绪，拖动我试试' })
   scheduleMessageDismiss(3600)
 })
 

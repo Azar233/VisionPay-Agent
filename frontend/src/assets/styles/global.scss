@@ -2,6 +2,15 @@
 
 :root {
   color-scheme: light;
+  --vp-agent-detection: #3d5afe;
+  --vp-agent-dataset: #8b5cf6;
+  --vp-agent-training: #0ea5e9;
+  --vp-agent-catalog: #f59e0b;
+  --vp-agent-knowledge: #10b981;
+  --vp-motion-fast: 180ms;
+  --vp-motion-base: 320ms;
+  --vp-motion-scene: 720ms;
+  --vp-ease-vision-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --vp-primary: #2b7fff;
   --vp-primary-hover: #1f6fe0;
   --vp-primary-soft: #eef4ff;
@@ -59,10 +68,42 @@
   --el-fill-color-lighter: #f7f8fa;
   --el-font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --vp-vj-bg:
+    radial-gradient(circle at 4% 6%, rgba(129, 149, 255, 0.32), transparent 24%),
+    radial-gradient(circle at 96% 8%, rgba(255, 200, 120, 0.28), transparent 22%),
+    radial-gradient(circle at 78% 88%, rgba(174, 138, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 5% 94%, rgba(255, 200, 120, 0.22), transparent 22%), #f8f9fd;
+  --vp-vj-star-opacity: 0.8;
+  --vp-vj-star-1: rgba(61, 90, 254, 0.55);
+  --vp-vj-star-2: rgba(61, 90, 254, 0.32);
+  --vp-vj-star-3: rgba(120, 140, 255, 0.4);
+  --vp-vj-header-text: #1d2340;
+  --vp-vj-header-accent: #2b3fd1;
+  --vp-vj-scroll-hint: rgba(29, 35, 64, 0.55);
+  --vp-vj-nav-bg: rgba(255, 255, 255, 0.85);
+  --vp-vj-nav-border: rgba(61, 90, 254, 0.22);
+  --vp-vj-nav-text: #33395c;
+  --vp-vj-progress-text: rgba(29, 35, 64, 0.4);
+  --vp-vj-progress-text-active: #1d2340;
+  --vp-vj-glass-border: rgba(61, 90, 254, 0.22);
+  --vp-vj-glass-bg: rgba(255, 255, 255, 0.5);
+  --vp-vj-text-soft: #55598a;
+  --vp-vj-agent-rail: rgba(61, 90, 254, 0.28);
+  --vp-vj-agent-panel-bg: rgba(255, 255, 255, 0.6);
+  --vp-vj-agent-panel-text: rgba(29, 35, 64, 0.55);
+  --vp-vj-agent-panel-text-active: #1d2340;
+  --vp-vj-dot: #1d2340;
+  --vp-vj-scan-bg-1: rgba(61, 90, 254, 0.1);
+  --vp-vj-scan-bg-2: rgba(255, 255, 255, 0.55);
 }
 
 html.dark {
   color-scheme: dark;
+  --vp-agent-detection: #7184ff;
+  --vp-agent-dataset: #a78bfa;
+  --vp-agent-training: #38bdf8;
+  --vp-agent-catalog: #fbbf24;
+  --vp-agent-knowledge: #34d399;
   --vp-primary: #3b8bff;
   --vp-primary-hover: #5c9dff;
   --vp-primary-soft: rgba(59, 139, 255, 0.16);
@@ -132,6 +173,29 @@ html.dark {
   --el-mask-color: rgba(0, 0, 0, 0.72);
   --el-mask-color-extra-light: rgba(0, 0, 0, 0.5);
   --el-box-shadow-light: 0 8px 28px rgba(0, 0, 0, 0.42);
+  --vp-vj-bg: #050716;
+  --vp-vj-star-1: rgba(255, 255, 255, 0.7);
+  --vp-vj-star-2: rgba(61, 90, 254, 0.8);
+  --vp-vj-star-3: rgba(255, 255, 255, 0.65);
+  --vp-vj-header-text: #dce2ff;
+  --vp-vj-header-accent: #b7c2ff;
+  --vp-vj-scroll-hint: rgba(220, 226, 255, 0.64);
+  --vp-vj-nav-bg: rgba(8, 11, 30, 0.82);
+  --vp-vj-nav-border: rgba(157, 174, 255, 0.26);
+  --vp-vj-nav-text: #c9d1ff;
+  --vp-vj-progress-text: rgba(220, 226, 255, 0.42);
+  --vp-vj-progress-text-active: #dce2ff;
+  --vp-vj-glass-border: rgba(157, 174, 255, 0.24);
+  --vp-vj-glass-bg: rgba(255, 255, 255, 0.04);
+  --vp-vj-text-soft: #b9c0d8;
+  --vp-vj-agent-rail: rgba(157, 174, 255, 0.3);
+  --vp-vj-agent-panel-bg: rgba(8, 11, 30, 0.55);
+  --vp-vj-agent-panel-text: rgba(225, 230, 255, 0.5);
+  --vp-vj-agent-panel-text-active: #ffffff;
+  --vp-vj-dot: #ffffff;
+  --vp-vj-scan-bg-1: rgba(61, 90, 254, 0.12);
+  --vp-vj-scan-bg-2: rgba(5, 7, 22, 0.4);
+  --vp-vj-star-opacity: 0.55;
 }
 
 html.dark body {
