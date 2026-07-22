@@ -534,7 +534,7 @@ async def camera_detection_ws(websocket: WebSocket):
                 "frame": frame,
                 "detections": last_snapshot["detections"],
                 "price_detections": last_snapshot["price_detections"],
-                "inference_time_ms": last_snapshot["inference_time_ms"] if should_infer else 0.0,
+                "inference_time_ms": last_snapshot["inference_time_ms"],
                 "captured_at": captured_at,
                 "sequence": sequence,
                 "dropped_frames": dropped_frames,
