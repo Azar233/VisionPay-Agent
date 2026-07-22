@@ -6,6 +6,7 @@ import { useVisionPetStore } from '@/stores/visionPet'
 import {
   beginVisionPetTask,
   notifyVisionPetBackendError,
+  notifyVisionPetPaymentSuccess,
   notifyVisionPetTask,
   notifyVisionPetTaskProgress,
   VISION_PET_TASK_EVENT,
@@ -43,6 +44,28 @@ describe('VisionPet', () => {
     expect(wrapper.text()).toContain('订单正在确认')
     expect(wrapper.find('.pet-sprite').attributes('style')).toContain('100%')
     expect(useVisionPetStore().state).toBe('checkout')
+    wrapper.unmount()
+  })
+
+  it('plays checkout success and returns to idle after the payment message', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    notifyVisionPetPaymentSuccess({ amount: 37, duration: 1200 })
+    await wrapper.vm.$nextTick()
+
+    expect(useVisionPetStore().state).toBe('checkout')
+    expect(wrapper.classes()).toContain('is-checkout')
+    expect(wrapper.text()).toContain('支付成功 · ¥ 37.00')
+    expect(wrapper.find('.pet-sprite').attributes('style')).toContain('100%')
+
+    vi.advanceTimersByTime(1200)
+    await wrapper.vm.$nextTick()
+    expect(useVisionPetStore().state).toBe('idle')
+    expect(wrapper.text()).not.toContain('支付成功')
     wrapper.unmount()
   })
 

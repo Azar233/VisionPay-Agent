@@ -5,7 +5,7 @@
         <el-icon><ArrowLeft /></el-icon><span>返回商品确认</span>
       </button>
       <div class="brand">
-        <span><img src="/favicon.svg" alt="VisionPay" /></span><strong>VisionPay 自助结算</strong>
+        <span><img :src="faviconUrl" alt="VisionPay" /></span><strong>VisionPay 自助结算</strong>
       </div>
       <div class="secure-label">
         <el-icon><Lock /></el-icon>模拟支付环境
@@ -178,9 +178,11 @@ import {
   getMockPaymentOrderApi,
   getMockPaymentStatusApi,
 } from '@/api/checkout'
+import { notifyVisionPetPaymentSuccess, notifyVisionPetTask } from '@/utils/visionPet'
 
 const router = useRouter()
 const route = useRoute()
+const faviconUrl = '/favicon.svg'
 const paymentOrder = ref(loadSession('visionpay-payment-order'))
 const cartOrder = ref(loadSession('visionpay-checkout-order'))
 const qrDataUrl = ref('')
@@ -189,6 +191,7 @@ const polling = ref(false)
 const regenerating = ref(false)
 let statusTimer = null
 let countdownTimer = null
+let paymentSuccessAnnounced = false
 
 const paymentStatus = computed(() => paymentOrder.value?.status || '')
 const statusText = computed(
@@ -251,15 +254,23 @@ async function pollStatus() {
   if (!paymentOrder.value || polling.value || paymentStatus.value !== 'pending') return
   polling.value = true
   try {
+    const previousStatus = paymentStatus.value
     const status = await getMockPaymentStatusApi(paymentOrder.value.order_uuid)
     paymentOrder.value = { ...paymentOrder.value, ...status }
     sessionStorage.setItem('visionpay-payment-order', JSON.stringify(paymentOrder.value))
+    if (previousStatus !== 'paid' && status.status === 'paid') announcePaymentSuccess()
     if (status.status !== 'pending') stopTimers()
   } catch {
     // Keep the current state and retry on the next interval.
   } finally {
     polling.value = false
   }
+}
+
+function announcePaymentSuccess() {
+  if (paymentSuccessAnnounced || paymentStatus.value !== 'paid') return
+  paymentSuccessAnnounced = true
+  notifyVisionPetPaymentSuccess({ amount: paymentOrder.value?.amount })
 }
 
 function startTimers() {
@@ -280,6 +291,7 @@ async function regenerateOrder() {
   if (!cartOrder.value?.items?.length) return router.push('/checkout')
   regenerating.value = true
   try {
+    paymentSuccessAnnounced = false
     paymentOrder.value = await createMockPaymentOrderApi(
       cartOrder.value.items,
       cartOrder.value.modelVersionId || null,
@@ -298,6 +310,7 @@ async function regenerateOrder() {
 }
 
 function startNewCheckout() {
+  notifyVisionPetTask({ state: 'idle', message: '', duration: 0 })
   sessionStorage.removeItem('visionpay-payment-order')
   sessionStorage.removeItem('visionpay-checkout-order')
   router.push('/checkout')
@@ -316,6 +329,7 @@ onMounted(async () => {
   }
   if (!paymentOrder.value) return
   await renderQrCode()
+  if (paymentStatus.value === 'paid') announcePaymentSuccess()
   if (paymentStatus.value === 'pending') {
     await pollStatus()
     if (paymentStatus.value === 'pending') startTimers()

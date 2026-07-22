@@ -2,7 +2,7 @@
   <div class="mock-pay-page">
     <header class="mobile-header">
       <div class="brand">
-        <span><img src="/favicon.svg" alt="VisionPay" /></span><strong>VisionPay</strong>
+        <span><img :src="faviconUrl" alt="VisionPay" /></span><strong>VisionPay</strong>
       </div>
       <span class="demo-badge">模拟支付</span>
     </header>
@@ -115,8 +115,10 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { confirmMockPaymentApi, getMockPaymentOrderApi } from '@/api/checkout'
+import { notifyVisionPetPaymentSuccess, notifyVisionPetTask } from '@/utils/visionPet'
 
 const route = useRoute()
+const faviconUrl = '/favicon.svg'
 const order = ref(null)
 const loading = ref(true)
 const submitting = ref(false)
@@ -164,12 +166,23 @@ async function confirmPayment() {
   if (submitting.value) return
   submitting.value = true
   confirmError.value = ''
+  notifyVisionPetTask({ state: 'working', message: '正在确认支付', duration: 0 })
   try {
     order.value = await confirmMockPaymentApi(route.params.token, paymentMethod.value)
     window.clearInterval(countdownTimer)
+    if (order.value.status === 'paid') {
+      notifyVisionPetPaymentSuccess({ amount: order.value.amount })
+    } else {
+      notifyVisionPetTask({ state: 'idle', message: '支付状态已更新', duration: 3200 })
+    }
   } catch (error) {
-    if (error.response?.status === 410) order.value = { ...order.value, status: 'expired' }
-    else confirmError.value = '付款确认失败，请检查网络后重试。'
+    if (error.response?.status === 410) {
+      order.value = { ...order.value, status: 'expired' }
+      notifyVisionPetTask({ state: 'idle', message: '支付二维码已过期', duration: 4200 })
+    } else {
+      confirmError.value = '付款确认失败，请检查网络后重试。'
+      notifyVisionPetTask({ state: 'error', message: '支付确认失败，请重试', duration: 5200 })
+    }
   } finally {
     submitting.value = false
   }

@@ -7,6 +7,7 @@
     :class="{
       'is-dragging': dragging,
       'has-message': Boolean(petStore.message),
+      'is-checkout': petStore.state === 'checkout',
       'is-error': petStore.state === 'error',
     }"
     :style="petPositionStyle"
@@ -341,7 +342,7 @@ function scheduleMessageDismiss(duration = 4200) {
   if (!petStore.message || duration <= 0) return
   messageTimer = window.setTimeout(() => {
     petStore.clearMessage()
-    if (petStore.state === 'error') petStore.setState('idle')
+    if (petStore.state === 'checkout' || petStore.state === 'error') petStore.setState('idle')
   }, duration)
 }
 
@@ -558,6 +559,10 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: $success-color;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-success) 16%, transparent);
+}
+
+.vision-pet.is-checkout .pet-message {
+  border-color: color-mix(in srgb, var(--vp-success) 42%, var(--vp-border));
 }
 
 .vision-pet.is-error .pet-message {

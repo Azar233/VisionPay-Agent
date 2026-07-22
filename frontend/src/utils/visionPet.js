@@ -73,6 +73,20 @@ export function notifyVisionPetBackendError(error, { message = '', duration = 52
   return true
 }
 
+/** Show the checkout completion sequence for a confirmed backend payment. */
+export function notifyVisionPetPaymentSuccess({ amount = null, duration = 5600 } = {}) {
+  const numericAmount = Number(amount)
+  const amountText =
+    amount !== null && amount !== '' && Number.isFinite(numericAmount)
+      ? `¥ ${numericAmount.toFixed(2)}`
+      : ''
+  notifyVisionPetTask({
+    state: 'checkout',
+    message: ['支付成功', amountText].filter(Boolean).join(' · '),
+    duration,
+  })
+}
+
 function latestActiveTask() {
   return [...activeTasks.values()].at(-1)
 }
