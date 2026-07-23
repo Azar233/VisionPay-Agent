@@ -6,9 +6,7 @@
         <div><strong>VisionPay</strong><span>自助视觉结算</span></div>
       </div>
       <div class="header-actions">
-        <button type="button" class="history-button" @click="router.push('/checkout/history')">
-          <el-icon><List /></el-icon>订单历史
-        </button>
+        <el-button :icon="List" @click="router.push('/checkout/history')">订单历史</el-button>
         <div class="header-status"><i></i><span>设备就绪</span></div>
       </div>
     </header>
@@ -20,9 +18,7 @@
             <span>步骤 1</span>
             <h1>扫描您的商品</h1>
           </div>
-          <button type="button" class="reset-button" @click="resetDemo">
-            <el-icon><Refresh /></el-icon>重新扫描
-          </button>
+          <el-button :icon="Refresh" @click="resetDemo">重新扫描</el-button>
         </div>
 
         <div class="source-tabs" role="tablist">
@@ -118,10 +114,10 @@
           <el-icon><InfoFilled /></el-icon><span>{{ detectionError }}</span>
         </div>
 
-        <div class="product-list">
+        <TransitionGroup name="basket-item" tag="div" class="product-list">
           <article v-for="item in products" :key="item.classId" class="product-item">
-            <div class="product-thumb">
-              <span>{{ item.short }}</span>
+            <div class="product-thumb" :style="{ background: thumbGradient(item.name) }">
+              <span>{{ item.short.charAt(0) }}</span>
             </div>
             <div class="product-copy">
               <strong>{{ item.name }}</strong>
@@ -155,15 +151,16 @@
             </button>
           </article>
 
-          <div v-if="!products.length" class="empty-basket">
+          <div v-if="!products.length" key="empty-basket" class="empty-basket">
             <el-icon><ShoppingCart /></el-icon><strong>暂未识别到商品</strong
             ><span>请重新扫描或上传商品图片</span>
           </div>
-        </div>
+        </TransitionGroup>
 
         <footer class="settlement-panel">
           <div class="settlement-summary">
-            <span>应付金额</span><strong>{{ formatMoney(totalPrice) }}</strong
+            <span>应付金额</span
+            ><strong class="vp-num">{{ formatMoney(animatedTotalPrice) }}</strong
             ><small>{{
               pricing
                 ? '正在重新计价'
@@ -172,8 +169,9 @@
                   : '总价不含未定价商品'
             }}</small>
           </div>
-          <button
-            type="button"
+          <el-button
+            type="primary"
+            class="settlement-button"
             :disabled="
               !products.length || !pricingComplete || detecting || pricing || creatingOrder
             "
@@ -181,7 +179,7 @@
           >
             <span>{{ creatingOrder ? '正在创建支付订单' : '确认商品并去结算' }}</span
             ><el-icon><ArrowRight /></el-icon>
-          </button>
+          </el-button>
           <p>继续即表示您已确认以上商品和数量</p>
         </footer>
       </section>
@@ -207,6 +205,7 @@ import {
 } from '@element-plus/icons-vue'
 import { calculateCheckoutApi, createMockPaymentOrderApi, detectCheckoutApi } from '@/api/checkout'
 import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
+import { useCountUp } from '@/composables/useCountUp'
 
 const router = useRouter()
 const sourceMode = ref('camera')
@@ -263,6 +262,22 @@ const averageConfidence = computed(() => {
   if (!detections.length) return '--'
   return `${((detections.reduce((sum, item) => sum + Number(item.confidence || 0), 0) / detections.length) * 100).toFixed(1)}%`
 })
+// 合计金额滚动动画；prefers-reduced-motion 下 useCountUp 直接落终值。
+const animatedTotalPrice = useCountUp(() => totalPrice.value, { duration: 600 })
+
+// 商品 thumb 渐变色块：按名称 hash 稳定取一组预设渐变（蓝紫/青蓝/橙粉/青绿）。
+const THUMB_GRADIENTS = [
+  'linear-gradient(135deg, #3d5afe 0%, #8b5cf6 100%)',
+  'linear-gradient(135deg, #2b7fff 0%, #06b6d4 100%)',
+  'linear-gradient(135deg, #f59e0b 0%, #fb7185 100%)',
+  'linear-gradient(135deg, #10b981 0%, #0ea5e9 100%)',
+]
+function thumbGradient(name) {
+  const text = String(name || '')
+  let hash = 0
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0
+  return THUMB_GRADIENTS[hash % THUMB_GRADIENTS.length]
+}
 
 function productsFromDetection(detections, priceSummary) {
   const confidences = new Map()
@@ -590,29 +605,6 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
-.history-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
-  color: $text-secondary;
-  background: $surface-color;
-  cursor: pointer;
-  font-size: 12px;
-  transition:
-    border-color 0.2s,
-    color 0.2s,
-    background 0.2s;
-
-  &:hover {
-    border-color: $primary-color;
-    color: $primary-color;
-    background: $primary-soft;
-  }
-}
-
 .header-status {
   display: grid;
   grid-template-columns: 8px auto auto;
@@ -717,35 +709,12 @@ onBeforeUnmount(() => {
   }
 }
 
-.reset-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
-  color: $text-secondary;
-  background: $surface-color;
-  cursor: pointer;
-  font-size: 12px;
-  transition:
-    border-color 0.2s,
-    color 0.2s,
-    background 0.2s;
-
-  &:hover {
-    border-color: $primary-color;
-    color: $primary-color;
-    background: $primary-soft;
-  }
-}
-
 .source-tabs {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
   margin-bottom: 12px;
   border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
+  border-radius: 10px;
   overflow: hidden;
   background: $surface-color;
 
@@ -762,6 +731,7 @@ onBeforeUnmount(() => {
     background: $surface-color;
     cursor: pointer;
     font-size: 13px;
+    font-weight: 500;
     transition:
       color 0.2s,
       background 0.2s;
@@ -813,15 +783,22 @@ onBeforeUnmount(() => {
     margin-top: 8px;
     padding: 9px 18px;
     border: 0;
-    border-radius: $border-radius-sm;
+    border-radius: 10px;
     color: #fff;
     background: $primary-color;
     cursor: pointer;
     font-size: 13px;
-    transition: background 0.2s;
+    font-weight: 500;
+    transition:
+      background 0.2s,
+      transform 0.2s;
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: $primary-hover;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.98);
     }
 
     &:disabled {
@@ -883,7 +860,7 @@ onBeforeUnmount(() => {
 
   span {
     color: $text-secondary;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   strong {
@@ -918,12 +895,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 10px 11px;
-  border-left: 3px solid $warning-color;
-  border-radius: 0 $border-radius-sm $border-radius-sm 0;
-  color: $text-primary;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--vp-warning) 26%, transparent);
+  border-radius: 10px;
+  color: $text-regular;
   background: var(--vp-warning-bg);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
 
   .el-icon {
@@ -960,12 +937,34 @@ onBeforeUnmount(() => {
   height: 54px;
   display: grid;
   place-items: center;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
-  color: $primary-color;
-  background: $primary-soft;
-  font-size: 10px;
-  font-weight: 800;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  html.dark & {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* 新商品入场：淡入 + 上移；reduced-motion 由全局规则降级为瞬现。 */
+.basket-item-enter-active {
+  transition:
+    opacity 0.32s ease,
+    transform 0.32s $ease-vision-out;
+}
+.basket-item-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .basket-item-enter-active {
+    transition: none;
+  }
 }
 
 .product-copy {
@@ -998,7 +997,7 @@ onBeforeUnmount(() => {
   grid-template-columns: 26px 30px 26px;
   align-items: center;
   border: 1px solid $border-color;
-  border-radius: $border-radius-sm;
+  border-radius: 10px;
   overflow: hidden;
   background: $surface-color;
 
@@ -1010,11 +1009,16 @@ onBeforeUnmount(() => {
     cursor: pointer;
     transition:
       color 0.2s,
-      background 0.2s;
+      background 0.2s,
+      transform 0.2s;
 
     &:hover:not(:disabled) {
       color: $primary-color;
       background: $primary-soft;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.92);
     }
 
     &:disabled {
@@ -1034,14 +1038,25 @@ onBeforeUnmount(() => {
 .remove-button {
   width: 27px;
   height: 27px;
+  display: grid;
+  place-items: center;
   border: 0;
+  border-radius: 8px;
   color: $text-secondary;
   background: transparent;
   cursor: pointer;
-  transition: color 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    transform 0.2s;
 
   &:hover {
     color: $danger-color;
+    background: var(--vp-danger-bg);
+  }
+
+  &:active {
+    transform: scale(0.94);
   }
 }
 
@@ -1070,9 +1085,26 @@ onBeforeUnmount(() => {
   }
 }
 
+/* 玻璃底栏：sticky 贴底，深色下半透明 + 背景模糊 + 顶部 1px 亮边。 */
 .settlement-panel {
-  padding-top: 18px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 4px -28px -24px;
+  padding: 16px 28px 18px;
   border-top: 1px solid $border-color;
+  border-radius: 0 0 $border-radius-md $border-radius-md;
+  background: $surface-color;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+
+  html.dark & {
+    border-top-color: rgba(255, 255, 255, 0.14);
+    background: rgba(13, 20, 36, 0.72);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 -12px 32px rgba(0, 0, 0, 0.32);
+  }
 }
 
 .settlement-summary {
@@ -1089,38 +1121,37 @@ onBeforeUnmount(() => {
   strong {
     grid-row: span 2;
     color: $text-primary;
+    font-family: var(--vp-font-mono);
     font-size: 28px;
   }
 
   small {
     color: $warning-color;
-    font-size: 10px;
+    font-size: 11px;
   }
 }
 
-.settlement-panel > button {
+/* 主按钮：深色下渐变 + 光晕由全局 .el-button--primary 提供。 */
+.settlement-panel > .el-button {
   width: 100%;
   height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  border: 0;
-  border-radius: $border-radius-sm;
-  color: #fff;
-  background: $primary-color;
-  cursor: pointer;
+  border-radius: 12px;
   font-size: 15px;
-  font-weight: 800;
-  transition: background 0.2s;
+  font-weight: 700;
 
-  &:hover {
-    background: $primary-hover;
+  :deep(span) {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
-  &:disabled {
+  &.is-disabled,
+  &.is-disabled:hover {
+    border-color: transparent;
     background: $text-placeholder;
-    cursor: not-allowed;
+    background-image: none;
+    box-shadow: none;
+    opacity: 0.6;
   }
 }
 
@@ -1162,6 +1193,11 @@ onBeforeUnmount(() => {
     padding: 20px 16px;
   }
 
+  .settlement-panel {
+    margin: 4px -16px -20px;
+    padding: 14px 16px;
+  }
+
   .section-heading h1,
   .basket-heading h2 {
     font-size: 20px;
@@ -1195,6 +1231,7 @@ onBeforeUnmount(() => {
   .product-thumb {
     width: 48px;
     height: 48px;
+    font-size: 14px;
   }
 
   .quantity-control {

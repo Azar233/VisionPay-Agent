@@ -109,6 +109,12 @@ function handleCommand(command) {
   border-bottom: 1px solid $border-color;
 }
 
+html.dark .app-header {
+  background: rgba(7, 11, 22, 0.6);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+}
+
 .header-left {
   display: flex;
   align-items: center;

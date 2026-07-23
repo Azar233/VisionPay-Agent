@@ -6,7 +6,6 @@ import CustomerPaymentPage from '@/views/CustomerPaymentPage.vue'
 import { getMockPaymentStatusApi } from '@/api/checkout'
 import { VISION_PET_TASK_EVENT } from '@/utils/visionPet'
 
-
 vi.mock('qrcode', () => ({
   default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,qr') },
 }))

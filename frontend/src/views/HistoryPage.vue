@@ -1,41 +1,35 @@
 <template>
   <div class="history-page">
-    <section class="summary-grid">
-      <button type="button" class="summary-card detection" @click="jumpToTab('detection')">
-        <span
+    <section class="summary-hero vp-glass">
+      <button type="button" class="summary-item" @click="jumpToTab('detection')">
+        <span class="summary-icon"
           ><el-icon><View /></el-icon
         ></span>
-        <div>
-          <small>识别任务</small><strong>{{ overview.detection_tasks }}</strong>
+        <span class="summary-text">
+          <small>识别任务</small>
+          <strong class="vp-num">{{ Math.round(detectionCount) }}</strong>
           <p>当前账号累计检测</p>
-        </div>
+        </span>
       </button>
-      <button type="button" class="summary-card agent" @click="jumpToTab('agent')">
-        <span
+      <button type="button" class="summary-item" @click="jumpToTab('agent')">
+        <span class="summary-icon"
           ><el-icon><Connection /></el-icon
         ></span>
-        <div>
-          <small>Agent 调用</small><strong>{{ overview.agent_calls }}</strong>
+        <span class="summary-text">
+          <small>Agent 调用</small>
+          <strong class="vp-num">{{ Math.round(agentCount) }}</strong>
           <p>今日 {{ overview.today_agent_calls }} 次</p>
-        </div>
+        </span>
       </button>
-      <button type="button" class="summary-card model" @click="jumpToTab('model')">
-        <span
+      <button type="button" class="summary-item" @click="jumpToTab('model')">
+        <span class="summary-icon"
           ><el-icon><Cpu /></el-icon
         ></span>
-        <div>
-          <small>模型版本</small><strong>{{ overview.models }}</strong>
+        <span class="summary-text">
+          <small>模型版本</small>
+          <strong class="vp-num">{{ Math.round(modelCount) }}</strong>
           <p>{{ overview.active_models }} 个处于活动状态</p>
-        </div>
-      </button>
-      <button type="button" class="summary-card coverage">
-        <span
-          ><el-icon><Clock /></el-icon
-        ></span>
-        <div>
-          <small>记录范围</small><strong>3</strong>
-          <p>检测、Agent 与模型</p>
-        </div>
+        </span>
       </button>
     </section>
 
@@ -44,8 +38,7 @@
         <el-tab-pane name="detection">
           <template #label
             ><span class="tab-label"
-              ><el-icon><View /></el-icon><span>识别记录</span
-              ><small>{{ overview.detection_tasks }}</small></span
+              ><el-icon><View /></el-icon><span>识别记录</span></span
             ></template
           >
           <DetectionHistoryPanel ref="detectionPanel" @changed="loadOverview" />
@@ -53,8 +46,7 @@
         <el-tab-pane name="agent">
           <template #label
             ><span class="tab-label"
-              ><el-icon><Connection /></el-icon><span>Agent 调用</span
-              ><small>{{ overview.agent_calls }}</small></span
+              ><el-icon><Connection /></el-icon><span>Agent 调用</span></span
             ></template
           >
           <AgentHistoryPanel v-if="loadedTabs.agent" ref="agentPanel" />
@@ -62,8 +54,7 @@
         <el-tab-pane name="model">
           <template #label
             ><span class="tab-label"
-              ><el-icon><Cpu /></el-icon><span>模型历史</span
-              ><small>{{ overview.models }}</small></span
+              ><el-icon><Cpu /></el-icon><span>模型历史</span></span
             ></template
           >
           <ModelHistoryPanel v-if="loadedTabs.model" ref="modelPanel" />
@@ -85,12 +76,13 @@
 
 <script setup>
 import { nextTick, onMounted, reactive, ref } from 'vue'
-import { Clock, Connection, Cpu, Refresh, View } from '@element-plus/icons-vue'
+import { Connection, Cpu, Refresh, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AgentHistoryPanel from '@/components/history/AgentHistoryPanel.vue'
 import DetectionHistoryPanel from '@/components/history/DetectionHistoryPanel.vue'
 import ModelHistoryPanel from '@/components/history/ModelHistoryPanel.vue'
 import { getHistoryOverview } from '@/api/history'
+import { useCountUp } from '@/composables/useCountUp'
 
 const activeTab = ref('detection')
 const refreshing = ref(false)
@@ -106,6 +98,11 @@ const overview = reactive({
   active_models: 0,
 })
 
+// 概览带数字滚动动画：概览刷新后自动滚到新值，prefers-reduced-motion 下直接落终值。
+const detectionCount = useCountUp(() => overview.detection_tasks)
+const agentCount = useCountUp(() => overview.agent_calls)
+const modelCount = useCountUp(() => overview.models)
+
 async function loadOverview() {
   try {
     Object.assign(overview, await getHistoryOverview())
@@ -119,7 +116,7 @@ async function handleTabChange(name) {
   await nextTick()
 }
 
-// 指标卡点击后同步切换下方记录页签。
+// 概览带统计项点击后同步切换下方记录页签。
 async function jumpToTab(name) {
   if (activeTab.value === name) return
   activeTab.value = name
@@ -153,83 +150,85 @@ onMounted(loadOverview)
   color: $text-primary;
   background: $bg-color;
 }
-// 四张独立指标卡，可点击跳转到对应记录页签。
-.summary-grid {
+// 通栏 hero 概览带：玻璃拟态卡片，深色下叠一层微弱品牌渐变底纹；
+// 内部统计项横向排布、1px 分隔线相隔，点击跳转对应记录页签。
+.summary-hero {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: stretch;
+  padding: 10px;
+
+  html.dark & {
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--vp-primary) 9%, transparent),
+        color-mix(in srgb, var(--vp-accent-cyan) 6%, transparent)
+      ),
+      var(--vp-surface);
+  }
 }
-.summary-card {
+.summary-item {
   min-width: 0;
-  padding: 18px 20px;
-  display: grid;
-  grid-template-columns: 44px 1fr;
+  padding: 12px 24px;
+  display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   text-align: left;
-  background: $surface-color;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  color: inherit;
+  background: transparent;
+  border: 0;
   cursor: pointer;
   transition:
-    border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    background-color 0.2s ease,
+    transform 0.2s ease;
 }
-.summary-card:hover,
-.summary-card:focus-visible {
-  border-color: $primary-color;
-  box-shadow: $shadow-md;
+.summary-item + .summary-item {
+  border-left: 1px solid $border-color;
+}
+.summary-item:hover,
+.summary-item:focus-visible {
+  background: $primary-soft;
   transform: translateY(-1px);
 }
-.summary-card > span {
-  width: 44px;
-  height: 44px;
+// 统一主色强调：品牌渐变图标底，深色下加品牌光晕。
+.summary-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: 12px;
+  color: #fff;
   font-size: 20px;
+  background: var(--vp-brand-gradient);
+
+  html.dark & {
+    box-shadow: 0 0 14px var(--vp-border-glow);
+  }
 }
-.summary-grid .detection > span {
-  color: $primary-color;
-  background: $primary-soft;
-}
-.summary-grid .agent > span {
-  color: $secondary-color;
-  background: color-mix(in srgb, $secondary-color 12%, transparent);
-}
-.summary-grid .model > span {
-  color: $info-color;
-  background: var(--vp-info-bg);
-}
-.summary-grid .coverage > span {
-  color: $success-color;
-  background: var(--vp-success-bg);
-}
-.summary-card div {
+.summary-text {
   min-width: 0;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
+  display: flex;
+  flex-direction: column;
 }
-.summary-card small {
+.summary-text small {
+  color: $text-secondary;
+  font-size: 12px;
+  font-weight: 500;
+}
+.summary-text strong {
+  margin: 2px 0;
   color: $text-primary;
-  font-size: 17px;
+  font-size: 26px;
   font-weight: 700;
+  line-height: 1.2;
 }
-.summary-card strong {
-  grid-row: 1 / 3;
-  grid-column: 2;
-  color: $text-primary;
-  font-size: 28px;
-  font-weight: 650;
-}
-.summary-card p {
-  margin: 4px 0 0;
+.summary-text p {
+  margin: 0;
   overflow: hidden;
-  color: $text-placeholder;
-  font-size: 10px;
+  color: $text-secondary;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -282,39 +281,22 @@ onMounted(loadOverview)
   background: $surface-color;
   box-shadow: $shadow-sm;
 }
-.tab-label small {
-  min-width: 20px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  color: $text-placeholder;
-  background: $surface-muted;
-  font-size: 9px;
-  text-align: center;
-}
-.history-tabs :deep(.is-active) .tab-label small {
-  color: $primary-color;
-  background: $primary-soft;
-}
-@media (max-width: 1050px) {
-  .summary-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
 @media (max-width: 760px) {
   .history-page {
     padding: 16px;
   }
-  .summary-grid {
+  .summary-hero {
     grid-template-columns: 1fr;
+  }
+  .summary-item + .summary-item {
+    border-top: 1px solid $border-color;
+    border-left: 0;
   }
   .history-tabs :deep(.el-tabs__item) {
     padding: 0 2px;
   }
   .tab-label {
     padding: 0 8px;
-  }
-  .tab-label small {
-    display: none;
   }
 }
 </style>

@@ -14,33 +14,59 @@
     <section class="summary-grid card-container">
       <article class="summary-card current-card">
         <span>当前版本</span>
-        <strong>{{ currentDataset?.version || '未设置' }}</strong>
+        <strong class="vp-num">{{ currentDataset?.version || '未设置' }}</strong>
         <small>{{ currentDataset?.name || '导入版本时可指定当前版本' }}</small>
       </article>
-      <article class="summary-card">
-        <span>版本总数</span>
-        <strong>{{ total }}</strong>
-        <small>当前筛选结果 {{ rows.length }} 条</small>
+      <article class="summary-card metric-card">
+        <div class="metric-icon metric-icon--info" aria-hidden="true">
+          <el-icon :size="19"><Files /></el-icon>
+        </div>
+        <div class="metric-body">
+          <span>版本总数</span>
+          <strong class="vp-num">{{ total }}</strong>
+          <small>当前筛选结果 {{ rows.length }} 条</small>
+        </div>
       </article>
-      <article class="summary-card">
-        <span>草稿</span>
-        <strong>{{ statusCount.draft }}</strong>
-        <small>仍可编辑和补充类别映射</small>
+      <article class="summary-card metric-card">
+        <div class="metric-icon metric-icon--warning" aria-hidden="true">
+          <el-icon :size="19"><EditPen /></el-icon>
+        </div>
+        <div class="metric-body">
+          <span>草稿</span>
+          <strong class="vp-num">{{ statusCount.draft }}</strong>
+          <small>仍可编辑和补充类别映射</small>
+        </div>
       </article>
-      <article class="summary-card">
-        <span>待训练</span>
-        <strong>{{ statusCount.pending_train }}</strong>
-        <small>已冻结，等待首次训练</small>
+      <article class="summary-card metric-card">
+        <div class="metric-icon metric-icon--primary" aria-hidden="true">
+          <el-icon :size="19"><Timer /></el-icon>
+        </div>
+        <div class="metric-body">
+          <span>待训练</span>
+          <strong class="vp-num">{{ statusCount.pending_train }}</strong>
+          <small>已冻结，等待首次训练</small>
+        </div>
       </article>
-      <article class="summary-card">
-        <span>训练中</span>
-        <strong>{{ statusCount.training }}</strong>
-        <small>有进行中的训练任务</small>
+      <article class="summary-card metric-card metric-card--live">
+        <div class="metric-icon metric-icon--cyan" aria-hidden="true">
+          <el-icon :size="19"><Cpu /></el-icon>
+        </div>
+        <div class="metric-body">
+          <span>训练中</span>
+          <strong class="vp-num">{{ statusCount.training }}</strong>
+          <small>有进行中的训练任务</small>
+        </div>
+        <span class="live-bar" aria-hidden="true"></span>
       </article>
-      <article class="summary-card">
-        <span>已发布</span>
-        <strong>{{ statusCount.published }}</strong>
-        <small>训练完成，可用于检测</small>
+      <article class="summary-card metric-card">
+        <div class="metric-icon metric-icon--success" aria-hidden="true">
+          <el-icon :size="19"><CircleCheck /></el-icon>
+        </div>
+        <div class="metric-body">
+          <span>已发布</span>
+          <strong class="vp-num">{{ statusCount.published }}</strong>
+          <small>训练完成，可用于检测</small>
+        </div>
       </article>
     </section>
 
@@ -71,13 +97,7 @@
         </div>
       </div>
 
-      <el-table
-        v-loading="loading"
-        :data="rows"
-        stripe
-        class="dataset-table"
-        empty-text="暂无数据集版本"
-      >
+      <el-table v-loading="loading" :data="rows" stripe class="dataset-table">
         <el-table-column label="版本" min-width="220">
           <template #default="{ row }">
             <button
@@ -87,7 +107,7 @@
               @click="openDetail(row)"
             >
               <div class="version-title">
-                <strong>{{ row.version }}</strong>
+                <strong :title="row.name">{{ row.name }}</strong>
                 <span
                   v-if="row.extra_metadata?.catalog_only"
                   class="vp-pill vp-pill--primary vp-pill--plain"
@@ -97,7 +117,7 @@
                   >当前版本</span
                 >
               </div>
-              <span class="version-name">{{ row.name }}</span>
+              <span class="version-id">{{ row.version }}</span>
             </button>
           </template>
         </el-table-column>
@@ -123,86 +143,117 @@
               <span>从 best.pt 读取类别</span>
             </div>
             <div v-else class="split-cell">
-              <strong>{{ row.total_image_count }}</strong>
-              <span
-                >T {{ row.train_image_count }} · V {{ row.val_image_count }} · E
-                {{ row.test_image_count }}</span
-              >
+              <strong class="vp-num">{{ row.total_image_count }}</strong>
+              <div class="split-chips">
+                <span class="split-chip"
+                  >T<b class="vp-num">{{ row.train_image_count }}</b></span
+                >
+                <span class="split-chip"
+                  >V<b class="vp-num">{{ row.val_image_count }}</b></span
+                >
+                <span class="split-chip"
+                  >E<b class="vp-num">{{ row.test_image_count }}</b></span
+                >
+              </div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="class_count" label="类别" min-width="80" align="center" />
+        <el-table-column label="类别" min-width="80" align="center">
+          <template #default="{ row }">
+            <span class="vp-num">{{ row.class_count }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="更新时间" min-width="170">
           <template #default="{ row }">{{ formatTime(row.updated_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="350" fixed="right">
+        <el-table-column label="操作" width="270" fixed="right">
           <template #default="{ row }">
             <div class="row-actions vp-table-action-safe-area">
-              <el-button
-                v-if="isDatasetDraft(row.status)"
-                class="row-action-button vp-table-action-button"
-                size="small"
-                :icon="Edit"
-                @click="openEditDialog(row)"
-                >编辑</el-button
+              <template v-if="isDatasetDraft(row.status)">
+                <el-button
+                  class="row-action-button vp-table-action-button is-primary-action"
+                  size="small"
+                  :icon="Plus"
+                  @click="openAddProductDialog(row)"
+                  >添加样本</el-button
+                >
+                <el-button
+                  class="row-action-button vp-table-action-button"
+                  size="small"
+                  :icon="Lock"
+                  @click="freezeRow(row)"
+                  >冻结</el-button
+                >
+              </template>
+              <template v-else>
+                <el-button
+                  v-if="canDeriveDataset(row.status)"
+                  class="row-action-button vp-table-action-button is-primary-action"
+                  size="small"
+                  @click="openDeriveDialog(row)"
+                  >派生版本</el-button
+                >
+                <el-button
+                  v-else-if="canArchiveDataset(row.status)"
+                  class="row-action-button vp-table-action-button"
+                  size="small"
+                  @click="archiveRow(row)"
+                  >归档</el-button
+                >
+              </template>
+              <el-dropdown
+                v-if="hasOverflowActions(row)"
+                trigger="click"
+                placement="bottom-end"
+                popper-class="dataset-row-actions-popper"
               >
-              <el-button
-                v-if="isDatasetDraft(row.status)"
-                class="row-action-button vp-table-action-button is-primary-action"
-                size="small"
-                :icon="Plus"
-                @click="openAddProductDialog(row)"
-                >添加样本</el-button
-              >
-              <el-button
-                v-if="isDatasetDraft(row.status)"
-                class="row-action-button vp-table-action-button is-danger-action"
-                size="small"
-                :icon="Delete"
-                @click="openDeleteProductDialog(row)"
-                >删除商品</el-button
-              >
-              <el-button
-                v-if="isDatasetDraft(row.status)"
-                class="row-action-button vp-table-action-button"
-                size="small"
-                :icon="CircleCheck"
-                @click="validateRow(row)"
-                >校验</el-button
-              >
-              <el-button
-                v-if="isDatasetDraft(row.status)"
-                class="row-action-button vp-table-action-button is-primary-action"
-                size="small"
-                :icon="Lock"
-                @click="freezeRow(row)"
-                >冻结</el-button
-              >
-              <el-button
-                v-if="canArchiveDataset(row.status)"
-                class="row-action-button vp-table-action-button"
-                size="small"
-                @click="archiveRow(row)"
-                >归档</el-button
-              >
-              <el-button
-                v-if="canDeriveDataset(row.status)"
-                class="row-action-button vp-table-action-button is-primary-action"
-                size="small"
-                @click="openDeriveDialog(row)"
-                >派生版本</el-button
-              >
-              <el-button
-                v-if="isDatasetDraft(row.status)"
-                class="row-action-button vp-table-action-button is-danger-action"
-                size="small"
-                :icon="Delete"
-                @click="deleteRow(row)"
-                >删除草稿</el-button
-              >
+                <el-button
+                  class="row-action-button vp-table-action-button row-actions-more"
+                  size="small"
+                  aria-label="更多操作"
+                >
+                  更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <template v-if="isDatasetDraft(row.status)">
+                      <el-dropdown-item :icon="Edit" @click="openEditDialog(row)"
+                        >编辑</el-dropdown-item
+                      >
+                      <el-dropdown-item :icon="CircleCheck" @click="validateRow(row)"
+                        >校验</el-dropdown-item
+                      >
+                      <el-dropdown-item :icon="Remove" @click="openDeleteProductDialog(row)"
+                        >删除商品</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        :icon="Delete"
+                        class="is-danger-item"
+                        divided
+                        @click="deleteRow(row)"
+                        >删除草稿</el-dropdown-item
+                      >
+                    </template>
+                    <el-dropdown-item
+                      v-else-if="canArchiveDataset(row.status)"
+                      :icon="Box"
+                      @click="archiveRow(row)"
+                      >归档</el-dropdown-item
+                    >
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <span v-if="!hasAnyRowAction(row)" class="row-actions-empty">—</span>
             </div>
           </template>
         </el-table-column>
+        <template #empty>
+          <EmptyState
+            :icon="Files"
+            title="暂无数据集版本"
+            description="调整筛选条件后重新查询，或点击右上角「新建数据集草稿」开始"
+          />
+        </template>
       </el-table>
     </section>
 
@@ -920,16 +971,24 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  ArrowDown,
+  Box,
   CircleCheck,
+  Cpu,
   Delete,
   Edit,
+  EditPen,
+  Files,
   Lock,
   Plus,
   Refresh,
+  Remove,
   Search,
+  Timer,
   UploadFilled,
 } from '@element-plus/icons-vue'
 import DatasetBoxEditor from '@/components/dataset/DatasetBoxEditor.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import {
   annotationReviewSummary,
   attachFilesToStagedImages,
@@ -1212,6 +1271,16 @@ function statusType(status) {
       archived: 'info',
     }[status] || 'info'
   )
+}
+
+// 操作列收敛：草稿行的低频/危险操作收进「更多」菜单；非草稿行仅当派生与归档同时存在时才需要菜单。
+function hasOverflowActions(row) {
+  if (isDatasetDraft(row.status)) return true
+  return canDeriveDataset(row.status) && canArchiveDataset(row.status)
+}
+
+function hasAnyRowAction(row) {
+  return isDatasetDraft(row.status) || canDeriveDataset(row.status) || canArchiveDataset(row.status)
 }
 
 function formatTime(value) {
@@ -1963,6 +2032,90 @@ onMounted(async () => {
 .current-card {
   border-color: $primary-color;
   background: linear-gradient(145deg, $surface-color, $primary-soft);
+
+  html.dark & {
+    border-color: var(--vp-border-glow);
+    background:
+      linear-gradient(145deg, rgba(92, 157, 255, 0.12), rgba(34, 211, 238, 0.05)), $surface-color;
+    box-shadow: var(--vp-glow-primary);
+  }
+}
+
+.metric-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.metric-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: $info-color;
+  background: color-mix(in srgb, $info-color 12%, transparent);
+
+  &--primary {
+    color: $primary-color;
+    background: color-mix(in srgb, $primary-color 12%, transparent);
+  }
+
+  &--warning {
+    color: $warning-color;
+    background: color-mix(in srgb, $warning-color 12%, transparent);
+  }
+
+  &--success {
+    color: $success-color;
+    background: color-mix(in srgb, $success-color 12%, transparent);
+  }
+
+  &--cyan {
+    color: var(--vp-accent-cyan);
+    background: color-mix(in srgb, var(--vp-accent-cyan) 12%, transparent);
+  }
+}
+
+.metric-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.metric-card--live .live-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--vp-accent-cyan) 35%,
+    $primary-color 65%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .metric-card--live .live-bar {
+    animation: dataset-live-bar 2.6s linear infinite;
+  }
+}
+
+@keyframes dataset-live-bar {
+  from {
+    background-position: 110% 0;
+  }
+
+  to {
+    background-position: -110% 0;
+  }
 }
 
 .panel.card-container {
@@ -1975,8 +2128,9 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 15px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid $border-color;
+  background: $surface-muted;
 }
 
 .filters,
@@ -2010,9 +2164,9 @@ onMounted(async () => {
   }
 
   :deep(.el-table__row td.el-table__cell) {
-    height: 116px;
-    padding-top: 14px;
-    padding-bottom: 14px;
+    height: 92px;
+    padding-top: 10px;
+    padding-bottom: 10px;
     border-bottom: 1px solid $border-color;
   }
 
@@ -2061,23 +2215,28 @@ onMounted(async () => {
 
 .version-title {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 6px;
   min-width: 0;
 
   strong {
-    flex: 1 0 100%;
     min-width: 0;
-    line-height: 1.35;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    color: $text-primary;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
-.version-name {
+.version-id {
   display: block;
   margin-top: 5px;
   color: $text-secondary;
+  font-family: var(--vp-font-mono);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2095,12 +2254,48 @@ onMounted(async () => {
   }
 }
 
+.split-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.split-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  color: $text-secondary;
+  background: $surface-muted;
+  font-family: var(--vp-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+
+  b {
+    color: $text-regular;
+    font-weight: 600;
+  }
+}
+
 .row-actions {
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   width: max-content;
   max-width: 100%;
+}
+
+.row-actions-more {
+  min-width: 64px;
+}
+
+.row-actions-empty {
+  color: $text-placeholder;
+  font-size: 12px;
 }
 
 .row-action-button {
@@ -2169,6 +2364,48 @@ onMounted(async () => {
       background: color-mix(in srgb, $danger-color 18%, transparent);
     }
   }
+}
+
+/* 行操作「更多」菜单：圆角卡片化，危险项走语义红。 */
+:global(.dataset-row-actions-popper) {
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--vp-border) !important;
+  border-radius: 12px !important;
+  background: var(--vp-surface) !important;
+  box-shadow: var(--vp-shadow-lg) !important;
+}
+
+:global(.dataset-row-actions-popper .el-popper__arrow) {
+  display: none !important;
+}
+
+:global(.dataset-row-actions-popper .el-dropdown-menu) {
+  padding: 5px;
+  border-radius: inherit;
+}
+
+:global(.dataset-row-actions-popper .el-dropdown-menu__item) {
+  min-height: 34px;
+  padding: 0 10px;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+:global(.dataset-row-actions-popper .el-dropdown-menu__item.is-danger-item) {
+  color: var(--vp-danger);
+}
+
+:global(.dataset-row-actions-popper .el-dropdown-menu__item.is-danger-item:hover),
+:global(.dataset-row-actions-popper .el-dropdown-menu__item.is-danger-item:focus) {
+  color: var(--vp-danger) !important;
+  background: var(--vp-danger-bg) !important;
+}
+
+:global(.dataset-row-actions-popper .el-dropdown-menu__item--divided) {
+  margin-top: 4px;
+  border-top-color: var(--vp-border);
 }
 
 .form-grid {

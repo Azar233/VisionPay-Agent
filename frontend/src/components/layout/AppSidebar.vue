@@ -111,6 +111,11 @@ const menuItems = computed(() => [
     border-color 0.28s ease;
 }
 
+html.dark .app-sidebar {
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -129,6 +134,12 @@ const menuItems = computed(() => [
   place-items: center;
   border-radius: 9px;
   background: linear-gradient(145deg, #3b8bff, #1f6fe0);
+
+  html.dark & {
+    box-shadow:
+      0 4px 16px rgba(77, 141, 255, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
 
   svg {
     width: 17px;
@@ -159,6 +170,7 @@ const menuItems = computed(() => [
 }
 
 .el-menu-item {
+  position: relative;
   height: 40px;
   line-height: 40px;
   margin-bottom: 2px;
@@ -193,6 +205,23 @@ const menuItems = computed(() => [
     background-color: var(--vp-sidebar-active-bg) !important;
     color: $sidebar-active-text !important;
     font-weight: 600;
+
+    // 激活项左侧渐变光条，深色下带外发光。
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 18px;
+      border-radius: 999px;
+      background: var(--vp-brand-gradient);
+
+      html.dark & {
+        box-shadow: 0 0 12px rgba(92, 157, 255, 0.55);
+      }
+    }
   }
 
   &:hover {

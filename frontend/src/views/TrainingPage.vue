@@ -2,7 +2,9 @@
   <div class="training-page">
     <div class="page-header">
       <div>
+        <span class="vp-kicker">Training</span>
         <h1 class="vp-page-title">模型训练与监控</h1>
+        <p class="vp-page-subtitle">启动 YOLOv11 训练任务，实时观察 loss、mAP 与运行状态。</p>
       </div>
       <div class="page-actions">
         <el-button :icon="Upload" @click="openImportDialog"> 导入离线结果 </el-button>
@@ -340,7 +342,7 @@
       <div class="live-progress-panel">
         <div class="live-progress-header">
           <span>{{ liveProgressTitle }}</span>
-          <span>{{ liveProgressPercent.toFixed(1) }}%</span>
+          <span class="live-progress-percent vp-num">{{ liveProgressPercent.toFixed(1) }}%</span>
         </div>
         <el-progress
           class="monitor-progress"
@@ -367,7 +369,7 @@
       <div class="metric-grid">
         <div v-for="item in metricCards" :key="item.label" class="metric-card">
           <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
+          <strong class="vp-num">{{ item.value }}</strong>
         </div>
       </div>
 
@@ -377,7 +379,17 @@
       </div>
     </section>
 
-    <el-empty v-else class="page-card empty-monitor" description="选择一个训练任务查看监控曲线" />
+    <div v-else class="page-card empty-monitor">
+      <EmptyState
+        :icon="Monitor"
+        title="尚未选择训练任务"
+        description="在任务列表中点击「监控」，实时查看训练进度、损失曲线与评估指标。"
+      >
+        <el-button type="primary" :icon="Plus" @click="openCreateTrainingDialog">
+          新建训练任务
+        </el-button>
+      </EmptyState>
+    </div>
 
     <el-dialog
       v-model="showCreateDialog"
@@ -637,7 +649,7 @@
         <div class="metric-grid">
           <div v-for="item in evalMetricCards" :key="item.label" class="metric-card">
             <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
+            <strong class="vp-num">{{ item.value }}</strong>
           </div>
         </div>
 
@@ -740,6 +752,7 @@ import {
 } from '@/api/training'
 import { getDatasetVersionsApi } from '@/api/datasets'
 import { confirmAction } from '@/utils/messageBox'
+import EmptyState from '@/components/EmptyState.vue'
 
 echarts.use([
   TitleComponent,
@@ -1585,6 +1598,39 @@ onBeforeUnmount(() => {
   box-shadow: $shadow-sm;
 }
 
+/* 监控面板：深色下升级为终端控制台 hero 区，浅色保持干净白卡。 */
+.monitor-panel {
+  position: relative;
+  overflow: hidden;
+
+  > * {
+    position: relative;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  html.dark & {
+    background: #080d1a;
+    border-color: var(--vp-border-glow);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      var(--vp-glow-primary);
+  }
+
+  html.dark &::before {
+    opacity: 1;
+    background:
+      radial-gradient(46% 40% at 10% 0%, var(--vp-aurora-1), transparent 72%),
+      radial-gradient(38% 34% at 94% 6%, var(--vp-aurora-2), transparent 72%);
+  }
+}
+
 .page-card-header {
   display: flex;
   align-items: center;
@@ -1956,6 +2002,16 @@ onBeforeUnmount(() => {
     --task-progress-color: #8e8e93;
   }
 
+  html.dark &.is-running {
+    --task-progress-color: var(--vp-primary);
+  }
+  html.dark &.is-completed {
+    --task-progress-color: var(--vp-success);
+  }
+  html.dark &.is-failed {
+    --task-progress-color: var(--vp-danger);
+  }
+
   strong {
     color: $text-secondary;
     font-size: 12px;
@@ -1988,6 +2044,7 @@ onBeforeUnmount(() => {
     inset: 0 auto 0 0;
     display: block;
     min-width: 0;
+    overflow: hidden;
     border-radius: inherit;
     background: linear-gradient(
       90deg,
@@ -1996,6 +2053,35 @@ onBeforeUnmount(() => {
     );
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--task-progress-color) 12%, transparent);
     transition: width 0.35s ease;
+
+    html.dark .task-progress.is-running & {
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--task-progress-color) 12%, transparent),
+        0 0 12px color-mix(in srgb, var(--task-progress-color) 55%, transparent);
+    }
+  }
+}
+
+/* 进行中任务的进度条流动高光，reduced-motion 时保持静态。 */
+@keyframes task-progress-flow {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .task-progress.is-running .task-progress-track i::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 15%,
+      rgba(255, 255, 255, 0.45) 50%,
+      transparent 85%
+    );
+    transform: translateX(-100%);
+    animation: task-progress-flow 1.6s ease-in-out infinite;
   }
 }
 
@@ -2082,6 +2168,11 @@ onBeforeUnmount(() => {
   border: 1px solid $border-color;
   border-radius: $border-radius-sm;
   background: $surface-muted;
+
+  html.dark & {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .live-progress-header,
@@ -2098,10 +2189,16 @@ onBeforeUnmount(() => {
   color: $text-primary;
 }
 
+.live-progress-percent {
+  font-family: var(--vp-font-mono);
+  font-size: 16px;
+}
+
 .live-progress-meta {
   flex-wrap: wrap;
   margin-top: 8px;
   color: $text-secondary;
+  font-family: var(--vp-font-mono);
   font-size: 12px;
 }
 
@@ -2116,10 +2213,7 @@ onBeforeUnmount(() => {
   color: $text-regular;
   background: $bg-color-dark;
   border-radius: $border-radius-sm;
-  font:
-    12px/1.5 Consolas,
-    'Courier New',
-    monospace;
+  font: 12px/1.5 var(--vp-font-mono);
 }
 
 .metric-grid {
@@ -2135,6 +2229,12 @@ onBeforeUnmount(() => {
   border-radius: $border-radius-sm;
   background: $surface-muted;
 
+  html.dark & {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
   span {
     display: block;
     color: $text-secondary;
@@ -2144,6 +2244,7 @@ onBeforeUnmount(() => {
   strong {
     display: block;
     margin-top: 8px;
+    font-family: var(--vp-font-mono);
     font-size: 20px;
     color: $text-primary;
   }
@@ -2161,10 +2262,14 @@ onBeforeUnmount(() => {
   border: 1px solid $border-color;
   border-radius: $border-radius-sm;
   background: $surface-color;
+
+  html.dark & {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .empty-monitor {
-  padding: 32px 0;
   background: $surface-color;
   border: 1px solid $border-color;
   border-radius: $border-radius-md;

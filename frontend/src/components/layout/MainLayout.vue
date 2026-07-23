@@ -23,7 +23,8 @@ const sidebarCollapsed = ref(false)
   width: 100%;
   height: 100%;
   display: flex;
-  background: $bg-color;
+  /* 透明底色让 body 上的极光背景层透出来（深色主视觉）。 */
+  background: transparent;
 }
 
 .layout-main {

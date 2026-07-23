@@ -52,9 +52,13 @@
               ><el-icon><Delete /></el-icon
             ></i>
           </button>
-          <div v-if="!sessionLoading && !agentStore.sessions.length" class="session-empty">
-            还没有对话记录
-          </div>
+          <EmptyState
+            v-if="!sessionLoading && !agentStore.sessions.length"
+            class="session-empty"
+            :icon="ChatDotRound"
+            title="暂无会话"
+            description="点击上方「新建对话」，开始你的第一次对话"
+          />
         </div>
       </aside>
 
@@ -116,7 +120,7 @@
               <el-icon><Connection /></el-icon>
             </div>
             <span>管理工作区</span>
-            <h2>今天想处理什么？</h2>
+            <h2>今天想<span class="vp-gradient-text">处理什么</span>？</h2>
             <p>描述你的目标，我会选择合适的工具。涉及数据写入或模型变更时，会先请你确认。</p>
             <div class="quick-grid">
               <button
@@ -404,6 +408,7 @@ import {
 } from '@element-plus/icons-vue'
 import AgentConfirmationCard from '@/components/AgentConfirmationCard.vue'
 import AgentInputFormCard from '@/components/AgentInputFormCard.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import { handleAuthExpired } from '@/utils/authExpiry'
 import DetectionResultCard from '@/components/DetectionResultCard.vue'
 import KnowledgeSourcesCard from '@/components/KnowledgeSourcesCard.vue'
@@ -996,12 +1001,21 @@ function stopStream() {
 }
 
 .session-panel,
-.conversation-panel,
 .insight-panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
   background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+}
+
+// 对话主区不设底色，深色下透出 body 极光背景，与两侧面板拉开层级。
+.conversation-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
   border: 1px solid $border-color;
   border-radius: $border-radius-md;
 }
@@ -1113,6 +1127,7 @@ function stopStream() {
 }
 
 .session-item {
+  position: relative;
   width: 100%;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 22px;
@@ -1135,6 +1150,22 @@ function stopStream() {
 
   &.active {
     font-weight: 600;
+
+    // 与全局侧边栏一致的激活光条。
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      border-radius: 999px;
+      background: var(--vp-brand-gradient);
+
+      html.dark & {
+        box-shadow: 0 0 12px rgba(92, 157, 255, 0.55);
+      }
+    }
   }
 }
 
@@ -1193,10 +1224,7 @@ function stopStream() {
 }
 
 .session-empty {
-  padding: 24px 0;
-  color: $text-placeholder;
-  font-size: 13px;
-  text-align: center;
+  padding: 32px 8px;
 }
 
 /* 右侧管理辅助 */
@@ -1288,16 +1316,16 @@ function stopStream() {
     font-size: 17px;
 
     &.dataset {
-      color: #8b5cf6;
+      color: $agent-dataset;
     }
     &.training {
-      color: #0ea5e9;
+      color: $agent-training;
     }
     &.catalog {
-      color: #f59e0b;
+      color: $agent-catalog;
     }
     &.knowledge {
-      color: #10b981;
+      color: $agent-knowledge;
     }
   }
 
@@ -1336,6 +1364,23 @@ function stopStream() {
 .agent-item.active .agent-status-dot {
   background: $success-color;
   box-shadow: 0 0 0 3px var(--vp-success-bg);
+}
+
+// 运行中的 Agent 状态点带脉冲光环；减少动态偏好时退回静态光环。
+@media (prefers-reduced-motion: no-preference) {
+  .agent-item.active .agent-status-dot {
+    animation: agent-status-pulse 1.6s ease-out infinite;
+  }
+}
+
+@keyframes agent-status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--vp-success) 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+  }
 }
 
 .pending-list {
@@ -1571,14 +1616,22 @@ function stopStream() {
 }
 
 .welcome-mark {
-  width: 51px;
-  height: 51px;
+  width: 60px;
+  height: 60px;
   display: grid;
   place-items: center;
   margin: 0 auto;
-  color: $text-placeholder;
-  background: transparent;
-  font-size: 40px;
+  border-radius: 17px;
+  color: #fff;
+  background: var(--vp-brand-gradient);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  font-size: 30px;
+
+  html.dark & {
+    box-shadow:
+      var(--vp-glow-primary),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
 }
 
 .welcome-state > span {
@@ -1652,16 +1705,16 @@ function stopStream() {
     font-size: 21px;
 
     &.dataset {
-      color: #8b5cf6;
+      color: $agent-dataset;
     }
     &.training {
-      color: #0ea5e9;
+      color: $agent-training;
     }
     &.catalog {
-      color: #f59e0b;
+      color: $agent-catalog;
     }
     &.knowledge {
-      color: #10b981;
+      color: $agent-knowledge;
     }
   }
 
@@ -1771,6 +1824,14 @@ function stopStream() {
   border-radius: 12px;
   color: $text-primary;
   background: $surface-color;
+
+  // 深色下助手气泡玻璃拟态，浮在极光背景之上。
+  html.dark & {
+    background: rgba(255, 255, 255, 0.06);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
 }
 
 .message-row.user .message-bubble {
@@ -1778,6 +1839,11 @@ function stopStream() {
   border-radius: 12px 12px 4px 12px;
   color: #fff;
   background: var(--vp-primary);
+
+  html.dark & {
+    background: var(--vp-brand-gradient);
+    box-shadow: 0 4px 18px rgba(92, 157, 255, 0.28);
+  }
 }
 
 .message-row.user .message-files span {
@@ -1910,7 +1976,7 @@ function stopStream() {
   flex-shrink: 0;
   padding: 12px 16px 16px;
   border-top: 1px solid $border-color;
-  background: $surface-color;
+  background: transparent;
   border-radius: 0 0 $border-radius-md $border-radius-md;
 }
 
@@ -1978,8 +2044,14 @@ function stopStream() {
     box-shadow 0.2s ease;
 
   &:focus-within {
-    border-color: $primary-color;
+    border-color: var(--vp-border-glow);
     box-shadow: $ring-primary;
+  }
+
+  html.dark &:focus-within {
+    box-shadow:
+      $ring-primary,
+      0 0 20px rgba(92, 157, 255, 0.16);
   }
 }
 
@@ -2080,47 +2152,11 @@ function stopStream() {
   }
 }
 
-/* 暗色 */
-:global(html.dark .agent-chat-page) {
-  color: var(--vp-text);
-}
-:global(html.dark .agent-chat-page .session-panel),
-:global(html.dark .agent-chat-page .conversation-panel),
-:global(html.dark .agent-chat-page .insight-panel),
-:global(html.dark .agent-chat-page .message-bubble),
-:global(html.dark .agent-chat-page .composer) {
-  background: var(--vp-surface);
-  border-color: var(--vp-border);
-}
-:global(html.dark .agent-chat-page .message-row.user .message-bubble) {
-  color: #fff;
-  background: var(--vp-primary);
-  border-color: transparent;
-}
-:global(html.dark .agent-chat-page .session-item:hover),
-:global(html.dark .agent-chat-page .session-item.active),
-:global(html.dark .agent-chat-page .agent-item.active),
-:global(html.dark .agent-chat-page .quick-grid button:hover),
-:global(html.dark .agent-chat-page .pending-list button:hover),
-:global(html.dark .agent-chat-page) .message-content :deep(code),
-:global(html.dark .agent-chat-page) .message-content :deep(pre),
-:global(html.dark .agent-chat-page .message-files span),
-:global(html.dark .agent-chat-page .attachment-tray > span) {
-  background: var(--vp-sidebar-active-bg);
-}
-:global(html.dark .agent-chat-page .message-row.user .message-files span) {
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.14);
-}
-:global(html.dark .agent-chat-page .composer-box:focus-within) {
-  border-color: var(--vp-primary);
-  box-shadow: var(--vp-ring);
-}
-:global(html.dark .agent-chat-page .welcome-mark) {
-  color: var(--vp-text-placeholder);
-}
+/* 暗色：面板、气泡等基础色已随 token 自动切换，这里只保留无法走 token 的修正。 */
 :global(html.dark .agent-chat-page .floating-control-capsule) {
-  background: rgba(23, 26, 33, 0.95);
+  background: rgba(13, 20, 36, 0.88);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   border-color: var(--vp-border);
 }
 

@@ -53,7 +53,7 @@
                 <strong>{{ itemName(item) }}</strong
                 ><span>数量 x {{ item.count }}</span>
               </div>
-              <b>{{ formatMoney(item.subtotal) }}</b>
+              <b class="vp-num">{{ formatMoney(item.subtotal) }}</b>
             </article>
           </div>
           <div class="order-count">
@@ -61,7 +61,7 @@
           </div>
           <div class="order-total">
             <div><span>应付金额</span><small>金额由服务端商品价格生成</small></div>
-            <strong>{{ formatMoney(paymentOrder.amount) }}</strong>
+            <strong class="vp-num">{{ formatMoney(paymentOrder.amount) }}</strong>
           </div>
           <dl class="order-meta">
             <div>
@@ -86,12 +86,15 @@
 
         <section class="pay-panel" aria-live="polite">
           <div v-if="paymentStatus === 'paid'" class="result-state success-state">
-            <span class="result-icon"
-              ><el-icon><CircleCheckFilled /></el-icon
-            ></span>
+            <span class="result-icon success-icon">
+              <svg viewBox="0 0 76 76" fill="none" aria-hidden="true">
+                <circle class="success-ring" cx="38" cy="38" r="30" />
+                <path class="success-check" d="M25 39.5l9.5 9.5L51 29" />
+              </svg>
+            </span>
             <small>PAYMENT COMPLETE</small>
             <h1>付款成功</h1>
-            <strong>{{ formatMoney(paymentOrder.amount) }}</strong>
+            <strong class="vp-num">{{ formatMoney(successAmount) }}</strong>
             <p>手机端确认结果已同步至当前收银端。</p>
             <div class="result-reference">
               <span>订单编号</span><b>{{ orderNumber }}</b>
@@ -121,21 +124,40 @@
             </div>
 
             <div class="qr-section">
-              <div class="qr-frame">
-                <img
-                  v-if="qrDataUrl"
-                  :src="qrDataUrl"
-                  width="220"
-                  height="220"
-                  alt="模拟支付二维码"
-                />
-                <el-icon v-else class="qr-loading"><Loading /></el-icon>
+              <div class="qr-stage">
+                <svg class="qr-ring" viewBox="0 0 266 266" aria-hidden="true">
+                  <circle class="qr-ring-track" cx="133" cy="133" r="129" />
+                  <circle
+                    class="qr-ring-progress"
+                    cx="133"
+                    cy="133"
+                    r="129"
+                    :stroke-dasharray="QR_RING_CIRCUMFERENCE"
+                    :stroke-dashoffset="qrRingOffset"
+                  />
+                </svg>
+                <div class="qr-frame">
+                  <img
+                    v-if="qrDataUrl"
+                    :src="qrDataUrl"
+                    width="220"
+                    height="220"
+                    alt="模拟支付二维码"
+                  />
+                  <el-icon v-else class="qr-loading"><Loading /></el-icon>
+                  <i class="qr-scanline" aria-hidden="true"></i>
+                </div>
               </div>
               <div class="qr-copy">
-                <strong>{{ formatMoney(paymentOrder.amount) }}</strong>
+                <strong class="vp-num">{{ formatMoney(paymentOrder.amount) }}</strong>
                 <span>手机与收银设备需连接同一局域网</span>
                 <small>二维码有效期 {{ countdownText }}</small>
-                <code>{{ paymentUrl }}</code>
+                <div class="url-chip">
+                  <code ref="urlTextRef" :title="paymentUrl">{{ paymentUrl }}</code>
+                  <button type="button" aria-label="复制支付链接" @click="copyPaymentUrl">
+                    <el-icon><CopyDocument /></el-icon>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -163,11 +185,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import QRCode from 'qrcode'
+import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
   Check,
-  CircleCheckFilled,
   Clock,
+  CopyDocument,
   InfoFilled,
   Loading,
   Lock,
@@ -179,6 +202,7 @@ import {
   getMockPaymentStatusApi,
 } from '@/api/checkout'
 import { notifyVisionPetPaymentSuccess, notifyVisionPetTask } from '@/utils/visionPet'
+import { useCountUp } from '@/composables/useCountUp'
 
 const router = useRouter()
 const route = useRoute()
@@ -219,6 +243,50 @@ const countdownText = computed(
   () =>
     `${String(Math.floor(remainingSeconds.value / 60)).padStart(2, '0')}:${String(remainingSeconds.value % 60).padStart(2, '0')}`,
 )
+
+// 环形倒计时：复用 remainingSeconds（由现有 countdownTimer 驱动），按订单有效期换算进度。
+const QR_RING_RADIUS = 129
+const QR_RING_CIRCUMFERENCE = 2 * Math.PI * QR_RING_RADIUS
+const countdownTotalSeconds = computed(() => {
+  const total = Math.round(
+    (new Date(paymentOrder.value?.expires_at || 0).getTime() -
+      new Date(paymentOrder.value?.created_at || 0).getTime()) /
+      1000,
+  )
+  return total > 0 ? total : remainingSeconds.value || 1
+})
+const qrRingOffset = computed(() => {
+  const progress = Math.min(1, Math.max(0, remainingSeconds.value / countdownTotalSeconds.value))
+  return QR_RING_CIRCUMFERENCE * (1 - progress)
+})
+
+// 成功态金额滚动动画：未支付时停在 0，变为 paid 后滚到订单金额。
+const successAmount = useCountUp(
+  () => (paymentStatus.value === 'paid' ? Number(paymentOrder.value?.amount) || 0 : 0),
+  { duration: 900 },
+)
+
+const urlTextRef = ref(null)
+
+async function copyPaymentUrl() {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
+    await navigator.clipboard.writeText(paymentUrl.value)
+    ElMessage.success('支付链接已复制，可粘贴到手机浏览器打开')
+  } catch {
+    selectPaymentUrlText()
+    ElMessage.warning('无法访问剪贴板，已为你选中链接，请手动复制')
+  }
+}
+
+function selectPaymentUrlText() {
+  if (!urlTextRef.value) return
+  const selection = window.getSelection()
+  const range = document.createRange()
+  range.selectNodeContents(urlTextRef.value)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
 
 function loadSession(key) {
   try {
@@ -559,9 +627,9 @@ onBeforeUnmount(stopTimers)
 }
 
 .order-items b {
-  color: $warning-color;
+  color: $text-primary;
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .order-count {
@@ -592,14 +660,14 @@ onBeforeUnmount(stopTimers)
   }
 
   small {
-    color: $warning-color;
+    color: $text-secondary;
     font-size: 10px;
   }
 
   > strong {
     color: $text-primary;
     font-size: 28px;
-    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 }
 
@@ -655,23 +723,80 @@ onBeforeUnmount(stopTimers)
   border: 1px solid $border-color;
   border-radius: $border-radius-md;
   background: $surface-muted;
+
+  html.dark & {
+    border-color: var(--vp-border-glow);
+    background:
+      radial-gradient(130% 120% at 50% -10%, var(--vp-aurora-1), transparent 62%),
+      var(--vp-surface-muted);
+  }
+}
+
+.qr-stage {
+  position: relative;
+  display: grid;
+}
+
+.qr-ring {
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  width: 266px;
+  height: 266px;
+  pointer-events: none;
+
+  circle {
+    fill: none;
+  }
+}
+
+.qr-ring-track {
+  stroke: $border-color;
+  stroke-width: 3;
+}
+
+.qr-ring-progress {
+  stroke: var(--vp-accent-cyan);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dashoffset 1s linear;
+
+  html.dark & {
+    filter: drop-shadow(0 0 4px var(--vp-accent-cyan));
+  }
 }
 
 .qr-frame {
+  position: relative;
   width: 242px;
   height: 242px;
   display: grid;
   place-items: center;
   padding: 10px;
+  overflow: hidden;
   border: 1px solid $border-color;
   border-radius: $border-radius-sm;
-  background: $surface-color;
+  background: #ffffff;
 
   img {
     display: block;
     width: 220px;
     height: 220px;
   }
+}
+
+.qr-scanline {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  right: 7px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--vp-accent-cyan), transparent);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .qr-loading {
@@ -690,7 +815,6 @@ onBeforeUnmount(stopTimers)
   strong {
     color: $text-primary;
     font-size: 30px;
-    font-variant-numeric: tabular-nums;
   }
 
   span {
@@ -703,12 +827,57 @@ onBeforeUnmount(stopTimers)
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   }
+}
+
+.url-chip {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 5px 5px 10px;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-sm;
+  background: $surface-color;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: var(--vp-border-glow);
+  }
+
+  html.dark & {
+    background: rgba(255, 255, 255, 0.05);
+  }
 
   code {
-    overflow-wrap: anywhere;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: $text-secondary;
-    font-size: 10px;
+    font-family: var(--vp-font-mono);
+    font-size: 11px;
     line-height: 1.45;
+  }
+
+  button {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    color: $primary-color;
+    background: $primary-soft;
+    cursor: pointer;
+    transition:
+      color 0.2s,
+      background 0.2s;
+
+    &:hover {
+      color: #fff;
+      background: $primary-color;
+    }
   }
 }
 
@@ -815,8 +984,9 @@ onBeforeUnmount(stopTimers)
 .result-state > strong {
   margin: 4px 0 8px;
   color: $text-primary;
+  font-family: var(--vp-font-mono);
   font-size: 34px;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .result-state p {
@@ -850,6 +1020,27 @@ onBeforeUnmount(stopTimers)
 .success-state .result-icon {
   color: $success-color;
   background: var(--vp-success-bg);
+
+  html.dark & {
+    box-shadow: 0 0 32px rgba(52, 211, 153, 0.25);
+  }
+}
+
+.success-icon svg {
+  width: 42px;
+  height: 42px;
+}
+
+.success-ring {
+  stroke: currentColor;
+  stroke-width: 4;
+}
+
+.success-check {
+  stroke: currentColor;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .expired-state .result-icon {
@@ -902,6 +1093,70 @@ onBeforeUnmount(stopTimers)
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes qr-pulse {
+  0% {
+    box-shadow:
+      0 0 0 0 var(--vp-border-glow),
+      var(--vp-glow-primary);
+  }
+  100% {
+    box-shadow:
+      0 0 0 18px rgba(0, 0, 0, 0),
+      var(--vp-glow-primary);
+  }
+}
+
+@keyframes qr-scan {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(224px);
+  }
+}
+
+@keyframes success-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes success-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .qr-frame {
+    animation: qr-pulse 2.4s ease-out infinite;
+  }
+
+  .qr-scanline {
+    opacity: 0.45;
+    animation: qr-scan 3s ease-in-out infinite alternate;
+  }
+
+  .success-state .result-icon {
+    animation: success-pop 0.55s var(--vp-ease-vision-out) both;
+  }
+
+  .success-check {
+    stroke-dasharray: 42;
+    stroke-dashoffset: 42;
+    animation: success-draw 0.4s ease-out 0.35s forwards;
   }
 }
 
@@ -985,6 +1240,11 @@ onBeforeUnmount(stopTimers)
   .qr-frame {
     width: 232px;
     height: 232px;
+  }
+
+  .qr-ring {
+    width: 256px;
+    height: 256px;
   }
 
   .qr-frame img {

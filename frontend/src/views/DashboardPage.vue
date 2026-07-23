@@ -38,13 +38,17 @@
             </div>
 
             <section class="metric-grid" aria-label="识别业务指标">
-              <article v-for="card in metricCards" :key="card.key" class="metric-card">
+              <article
+                v-for="(card, index) in metricCards"
+                :key="card.key"
+                :class="['metric-card', index === 0 ? 'metric-card--hero' : 'vp-glow-card']"
+              >
                 <div :class="['metric-icon', card.tone]">
                   <el-icon><component :is="card.icon" /></el-icon>
                 </div>
                 <div class="metric-copy">
                   <span>{{ card.label }}</span
-                  ><strong
+                  ><strong class="vp-num"
                     >{{ card.value }}<small v-if="card.unit">{{ card.unit }}</small></strong
                   >
                 </div>
@@ -116,16 +120,20 @@
 
             <section class="metric-grid" aria-label="模型调用指标">
               <article
-                v-for="card in modelMetricCards"
+                v-for="(card, index) in modelMetricCards"
                 :key="card.key"
-                class="metric-card model-metric-card"
+                :class="[
+                  'metric-card',
+                  'model-metric-card',
+                  index === 0 ? 'metric-card--hero' : 'vp-glow-card',
+                ]"
               >
                 <div :class="['metric-icon', card.tone]">
                   <el-icon><component :is="card.icon" /></el-icon>
                 </div>
                 <div class="metric-copy">
                   <span>{{ card.label }}</span
-                  ><strong
+                  ><strong class="vp-num"
                     >{{ card.value }}<small v-if="card.unit">{{ card.unit }}</small></strong
                   >
                 </div>
@@ -251,7 +259,17 @@ import {
   getTrend,
   getTypeDistribution,
 } from '@/api/dashboard'
+import { useCountUp } from '@/composables/useCountUp'
 import { useTheme } from '@/composables/useTheme'
+import {
+  SERIES_COLORS,
+  areaGradient,
+  barGradient,
+  chartPalette,
+  donutCenterGraphic,
+  emptyChartGraphic,
+  glassTooltip,
+} from '@/utils/chartTheme'
 
 const activeSection = ref('detection')
 const detectionPeriodDays = ref(30)
@@ -293,6 +311,16 @@ const charts = []
 let resizeObserver
 const { isDark } = useTheme()
 
+// 指标数字滚动动画：目标用 getter，统计数据刷新后自动滚到新值。
+const tasksCount = useCountUp(() => stats.value.total_tasks, { duration: 700 })
+const imagesCount = useCountUp(() => stats.value.total_images, { duration: 700 })
+const objectsCount = useCountUp(() => stats.value.total_objects, { duration: 700 })
+const inferenceTimeCount = useCountUp(() => stats.value.avg_inference_time, { duration: 700 })
+const callsCount = useCountUp(() => modelUsage.value.summary.total_calls, { duration: 700 })
+const tokensCount = useCountUp(() => modelUsage.value.summary.total_tokens, { duration: 700 })
+const latencyCount = useCountUp(() => modelUsage.value.summary.avg_latency_ms, { duration: 700 })
+const successRateCount = useCountUp(() => modelUsage.value.summary.success_rate, { duration: 700 })
+
 use([
   LineChart,
   PieChart,
@@ -308,28 +336,28 @@ const metricCards = computed(() => [
   {
     key: 'tasks',
     label: '识别任务',
-    value: formatNumber(stats.value.total_tasks),
+    value: formatNumber(Math.round(tasksCount.value)),
     icon: Camera,
     tone: 'blue',
   },
   {
     key: 'images',
     label: '处理图片 / 帧',
-    value: formatNumber(stats.value.total_images),
+    value: formatNumber(Math.round(imagesCount.value)),
     icon: PictureFilled,
     tone: 'green',
   },
   {
     key: 'objects',
     label: '商品实例',
-    value: formatNumber(stats.value.total_objects),
+    value: formatNumber(Math.round(objectsCount.value)),
     icon: Aim,
     tone: 'orange',
   },
   {
     key: 'inference_time',
     label: '单图平均推理',
-    value: Number(stats.value.avg_inference_time || 0).toFixed(1),
+    value: Number(inferenceTimeCount.value || 0).toFixed(1),
     unit: 'ms',
     icon: Timer,
     tone: 'purple',
@@ -343,7 +371,7 @@ const modelMetricCards = computed(() => {
     {
       key: 'calls',
       label: '模型请求',
-      value: formatNumber(summary.total_calls),
+      value: formatNumber(Math.round(callsCount.value)),
       icon: Connection,
       tone: 'blue',
       note: `${formatNumber(summary.total_turns)} 次 Agent 响应`,
@@ -351,7 +379,7 @@ const modelMetricCards = computed(() => {
     {
       key: 'tokens',
       label: 'Token 消耗',
-      value: formatCompact(summary.total_tokens),
+      value: formatCompact(Math.round(tokensCount.value)),
       icon: DataLine,
       tone: 'orange',
       note: `统计周期 ${modelPeriodDays.value} 天`,
@@ -359,7 +387,7 @@ const modelMetricCards = computed(() => {
     {
       key: 'latency',
       label: '平均响应耗时',
-      value: formatSeconds(summary.avg_latency_ms),
+      value: formatSeconds(latencyCount.value),
       unit: 's',
       icon: Timer,
       tone: 'purple',
@@ -368,7 +396,7 @@ const modelMetricCards = computed(() => {
     {
       key: 'success',
       label: '调用成功率',
-      value: Number(summary.success_rate || 0).toFixed(1),
+      value: Number(successRateCount.value || 0).toFixed(1),
       unit: '%',
       icon: CircleCheck,
       tone: 'green',
@@ -414,30 +442,11 @@ function growthTone(key, inverse = false) {
   if (!value) return 'neutral'
   return (inverse ? value < 0 : value > 0) ? 'positive' : 'negative'
 }
-function palette() {
-  const style = getComputedStyle(document.documentElement)
-  return {
-    text: style.getPropertyValue('--vp-text').trim() || '#1d1d1f',
-    muted: style.getPropertyValue('--vp-muted').trim() || '#6e6e73',
-    border: style.getPropertyValue('--vp-border').trim() || '#e5e5e7',
-    surface: style.getPropertyValue('--vp-surface').trim() || '#fff',
-  }
-}
 function compactDistribution(items, limit = 8) {
   if (items.length <= limit) return items
   return [
     ...items.slice(0, limit),
     { name: '其他', value: items.slice(limit).reduce((sum, item) => sum + item.value, 0) },
-  ]
-}
-function emptyGraphic(message) {
-  return [
-    {
-      type: 'text',
-      left: 'center',
-      top: 'middle',
-      style: { text: message, fill: palette().muted, fontSize: 13 },
-    },
   ]
 }
 function baseChart(element) {
@@ -460,37 +469,22 @@ function modelTrendLabel(item) {
 }
 
 function renderActiveCharts() {
-  const colors = palette()
+  const colors = chartPalette()
   const axis = {
     axisLine: { lineStyle: { color: colors.border } },
     axisLabel: { color: colors.muted },
     splitLine: { lineStyle: { color: colors.border } },
   }
-  const tooltip = {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    textStyle: { color: colors.text },
-  }
-  const pieColors = [
-    '#0071e3',
-    '#34c759',
-    '#ff9f0a',
-    '#af52de',
-    '#5ac8fa',
-    '#ff375f',
-    '#64d2ff',
-    '#bf5af2',
-    '#8e8e93',
-  ]
   const renderPies = (items) =>
-    items.forEach(([element, source, emptyText]) => {
+    items.forEach(([element, source, emptyText, totalLabel]) => {
       const chart = baseChart(element)
       const data = source.filter((item) => Number(item.value || 0) > 0)
       const hasData = data.length > 0
+      const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0)
       chart?.setOption(
         {
-          color: pieColors,
-          tooltip: { trigger: 'item', formatter: '{b}<br/>{c}（{d}%）', ...tooltip },
+          color: SERIES_COLORS,
+          tooltip: glassTooltip(colors, { trigger: 'item', formatter: '{b}<br/>{c}（{d}%）' }),
           legend: {
             show: hasData,
             type: 'plain',
@@ -503,7 +497,9 @@ function renderActiveCharts() {
             itemGap: 12,
             textStyle: { color: colors.muted, fontSize: 12, lineHeight: 17 },
           },
-          graphic: hasData ? [] : emptyGraphic(emptyText),
+          graphic: hasData
+            ? donutCenterGraphic(formatNumber(total), totalLabel, colors)
+            : emptyChartGraphic(emptyText, colors),
           // 饼图左移并稍收半径，避免右缘与图例文字重合。
           series: [
             {
@@ -526,8 +522,8 @@ function renderActiveCharts() {
     const trendChart = baseChart(trendChartRef.value)
     trendChart?.setOption(
       {
-        color: ['#0071e3', '#34c759', '#ff9f0a'],
-        tooltip: { trigger: 'axis', ...tooltip },
+        color: SERIES_COLORS.slice(0, 3),
+        tooltip: glassTooltip(colors, { trigger: 'axis' }),
         legend: { top: 0, right: 4, textStyle: { color: colors.muted } },
         grid: { left: 44, right: 18, top: 46, bottom: 34 },
         xAxis: {
@@ -548,7 +544,7 @@ function renderActiveCharts() {
             smooth: true,
             showSymbol: trend.value.length <= 7,
             symbolSize: 6,
-            areaStyle: { opacity: 0.08 },
+            areaStyle: { color: areaGradient(SERIES_COLORS[0]) },
             data: trend.value.map((item) => item.task_count),
           },
           {
@@ -572,18 +568,25 @@ function renderActiveCharts() {
       true,
     )
     renderPies([
-      [classChartRef.value, compactDistribution(classDistribution.value), '暂无商品类别数据'],
-      [typeChartRef.value, typeDistribution.value, '暂无识别方式数据'],
+      [
+        classChartRef.value,
+        compactDistribution(classDistribution.value),
+        '暂无商品类别数据',
+        '商品实例',
+      ],
+      [typeChartRef.value, typeDistribution.value, '暂无识别方式数据', '识别任务'],
     ])
     return
   }
 
-  renderPies([[agentChartRef.value, modelUsage.value.agent_distribution, '暂无 Agent 调用数据']])
+  renderPies([
+    [agentChartRef.value, modelUsage.value.agent_distribution, '暂无 Agent 调用数据', 'Agent 轮次'],
+  ])
   const modelTrendChart = baseChart(modelTrendChartRef.value)
   modelTrendChart?.setOption(
     {
-      color: ['#0071e3', '#af52de'],
-      tooltip: { trigger: 'axis', ...tooltip },
+      color: [SERIES_COLORS[0], SERIES_COLORS[3]],
+      tooltip: glassTooltip(colors, { trigger: 'axis' }),
       legend: { top: 0, right: 4, textStyle: { color: colors.muted } },
       grid: { left: 48, right: 52, top: 46, bottom: 34, containLabel: true },
       xAxis: {
@@ -615,7 +618,7 @@ function renderActiveCharts() {
           name: '模型请求',
           type: 'bar',
           barMaxWidth: 24,
-          itemStyle: { borderRadius: [5, 5, 0, 0] },
+          itemStyle: { borderRadius: [5, 5, 0, 0], color: barGradient(SERIES_COLORS[0]) },
           data: modelUsage.value.trend.map((item) => item.calls),
         },
         {
@@ -785,7 +788,7 @@ onBeforeUnmount(() => {
 .dashboard-tabs :deep(.is-active) .tab-label {
   color: $primary-color;
   background: $surface-color;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.07);
+  box-shadow: var(--vp-shadow-md);
 }
 .tab-label small {
   min-width: 20px;
@@ -865,7 +868,7 @@ onBeforeUnmount(() => {
 .period-switch button.active {
   color: $primary-color;
   background: $surface-color;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--vp-shadow-md);
   font-weight: 650;
 }
 .metric-grid {
@@ -960,6 +963,31 @@ onBeforeUnmount(() => {
 }
 .model-metric-card {
   min-height: 132px;
+}
+// 主指标 hero 卡：品牌渐变底 + 白字；深色下叠加主色外发光。
+.metric-card--hero {
+  border-color: transparent;
+  background: var(--vp-brand-gradient);
+
+  .metric-icon {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .metric-copy > span,
+  .metric-copy small {
+    color: rgba(255, 255, 255, 0.82);
+  }
+  .metric-copy strong {
+    color: #fff;
+  }
+  .growth {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  html.dark & {
+    box-shadow: var(--vp-glow-primary);
+  }
 }
 .chart-grid,
 .model-chart-grid {

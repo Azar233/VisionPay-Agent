@@ -16,6 +16,13 @@
   --vp-primary-soft: #eef4ff;
   --vp-secondary: #5ac8fa;
   --vp-accent: #2b7fff;
+  --vp-accent-cyan: #06b6d4;
+  --vp-brand-gradient: linear-gradient(135deg, #2b7fff 0%, #06b6d4 100%);
+  --vp-glow-primary: 0 6px 24px rgba(43, 127, 255, 0.28);
+  --vp-border-glow: rgba(43, 127, 255, 0.4);
+  --vp-aurora-1: rgba(43, 127, 255, 0.1);
+  --vp-aurora-2: rgba(6, 182, 212, 0.08);
+  --vp-aurora-3: rgba(139, 92, 246, 0.08);
   --vp-success: #12b76a;
   --vp-success-bg: #e8f7ef;
   --vp-warning: #d97706;
@@ -67,7 +74,9 @@
   --el-fill-color-light: #f3f4f6;
   --el-fill-color-lighter: #f7f8fa;
   --el-font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    'InterVariable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --vp-font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
   --vp-vj-bg:
     radial-gradient(circle at 4% 6%, rgba(129, 149, 255, 0.32), transparent 24%),
     radial-gradient(circle at 96% 8%, rgba(255, 200, 120, 0.28), transparent 22%),
@@ -104,11 +113,18 @@ html.dark {
   --vp-agent-training: #38bdf8;
   --vp-agent-catalog: #fbbf24;
   --vp-agent-knowledge: #34d399;
-  --vp-primary: #3b8bff;
-  --vp-primary-hover: #5c9dff;
-  --vp-primary-soft: rgba(59, 139, 255, 0.16);
+  --vp-primary: #5c9dff;
+  --vp-primary-hover: #80b3ff;
+  --vp-primary-soft: rgba(92, 157, 255, 0.14);
   --vp-secondary: #64d2ff;
-  --vp-accent: #3b8bff;
+  --vp-accent: #22d3ee;
+  --vp-accent-cyan: #22d3ee;
+  --vp-brand-gradient: linear-gradient(135deg, #5c9dff 0%, #22d3ee 100%);
+  --vp-glow-primary: 0 0 24px rgba(92, 157, 255, 0.32), 0 0 72px rgba(34, 211, 238, 0.1);
+  --vp-border-glow: rgba(140, 180, 255, 0.38);
+  --vp-aurora-1: rgba(61, 90, 254, 0.2);
+  --vp-aurora-2: rgba(34, 211, 238, 0.12);
+  --vp-aurora-3: rgba(139, 92, 246, 0.14);
   --vp-success: #34d399;
   --vp-success-bg: rgba(52, 211, 153, 0.14);
   --vp-warning: #fbbf24;
@@ -117,32 +133,32 @@ html.dark {
   --vp-danger-bg: rgba(248, 113, 113, 0.13);
   --vp-info: #9ca3af;
   --vp-info-bg: rgba(255, 255, 255, 0.08);
-  --vp-bg: #0f1115;
-  --vp-bg-dark: #0f1115;
-  --vp-surface: #171a21;
-  --vp-surface-muted: #1f232c;
-  --vp-sidebar-bg: #14171d;
+  --vp-bg: #05070f;
+  --vp-bg-dark: #05070f;
+  --vp-surface: rgba(255, 255, 255, 0.045);
+  --vp-surface-muted: rgba(255, 255, 255, 0.08);
+  --vp-sidebar-bg: rgba(7, 11, 22, 0.72);
   --vp-sidebar-text: #9ca3af;
   --vp-sidebar-active-text: #f3f4f6;
-  --vp-sidebar-active-bg: #242933;
-  --vp-border: rgba(255, 255, 255, 0.08);
-  --vp-border-strong: rgba(255, 255, 255, 0.14);
+  --vp-sidebar-active-bg: rgba(255, 255, 255, 0.07);
+  --vp-border: rgba(255, 255, 255, 0.09);
+  --vp-border-strong: rgba(255, 255, 255, 0.16);
   --vp-text: #f3f4f6;
   --vp-text-regular: #d1d5db;
   --vp-muted: #9ca3af;
   --vp-placeholder: #6b7280;
-  --vp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --vp-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.34);
-  --vp-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
-  --vp-ring: 0 0 0 3px rgba(59, 139, 255, 0.22);
-  --vp-modal-backdrop: rgba(0, 0, 0, 0.42);
-  --el-color-primary: #3b8bff;
-  --el-color-primary-light-3: #62a2ff;
-  --el-color-primary-light-5: #89bbff;
-  --el-color-primary-light-7: #b0d1ff;
-  --el-color-primary-light-8: #cbe0ff;
-  --el-color-primary-light-9: rgba(59, 139, 255, 0.16);
-  --el-color-primary-dark-2: #2b7fff;
+  --vp-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --vp-shadow-md: 0 8px 28px rgba(0, 0, 0, 0.42);
+  --vp-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55);
+  --vp-ring: 0 0 0 3px rgba(92, 157, 255, 0.22);
+  --vp-modal-backdrop: rgba(2, 4, 10, 0.55);
+  --el-color-primary: #5c9dff;
+  --el-color-primary-light-3: #80b3ff;
+  --el-color-primary-light-5: #a3c6ff;
+  --el-color-primary-light-7: #c2d9ff;
+  --el-color-primary-light-8: #d7e6ff;
+  --el-color-primary-light-9: rgba(92, 157, 255, 0.14);
+  --el-color-primary-dark-2: #3f83f8;
   --el-color-success: #34d399;
   --el-color-success-light-8: rgba(52, 211, 153, 0.2);
   --el-color-success-light-9: rgba(52, 211, 153, 0.12);
@@ -155,13 +171,13 @@ html.dark {
   --el-color-info: #9ca3af;
   --el-color-info-light-8: rgba(156, 163, 175, 0.2);
   --el-color-info-light-9: rgba(156, 163, 175, 0.12);
-  --el-bg-color: #171a21;
-  --el-bg-color-overlay: #1f232c;
-  --el-fill-color: #1f232c;
-  --el-fill-color-light: #1c2028;
-  --el-fill-color-lighter: #242933;
-  --el-fill-color-extra-light: #2a303b;
-  --el-fill-color-blank: #171a21;
+  --el-bg-color: #0d1424;
+  --el-bg-color-overlay: #141d33;
+  --el-fill-color: rgba(255, 255, 255, 0.07);
+  --el-fill-color-light: rgba(255, 255, 255, 0.05);
+  --el-fill-color-lighter: rgba(255, 255, 255, 0.09);
+  --el-fill-color-extra-light: rgba(255, 255, 255, 0.11);
+  --el-fill-color-blank: #0d1424;
   --el-border-color: rgba(255, 255, 255, 0.1);
   --el-border-color-light: rgba(255, 255, 255, 0.08);
   --el-border-color-lighter: rgba(255, 255, 255, 0.06);
@@ -199,8 +215,36 @@ html.dark {
 }
 
 html.dark body {
-  color: #f3f4f6;
-  background: #0f1115;
+  color: var(--vp-text);
+  background: var(--vp-bg);
+}
+
+/* 深空极光背景层：fixed 于视口、负 z-index 沉于内容之下、不拦截交互。 */
+html.dark body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(52% 38% at 8% -8%, var(--vp-aurora-1), transparent 72%),
+    radial-gradient(42% 34% at 94% 6%, var(--vp-aurora-2), transparent 72%),
+    radial-gradient(50% 42% at 52% 110%, var(--vp-aurora-3), transparent 78%);
+}
+
+/* 细网格纹理，向顶部聚拢并用 mask 淡出。 */
+html.dark body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(78% 62% at 50% 0%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(78% 62% at 50% 0%, #000 0%, transparent 100%);
 }
 
 body,
@@ -262,7 +306,7 @@ html.dark .el-popper.is-dark,
 html.dark .el-tooltip__popper.is-dark {
   padding: 7px 10px !important;
   color: #f3f4f6 !important;
-  background: rgba(31, 35, 44, 0.96) !important;
+  background: rgba(20, 29, 51, 0.96) !important;
   border: 0 !important;
   border-radius: 8px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28) !important;
@@ -279,7 +323,7 @@ html.dark .el-dialog,
 html.dark .el-drawer,
 html.dark .el-picker-panel {
   color: #f3f4f6;
-  background: #1f232c;
+  background: #141d33;
   border-color: rgba(255, 255, 255, 0.1);
 }
 html.dark .el-dropdown-menu__item {
@@ -288,15 +332,22 @@ html.dark .el-dropdown-menu__item {
 html.dark .el-dropdown-menu__item:not(.is-disabled):focus,
 html.dark .el-dropdown-menu__item:not(.is-disabled):hover {
   color: #fff;
-  background: rgba(59, 139, 255, 0.16);
+  background: rgba(92, 157, 255, 0.18);
+}
+
+/* 自定义弹层若用 var(--vp-surface) !important 兜底，深色下半透明会成幽灵层，这里压实。 */
+html.dark .user-menu-popper.el-popper,
+html.dark .checkout-row-actions-popper,
+html.dark .dataset-row-actions-popper {
+  background: #141d33 !important;
 }
 html.dark .el-loading-mask {
-  background-color: rgba(15, 17, 21, 0.82);
+  background-color: rgba(5, 7, 15, 0.82);
 }
 html.dark .el-message,
 html.dark .el-notification {
   color: #f3f4f6;
-  background: #1f232c;
+  background: #141d33;
   border-color: rgba(255, 255, 255, 0.12);
 }
 html.dark .el-message .el-message__content,
@@ -309,7 +360,7 @@ html.dark .el-table tr,
 html.dark .el-table th.el-table__cell,
 html.dark .el-table td.el-table__cell {
   color: #d1d5db;
-  background: #171a21;
+  background: #0d1424;
   border-color: rgba(255, 255, 255, 0.08);
 }
 html.dark .el-table__inner-wrapper::before {
@@ -323,7 +374,7 @@ html.dark .el-textarea__inner,
 html.dark .el-select__wrapper,
 html.dark .el-input-number {
   color: #f3f4f6;
-  background: #1f232c;
+  background: rgba(255, 255, 255, 0.05);
 }
 html.dark ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
@@ -391,6 +442,55 @@ body > .el-overlay-message-box {
 .card-container {
   padding: $spacing-lg;
   margin-bottom: $spacing-md;
+}
+
+html.dark .card-container,
+html.dark .vp-panel {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--vp-shadow-sm);
+}
+
+/* 玻璃拟态面板：深色下半透明 + 背景模糊 + 顶部高光；浅色下等同普通卡片。 */
+.vp-glass {
+  background: var(--vp-surface);
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+}
+html.dark .vp-glass {
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    var(--vp-shadow-md);
+}
+
+/* hover 浮起 + 品牌光边。 */
+.vp-glow-card {
+  transition:
+    transform 0.24s ease,
+    border-color 0.24s ease,
+    box-shadow 0.24s ease;
+}
+@media (hover: hover) {
+  .vp-glow-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--vp-border-glow);
+    box-shadow: var(--vp-glow-primary);
+  }
+}
+
+/* 品牌渐变文字。 */
+.vp-gradient-text {
+  background: var(--vp-brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 指标/价格类数字统一等宽数字字形。 */
+.vp-num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Shared status pill: <span class="vp-pill vp-pill--success">…</span> */
@@ -518,12 +618,27 @@ body > .el-overlay-message-box {
   --el-button-active-border-color: #1a62c7;
 }
 html.dark .el-button--primary {
-  --el-button-bg-color: #3b8bff;
-  --el-button-border-color: #3b8bff;
-  --el-button-hover-bg-color: #5c9dff;
-  --el-button-hover-border-color: #5c9dff;
-  --el-button-active-bg-color: #2b7fff;
-  --el-button-active-border-color: #2b7fff;
+  --el-button-bg-color: #4d8dff;
+  --el-button-border-color: transparent;
+  --el-button-hover-bg-color: #6aa6ff;
+  --el-button-hover-border-color: transparent;
+  --el-button-active-bg-color: #3f83f8;
+  --el-button-active-border-color: transparent;
+  background-image: linear-gradient(135deg, #4d8dff 0%, #2f7df6 55%, #22a2f0 100%);
+  box-shadow:
+    0 4px 18px rgba(61, 118, 255, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+html.dark .el-button--primary:hover {
+  background-image: linear-gradient(135deg, #6aa6ff 0%, #4d8dff 55%, #38b4f6 100%);
+  box-shadow:
+    0 6px 26px rgba(61, 118, 255, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+html.dark .el-button--primary.is-disabled,
+html.dark .el-button--primary.is-disabled:hover {
+  background-image: none;
+  box-shadow: none;
 }
 
 .el-button.is-circle {

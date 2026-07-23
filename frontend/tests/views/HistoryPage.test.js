@@ -61,8 +61,11 @@ describe('HistoryPage', () => {
     await flushPromises()
 
     expect(getHistoryOverview).toHaveBeenCalledOnce()
-    expect(wrapper.text()).toContain('识别任务12')
-    expect(wrapper.text()).toContain('Agent 调用8')
+    // 概览带数字走 useCountUp 动画，flushPromises 后尚未落定，断言 label 与非动画文本。
+    expect(wrapper.text()).toContain('识别任务')
+    expect(wrapper.text()).toContain('Agent 调用')
+    expect(wrapper.text()).toContain('今日 3 次')
+    expect(wrapper.text()).toContain('2 个处于活动状态')
     expect(wrapper.find('[data-test="detection-panel"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="agent-panel"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="model-panel"]').exists()).toBe(false)

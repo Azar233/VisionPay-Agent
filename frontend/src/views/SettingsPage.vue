@@ -102,35 +102,44 @@
               label-position="top"
             >
               <div class="avatar-editor">
-                <el-avatar :size="64" :src="profileForm.avatar || undefined" class="profile-avatar">
-                  {{ avatarInitial }}
-                </el-avatar>
-                <div class="avatar-meta">
-                  <strong>自定义头像</strong>
-                  <span>支持 JPG、PNG、WEBP、BMP，文件不超过 2MB。</span>
-                  <div class="avatar-actions">
-                    <el-upload
-                      :auto-upload="false"
-                      :show-file-list="false"
-                      accept="image/jpeg,image/png,image/webp,image/bmp"
-                      :on-change="handleAvatarSelect"
-                    >
-                      <el-button :icon="Upload" :loading="avatarLoading">上传头像</el-button>
-                    </el-upload>
-                    <el-button
-                      v-if="profileForm.avatar"
-                      text
-                      :disabled="avatarLoading"
-                      @click="resetAvatar"
-                      >恢复默认</el-button
-                    >
+                <div class="identity-banner" aria-hidden="true"></div>
+                <div class="identity-body">
+                  <el-avatar
+                    :size="64"
+                    :src="profileForm.avatar || undefined"
+                    class="profile-avatar"
+                  >
+                    {{ avatarInitial }}
+                  </el-avatar>
+                  <div class="avatar-meta">
+                    <strong>{{ profileForm.nickname || profileForm.username || '—' }}</strong>
+                    <span class="avatar-email">{{ profileForm.email || '未设置邮箱' }}</span>
+                    <span class="avatar-hint">支持 JPG、PNG、WEBP、BMP，文件不超过 2MB。</span>
+                    <div class="avatar-actions">
+                      <el-upload
+                        :auto-upload="false"
+                        :show-file-list="false"
+                        accept="image/jpeg,image/png,image/webp,image/bmp"
+                        :on-change="handleAvatarSelect"
+                      >
+                        <el-button :icon="Upload" :loading="avatarLoading">上传头像</el-button>
+                      </el-upload>
+                      <el-button
+                        v-if="profileForm.avatar"
+                        text
+                        :disabled="avatarLoading"
+                        @click="resetAvatar"
+                        >恢复默认</el-button
+                      >
+                    </div>
                   </div>
                 </div>
               </div>
               <div class="form-grid">
-                <el-form-item label="用户名"
-                  ><el-input v-model="profileForm.username" disabled
-                /></el-form-item>
+                <div class="readonly-field">
+                  <span class="readonly-label">用户名</span>
+                  <span class="readonly-value">{{ profileForm.username || '—' }}</span>
+                </div>
                 <el-form-item label="昵称" prop="nickname"
                   ><el-input
                     v-model.trim="profileForm.nickname"
@@ -144,9 +153,12 @@
                 <el-form-item label="手机号" prop="phone"
                   ><el-input v-model.trim="profileForm.phone" placeholder="选填" maxlength="20"
                 /></el-form-item>
-                <el-form-item label="注册时间"
-                  ><el-input :model-value="formatDate(profileForm.created_at)" disabled
-                /></el-form-item>
+                <div class="readonly-field">
+                  <span class="readonly-label">注册时间</span>
+                  <span class="readonly-value vp-num">{{
+                    formatDate(profileForm.created_at)
+                  }}</span>
+                </div>
               </div>
               <div class="form-actions">
                 <el-button type="primary" :loading="profileLoading" @click="saveProfile"
@@ -693,6 +705,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
 }
 
 .settings-nav-item {
+  position: relative;
   width: 100%;
   min-height: 64px;
   padding: 10px 12px;
@@ -729,6 +742,23 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
     border-color: $border-color;
     background: $surface-color;
     box-shadow: $shadow-sm;
+
+    // 与全局侧边栏一致的激活光条，深色下发光。
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--vp-brand-gradient);
+
+      html.dark & {
+        box-shadow: 0 0 12px rgba(92, 157, 255, 0.55);
+      }
+    }
   }
 }
 
@@ -777,7 +807,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   small {
     margin-top: 4px;
     color: $text-secondary;
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.4;
   }
 }
@@ -790,6 +820,13 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
 .settings-panel {
   width: 100%;
   max-width: 1120px;
+}
+
+// v-show 从 display:none 恢复显示时会重启动画，实现 tab 切换的淡入上移。
+@media (prefers-reduced-motion: no-preference) {
+  .settings-panel {
+    animation: apple-fade-up 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
 }
 
 .panel-heading {
@@ -905,7 +942,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   > span {
     margin-right: 2px;
     color: $text-placeholder;
-    font-size: 10px;
+    font-size: 11px;
   }
   button {
     padding: 6px 9px;
@@ -914,7 +951,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
     color: $text-secondary;
     background: $surface-color;
     font: inherit;
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
   }
   button:hover {
@@ -944,7 +981,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   span {
     margin-top: 4px;
     color: $text-placeholder;
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.5;
   }
 }
@@ -955,43 +992,70 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
 
 .avatar-editor {
   margin-bottom: 22px;
-  padding: 18px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  overflow: hidden;
   border: 1px solid $border-color;
   border-radius: 14px;
   background: $surface-muted;
+
+  html.dark & {
+    box-shadow: $shadow-sm;
+  }
+}
+
+.identity-banner {
+  height: 72px;
+  background: var(--vp-brand-gradient);
+}
+
+.identity-body {
+  padding: 0 18px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .profile-avatar {
   flex: 0 0 auto;
+  margin-top: -24px;
+  border: 3px solid #fff;
   color: #fff;
-  background: linear-gradient(145deg, $primary-color, $primary-hover);
+  background: var(--vp-brand-gradient);
   font-size: 25px;
   font-weight: 700;
   box-shadow: 0 10px 28px rgba(0, 113, 227, 0.2);
+
+  html.dark & {
+    box-shadow: var(--vp-glow-primary);
+  }
 }
 
 .avatar-meta {
   min-width: 0;
+  padding-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 
   strong {
     color: $text-primary;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 650;
   }
-  > span {
+  .avatar-email {
     color: $text-secondary;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .avatar-hint {
+    margin-top: 6px;
+    color: $text-placeholder;
     font-size: 11px;
     line-height: 1.5;
   }
 }
 
 .avatar-actions {
-  margin-top: 3px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1002,6 +1066,35 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 20px;
+}
+
+// 描述式只读字段：12px 灰 label + 14px 值，替代灰色禁用输入框。
+.readonly-field {
+  min-width: 0;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.readonly-label {
+  color: $text-secondary;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.readonly-value {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: $text-primary;
+  font-size: 14px;
+  line-height: 1.4;
+
+  &.vp-num {
+    font-family: var(--vp-font-mono);
+    font-size: 13px;
+  }
 }
 
 .form-actions {
@@ -1172,7 +1265,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   display: flex;
   justify-content: space-between;
   color: $text-placeholder;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .preference-footer {
@@ -1186,7 +1279,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
 
   > span {
     color: $text-placeholder;
-    font-size: 10px;
+    font-size: 11px;
   }
 }
 
@@ -1274,7 +1367,7 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   .panel-heading h2 {
     font-size: 20px;
   }
-  .avatar-editor {
+  .identity-body {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -1294,136 +1387,6 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   .instructions-boundary {
     align-items: flex-start;
     flex-direction: column;
-  }
-}
-
-.settings-page {
-  min-height: 100%;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-.settings-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
-  gap: 16px;
-  align-items: start;
-}
-.settings-card {
-  padding: 26px;
-  background: $surface-color;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
-}
-.settings-card > header {
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 13px;
-}
-.settings-card h2 {
-  margin: 0;
-  color: $text-primary;
-  font-size: 19px;
-  font-weight: 600;
-}
-.settings-card header p {
-  margin: 4px 0 0;
-  color: $text-secondary;
-  font-size: 12px;
-}
-.card-icon {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 13px;
-  color: $primary-color;
-  background: $primary-soft;
-  font-size: 19px;
-}
-.card-icon.security {
-  color: $secondary-color;
-  background: color-mix(in srgb, $secondary-color 12%, transparent);
-}
-.avatar-editor {
-  margin-bottom: 22px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-md;
-  background: $surface-muted;
-}
-.profile-avatar {
-  flex: 0 0 auto;
-  color: #fff;
-  background: linear-gradient(145deg, $primary-color, $primary-hover);
-  font-size: 28px;
-  font-weight: 700;
-  box-shadow: 0 10px 28px color-mix(in srgb, $primary-color 20%, transparent);
-}
-.avatar-meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.avatar-meta strong {
-  color: $text-primary;
-  font-size: 15px;
-}
-.avatar-meta span {
-  color: $text-secondary;
-  font-size: 12px;
-}
-.avatar-actions {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  column-gap: 16px;
-}
-.form-actions {
-  padding-top: 4px;
-  display: flex;
-  justify-content: flex-end;
-}
-.password-card .el-alert {
-  margin-bottom: 20px;
-}
-@media (max-width: 1000px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 700px) {
-  .settings-page {
-    padding: 16px;
-  }
-  .settings-card {
-    padding: 24px;
-  }
-  .avatar-editor {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .form-grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>

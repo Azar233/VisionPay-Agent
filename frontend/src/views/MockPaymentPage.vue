@@ -20,12 +20,17 @@
       </section>
 
       <section v-else-if="order.status === 'paid'" class="state-panel success-state">
-        <span
-          ><el-icon><CircleCheckFilled /></el-icon></span
-        ><small>PAYMENT COMPLETE</small>
+        <span class="success-badge">
+          <svg class="success-svg" viewBox="0 0 52 52" aria-hidden="true">
+            <circle class="success-ring" cx="26" cy="26" r="23" />
+            <path class="success-tick" pathLength="1" d="M16 27l7 7 13-14" />
+          </svg>
+        </span>
+        <small>PAYMENT COMPLETE</small>
         <h1>模拟付款成功</h1>
         <strong>{{ formatMoney(order.amount) }}</strong>
         <p>收银端将在数秒内自动同步结果。</p>
+        <div class="sync-progress" aria-hidden="true"><span></span></div>
         <div class="success-order">
           <span>订单编号</span><b>{{ orderNumber }}</b>
         </div>
@@ -39,7 +44,7 @@
 
       <section v-else class="payment-shell card-container">
         <div class="amount-section">
-          <small>待支付金额</small><strong>{{ formatMoney(order.amount) }}</strong
+          <small>待支付金额</small><strong class="vp-num">{{ formatMoney(order.amount) }}</strong
           ><span>{{ countdownText }} 后二维码失效</span>
         </div>
 
@@ -65,22 +70,28 @@
           <div>
             <button
               type="button"
+              class="method-wechat"
               :class="{ active: paymentMethod === 'wechat' }"
               :aria-pressed="paymentMethod === 'wechat'"
               @click="paymentMethod = 'wechat'"
             >
-              <el-icon><ChatDotRound /></el-icon><span>微信支付</span
+              <span class="method-icon"
+                ><el-icon><ChatDotRound /></el-icon></span
+              ><span>微信支付</span
               ><i
                 ><el-icon v-if="paymentMethod === 'wechat'"><Check /></el-icon
               ></i>
             </button>
             <button
               type="button"
+              class="method-alipay"
               :class="{ active: paymentMethod === 'alipay' }"
               :aria-pressed="paymentMethod === 'alipay'"
               @click="paymentMethod = 'alipay'"
             >
-              <el-icon><Wallet /></el-icon><span>支付宝</span
+              <span class="method-icon"
+                ><el-icon><Wallet /></el-icon></span
+              ><span>支付宝</span
               ><i
                 ><el-icon v-if="paymentMethod === 'alipay'"><Check /></el-icon
               ></i>
@@ -89,10 +100,17 @@
         </fieldset>
 
         <div v-if="confirmError" class="confirm-error" role="alert">{{ confirmError }}</div>
-        <button class="confirm-button" type="button" :disabled="submitting" @click="confirmPayment">
-          <el-icon v-if="submitting" class="spin"><Loading /></el-icon
-          >{{ submitting ? '正在确认' : `确认模拟支付 ${formatMoney(order.amount)}` }}
-        </button>
+        <div class="confirm-bar">
+          <button
+            class="confirm-button"
+            type="button"
+            :disabled="submitting"
+            @click="confirmPayment"
+          >
+            <el-icon v-if="submitting" class="spin"><Loading /></el-icon
+            >{{ submitting ? '正在确认' : `确认模拟支付 ${formatMoney(order.amount)}` }}
+          </button>
+        </div>
         <p class="simulation-note">
           <el-icon><InfoFilled /></el-icon>演示环境不会调用真实支付渠道，也不会产生资金交易。
         </p>
@@ -107,7 +125,6 @@ import { useRoute } from 'vue-router'
 import {
   ChatDotRound,
   Check,
-  CircleCheckFilled,
   Clock,
   InfoFilled,
   Loading,
@@ -260,24 +277,29 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 28px 20px 24px;
-  border-bottom: 1px solid $border-color;
-  background: $surface-muted;
+  margin: 12px 12px 0;
+  padding: 26px 20px 24px;
+  border-radius: $border-radius-lg;
+  background: var(--vp-brand-gradient);
+
+  html.dark & {
+    box-shadow: var(--vp-glow-primary);
+  }
 
   small {
-    color: $text-secondary;
+    color: rgba(255, 255, 255, 0.8);
     font-size: 13px;
   }
 
   strong {
     margin: 5px 0 8px;
-    color: $text-primary;
+    color: #fff;
+    font-family: var(--vp-font-mono);
     font-size: 38px;
-    font-variant-numeric: tabular-nums;
   }
 
   span {
-    color: $primary-color;
+    color: rgba(255, 255, 255, 0.85);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   }
@@ -356,7 +378,7 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
 
   b {
     color: $text-primary;
-    font-family: ui-monospace, monospace;
+    font-family: var(--vp-font-mono);
   }
 }
 
@@ -380,36 +402,59 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
   }
 
   button {
-    min-height: 56px;
+    min-height: 64px;
     display: grid;
-    grid-template-columns: 24px 1fr 20px;
+    grid-template-columns: 40px 1fr 20px;
     align-items: center;
-    gap: 7px;
+    gap: 10px;
     padding: 0 12px;
     border: 1px solid $border-color;
-    border-radius: $border-radius-sm;
+    border-radius: $border-radius-md;
     color: $text-primary;
     background: $surface-color;
     cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
     transition:
       border-color 0.2s,
       color 0.2s,
-      background 0.2s;
+      background 0.2s,
+      box-shadow 0.2s;
+
+    &.method-wechat {
+      --method-brand: #07c160;
+    }
+
+    &.method-alipay {
+      --method-brand: #1677ff;
+    }
 
     &.active {
-      border: 2px solid $primary-color;
-      padding: 0 11px;
-      color: $primary-color;
-      background: $primary-soft;
+      border-color: var(--method-brand);
+      box-shadow: inset 0 0 0 1px var(--method-brand);
+      background: color-mix(in srgb, var(--method-brand) 6%, $surface-color);
     }
 
-    > .el-icon {
-      font-size: 20px;
+    .method-icon {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: var(--method-brand);
+      background: color-mix(in srgb, var(--method-brand) 12%, transparent);
+      transition:
+        color 0.2s,
+        background 0.2s;
+
+      .el-icon {
+        font-size: 22px;
+      }
     }
 
-    span {
-      font-size: 13px;
-      font-weight: 700;
+    &.active .method-icon {
+      color: #fff;
+      background: var(--method-brand);
     }
 
     i {
@@ -423,20 +468,24 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
     }
 
     &.active i {
-      border-color: $primary-color;
-      background: $primary-color;
+      border-color: var(--method-brand);
+      background: var(--method-brand);
     }
   }
 }
 
+.confirm-bar {
+  padding: 0 20px;
+}
+
 .confirm-button {
-  width: calc(100% - 40px);
+  width: 100%;
   min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 0 20px;
+  margin: 0;
   border: 0;
   border-radius: $border-radius-sm;
   color: #fff;
@@ -444,15 +493,20 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
   cursor: pointer;
   font-size: 15px;
   font-weight: 800;
-  transition: background 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    transform 0.15s ease;
 
   &:active {
     background: $primary-hover;
+    transform: scale(0.98);
   }
 
   &:disabled {
-    opacity: 0.62;
-    cursor: wait;
+    color: $text-secondary;
+    background: $surface-muted;
+    cursor: not-allowed;
   }
 }
 
@@ -492,6 +546,10 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
   > .el-icon {
     font-size: 48px;
     color: $primary-color;
+
+    html.dark & {
+      filter: drop-shadow(0 0 12px var(--vp-border-glow));
+    }
   }
 
   h1 {
@@ -506,17 +564,6 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
     font-size: 14px;
   }
 
-  > span {
-    width: 80px;
-    height: 80px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    color: $success-color;
-    background: var(--vp-success-bg);
-    font-size: 52px;
-  }
-
   > small {
     margin-top: 18px;
     color: $success-color;
@@ -529,6 +576,53 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
     color: $text-primary;
     font-size: 36px;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+.success-badge {
+  width: 80px;
+  height: 80px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: $success-color;
+  background: var(--vp-success-bg);
+}
+
+.success-svg {
+  width: 46px;
+  height: 46px;
+}
+
+.success-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.5;
+}
+
+.success-tick {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sync-progress {
+  width: 168px;
+  height: 3px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: $surface-muted;
+
+  span {
+    display: block;
+    width: 45%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--vp-brand-gradient);
+    transform: translateX(-100%);
   }
 }
 
@@ -548,7 +642,7 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
 
   b {
     color: $text-primary;
-    font-family: ui-monospace, monospace;
+    font-family: var(--vp-font-mono);
   }
 }
 
@@ -563,6 +657,53 @@ onBeforeUnmount(() => window.clearInterval(countdownTimer))
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .success-ring {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: success-ring-pop 0.55s $ease-vision-out both;
+  }
+
+  .success-tick {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: success-tick-draw 0.4s ease-out 0.4s forwards;
+  }
+
+  .sync-progress span {
+    animation: sync-progress-slide 3.6s linear infinite;
+  }
+}
+
+@keyframes success-ring-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes success-tick-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sync-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(230%);
   }
 }
 

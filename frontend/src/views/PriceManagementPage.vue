@@ -1,5 +1,13 @@
 <template>
   <div class="price-management-page">
+    <header class="page-header">
+      <div>
+        <span class="vp-kicker">Pricing</span>
+        <h1 class="vp-page-title">价目表管理</h1>
+        <p class="vp-page-subtitle">选择数据集版本后，只管理该版本中已有商品的价格。</p>
+      </div>
+    </header>
+
     <section class="card-container dataset-scope-panel">
       <div class="scope-copy">
         <strong><span class="required-star">*</span>数据集版本</strong>
@@ -41,7 +49,11 @@
     </section>
 
     <section v-if="!selectedDatasetId" class="card-container empty-card">
-      <el-empty description="请选择数据集版本后再管理价目表" :image-size="120" />
+      <EmptyState
+        :icon="PriceTag"
+        title="请选择数据集版本"
+        description="选择数据集版本后，即可管理该版本中已有商品的价格。"
+      />
     </section>
 
     <template v-else>
@@ -59,7 +71,29 @@
               <el-button :icon="Search" @click="handleSearch" />
             </template>
           </el-input>
-          <span class="scope-hint">当前仅显示所选版本的商品</span>
+          <div class="toolbar-side">
+            <div class="config-progress" title="当前数据集价格配置完成度">
+              <span class="config-progress-text">
+                已配置 <strong class="vp-num">{{ configuredCount }}</strong> /
+                <span class="vp-num">{{ priceList.length }}</span>
+              </span>
+              <div class="config-progress-track" aria-hidden="true">
+                <div class="config-progress-fill" :style="{ width: `${priceProgress}%` }" />
+              </div>
+            </div>
+            <div class="price-status-filter" role="group" aria-label="按价格配置状态筛选">
+              <button
+                v-for="option in priceFilterOptions"
+                :key="option.value"
+                type="button"
+                :class="{ active: priceFilter === option.value }"
+                @click="selectPriceFilter(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+            <span class="scope-hint">当前仅显示所选版本的商品</span>
+          </div>
         </div>
 
         <el-table
@@ -105,7 +139,7 @@
           >
             <template #default="{ row }">
               <div v-if="row.has_price" class="price-cell">
-                <strong>{{ formatPrice(row.unit_price) }}</strong>
+                <strong class="vp-num">{{ formatPrice(row.unit_price) }}</strong>
                 <span>{{ row.currency || 'CNY' }}</span>
               </div>
               <span v-else class="vp-pill vp-pill--warning">未配置</span>
@@ -147,12 +181,12 @@
         </el-table>
 
         <footer class="pagination-row">
-          <span>共 {{ priceList.length }} 种商品</span>
+          <span>共 {{ filteredPriceList.length }} 种商品</span>
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50]"
-            :total="priceList.length"
+            :total="filteredPriceList.length"
             layout="sizes, prev, pager, next"
             @size-change="handleSizeChange"
           />
@@ -254,7 +288,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Edit, Picture, Search } from '@element-plus/icons-vue'
+import { Edit, Picture, PriceTag, Search } from '@element-plus/icons-vue'
 import {
   getDatasetProductImageApi,
   getDatasetProductImagesApi,
@@ -262,6 +296,7 @@ import {
 } from '@/api/datasets'
 import { getDetectionModelVersionsApi } from '@/api/training'
 import { getPricesApi, updatePriceApi } from '@/api/prices'
+import EmptyState from '@/components/EmptyState.vue'
 
 const datasetLoading = ref(false)
 const loading = ref(false)
@@ -270,6 +305,7 @@ const datasetVersions = ref([])
 const selectedDatasetId = ref(null)
 const priceList = ref([])
 const searchKeyword = ref('')
+const priceFilter = ref('all')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const sortState = ref({ prop: 'class_index', order: 'ascending' })
@@ -300,11 +336,32 @@ const samplePreviewLoadedCount = computed(
   () => samplePreviewItems.value.filter((item) => Boolean(item.url)).length,
 )
 
+const priceFilterOptions = [
+  { label: '全部', value: 'all' },
+  { label: '已配置', value: 'configured' },
+  { label: '未配置', value: 'unconfigured' },
+]
+
+// 完成度直接从当前表格数据源推导，不发新请求。
+const configuredCount = computed(
+  () => priceList.value.filter((item) => Boolean(item.has_price)).length,
+)
+const priceProgress = computed(() => {
+  if (!priceList.value.length) return 0
+  return Math.round((configuredCount.value / priceList.value.length) * 100)
+})
+
+const filteredPriceList = computed(() => {
+  if (priceFilter.value === 'all') return priceList.value
+  const wantConfigured = priceFilter.value === 'configured'
+  return priceList.value.filter((item) => Boolean(item.has_price) === wantConfigured)
+})
+
 const sortedPriceList = computed(() => {
   const { prop, order } = sortState.value
-  if (!prop || !order) return priceList.value
+  if (!prop || !order) return filteredPriceList.value
   const direction = order === 'descending' ? -1 : 1
-  return [...priceList.value].sort((left, right) => {
+  return [...filteredPriceList.value].sort((left, right) => {
     const leftValue = Number(left[prop] ?? -1)
     const rightValue = Number(right[prop] ?? -1)
     return (leftValue - rightValue) * direction
@@ -387,6 +444,7 @@ async function fetchPrices() {
 
 function handleDatasetChange() {
   searchKeyword.value = ''
+  priceFilter.value = 'all'
   currentPage.value = 1
   priceList.value = []
   if (selectedDatasetId.value) fetchPrices()
@@ -395,6 +453,13 @@ function handleDatasetChange() {
 function handleSearch() {
   currentPage.value = 1
   fetchPrices()
+}
+
+// 纯前端展示过滤，不触发接口请求。
+function selectPriceFilter(value) {
+  if (priceFilter.value === value) return
+  priceFilter.value = value
+  currentPage.value = 1
 }
 
 function handleSortChange({ prop, order }) {
@@ -654,6 +719,106 @@ async function autoSelectDefaultModelDataset() {
   flex-wrap: wrap;
   border-bottom: 1px solid $border-color;
   background: $surface-color;
+}
+
+.toolbar-side {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.config-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-progress-text {
+  color: $text-secondary;
+  font-size: 13px;
+  white-space: nowrap;
+
+  strong {
+    color: $text-primary;
+    font-weight: 650;
+  }
+}
+
+.config-progress-track {
+  width: 96px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: $surface-muted;
+}
+
+.config-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--vp-brand-gradient);
+  transition: width 0.32s ease;
+
+  html.dark & {
+    box-shadow: 0 0 10px var(--vp-border-glow);
+  }
+}
+
+/* 复用 Dashboard「苹果分段控件」模式，仅做前端展示过滤。 */
+.price-status-filter {
+  max-width: 100%;
+  padding: 3px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  background: $surface-muted;
+  white-space: nowrap;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  button {
+    height: 30px;
+    padding: 0 12px;
+    flex: none;
+    border: 0;
+    border-radius: 9px;
+    color: $text-secondary;
+    background: transparent;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition:
+      color 0.18s ease,
+      background 0.18s ease,
+      box-shadow 0.18s ease;
+
+    &:hover {
+      color: $text-primary;
+    }
+
+    &.active {
+      color: $primary-color;
+      background: $surface-color;
+      box-shadow: var(--vp-shadow-md);
+      font-weight: 650;
+    }
+  }
+
+  html.dark & {
+    background: rgba(255, 255, 255, 0.05);
+
+    button.active {
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+    }
+  }
 }
 
 .scope-hint {

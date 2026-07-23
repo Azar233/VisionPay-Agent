@@ -6,7 +6,6 @@ import MockPaymentPage from '@/views/MockPaymentPage.vue'
 import { confirmMockPaymentApi, getMockPaymentOrderApi } from '@/api/checkout'
 import { VISION_PET_TASK_EVENT } from '@/utils/visionPet'
 
-
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { token: 'payment-token' } }),
 }))

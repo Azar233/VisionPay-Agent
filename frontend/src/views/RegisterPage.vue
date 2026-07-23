@@ -2,12 +2,12 @@
   <div class="register-page">
     <section class="auth-hero">
       <span class="vp-kicker">VisionPay Workspace</span>
-      <h1>一个账号，<br />开启智能零售。</h1>
+      <h1>一个账号，<br />开启<span class="vp-gradient-text">智能零售</span>。</h1>
       <p>创建账号后即可使用商品检测、模型训练和智能分析工作台。</p>
       <div class="feature-grid">
-        <span><strong>YOLOv11</strong><small>商品定位</small></span>
-        <span><strong>Agent</strong><small>结果分析</small></span>
-        <span><strong>Metrics</strong><small>训练监控</small></span>
+        <span><i class="feature-index">01</i><strong>YOLOv11</strong><small>商品定位</small></span>
+        <span><i class="feature-index">02</i><strong>Agent</strong><small>结果分析</small></span>
+        <span><i class="feature-index">03</i><strong>Metrics</strong><small>训练监控</small></span>
       </div>
     </section>
     <div class="register-card">
@@ -142,8 +142,18 @@ async function handleRegister() {
   gap: 64px;
   padding: 48px max(32px, calc((100vw - 1120px) / 2));
   background:
-    radial-gradient(circle at 18% 18%, rgba(0, 113, 227, 0.1), transparent 28%),
+    radial-gradient(circle at 18% 18%, var(--vp-aurora-1), transparent 32%),
+    radial-gradient(circle at 84% 12%, var(--vp-aurora-2), transparent 30%),
+    radial-gradient(circle at 62% 108%, var(--vp-aurora-3), transparent 38%),
     linear-gradient(180deg, $surface-color, $bg-color 72%);
+
+  html.dark & {
+    background:
+      radial-gradient(circle at 18% 18%, var(--vp-aurora-1), transparent 34%),
+      radial-gradient(circle at 84% 12%, var(--vp-aurora-2), transparent 32%),
+      radial-gradient(circle at 62% 108%, var(--vp-aurora-3), transparent 42%),
+      linear-gradient(180deg, var(--vp-bg), #0b1226 72%);
+  }
 }
 
 .auth-hero {
@@ -174,6 +184,7 @@ async function handleRegister() {
   margin-top: 40px;
 
   span {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -182,6 +193,46 @@ async function handleRegister() {
     border-radius: $border-radius-md;
     background: $surface-color;
     box-shadow: $shadow-sm;
+    overflow: hidden;
+    transition:
+      transform 0.24s ease,
+      box-shadow 0.24s ease;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--vp-brand-gradient);
+      opacity: 0;
+      transition: opacity 0.24s ease;
+    }
+
+    @media (hover: hover) {
+      &:hover {
+        box-shadow: var(--vp-glow-primary);
+
+        &::before {
+          opacity: 1;
+        }
+      }
+    }
+
+    @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+      &:hover {
+        transform: translateY(-2px);
+      }
+    }
+  }
+
+  .feature-index {
+    font-family: var(--vp-font-mono);
+    font-style: normal;
+    font-size: 12px;
+    color: $primary-color;
+    letter-spacing: 0.08em;
   }
 
   strong {
@@ -203,6 +254,28 @@ async function handleRegister() {
   border-radius: $border-radius-lg;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(24px) saturate(130%);
+  transition: border-color 0.24s ease;
+
+  &:focus-within {
+    border-color: var(--vp-border-glow);
+  }
+
+  html.dark & {
+    background: rgba(7, 11, 22, 0.62);
+    border-color: var(--vp-border-strong);
+    backdrop-filter: blur(28px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 24px 70px rgba(0, 0, 0, 0.45);
+
+    &:focus-within {
+      border-color: var(--vp-border-glow);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 24px 70px rgba(0, 0, 0, 0.45),
+        var(--vp-glow-primary);
+    }
+  }
 }
 
 .register-header {
@@ -225,6 +298,30 @@ async function handleRegister() {
   p {
     font-size: 13px;
     color: $text-secondary;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .register-header > * {
+    animation: register-fade-up 0.56s ease both;
+
+    @for $i from 1 through 3 {
+      &:nth-child(#{$i}) {
+        animation-delay: #{0.09 * ($i - 1)}s;
+      }
+    }
+  }
+}
+
+@keyframes register-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -252,7 +349,7 @@ async function handleRegister() {
 @media (max-width: 980px) {
   .register-page {
     grid-template-columns: 1fr;
-    gap: 28px;
+    gap: 40px;
     padding: 32px 20px;
   }
 

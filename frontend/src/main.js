@@ -11,6 +11,11 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
+// 品牌字体（可变字重 Inter + JetBrains Mono 用于数字/终端）
+import '@fontsource-variable/inter'
+import '@fontsource/jetbrains-mono/400.css'
+import '@fontsource/jetbrains-mono/500.css'
+
 // 全局样式
 import '@/assets/styles/global.scss'
 
