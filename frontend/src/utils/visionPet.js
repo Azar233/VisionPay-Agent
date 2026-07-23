@@ -87,10 +87,6 @@ export function notifyVisionPetPaymentSuccess({ amount = null, duration = 5600 }
   })
 }
 
-function latestActiveTask() {
-  return [...activeTasks.values()].at(-1)
-}
-
 /**
  * Create a lifecycle lease for a real backend task. The pet only returns to
  * idle after every active lease has finished, which prevents overlapping
@@ -105,12 +101,12 @@ export function beginVisionPetTask({
   const taskId = id || `pet-task-${++taskSequence}`
   const task = { id: taskId, message: String(message || '正在处理任务'), progress, showProgress }
   activeTasks.set(taskId, task)
-  notifyVisionPetTaskProgress({
-    status: 'running',
-    message: task.message,
-    progress: task.progress,
-    showProgress: task.showProgress,
-    duration: 0,
+  notifyVisionPetTask({
+    action: 'task-start',
+    task: {
+      ...task,
+      state: 'working',
+    },
   })
 
   let finished = false
@@ -124,12 +120,15 @@ export function beginVisionPetTask({
       } else {
         task.message = String(nextUpdate)
       }
-      notifyVisionPetTaskProgress({
-        status: 'running',
-        message: task.message,
-        progress: task.progress,
-        showProgress: task.showProgress,
-        duration: 0,
+      notifyVisionPetTask({
+        action: 'task-update',
+        id: taskId,
+        update: {
+          message: task.message,
+          progress: task.progress,
+          showProgress: task.showProgress,
+          state: 'working',
+        },
       })
     },
     finish({
@@ -142,17 +141,8 @@ export function beginVisionPetTask({
       if (finished) return
       finished = true
       activeTasks.delete(taskId)
-      const remainingTask = latestActiveTask()
-      if (remainingTask) {
-        notifyVisionPetTaskProgress({
-          status: 'running',
-          message: remainingTask.message,
-          progress: remainingTask.progress,
-          showProgress: remainingTask.showProgress,
-          duration: 0,
-        })
-        return
-      }
+      notifyVisionPetTask({ action: 'task-finish', id: taskId })
+      if (activeTasks.size) return
       notifyVisionPetTaskProgress({
         status,
         message: finalMessage,

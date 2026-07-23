@@ -83,9 +83,28 @@ describe('streamChat', () => {
     expect(onDone).toHaveBeenCalledOnce()
     expect(updates).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ state: 'working', message: 'Agent 正在处理任务' }),
-        expect.objectContaining({ state: 'working', message: '检测智能体正在处理' }),
-        expect.objectContaining({ state: 'working', message: '正在执行 detect_products' }),
+        expect.objectContaining({
+          action: 'task-start',
+          task: expect.objectContaining({
+            state: 'working',
+            message: 'Agent 正在处理任务',
+          }),
+        }),
+        expect.objectContaining({
+          action: 'task-update',
+          update: expect.objectContaining({
+            state: 'working',
+            message: '检测智能体正在处理',
+          }),
+        }),
+        expect.objectContaining({
+          action: 'task-update',
+          update: expect.objectContaining({
+            state: 'working',
+            message: '正在执行 detect_products',
+          }),
+        }),
+        expect.objectContaining({ action: 'task-finish' }),
         expect.objectContaining({ state: 'idle', message: '回答完成', duration: 3200 }),
       ]),
     )

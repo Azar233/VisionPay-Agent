@@ -101,18 +101,18 @@ describe('VisionPet', () => {
     await wrapper.vm.$nextTick()
     await Promise.resolve()
 
-    const bubble = wrapper.get('.pet-message')
-    Object.defineProperty(bubble.element, 'offsetWidth', { configurable: true, value: 240 })
-    Object.defineProperty(bubble.element, 'offsetHeight', { configurable: true, value: 70 })
+    const bubbleList = wrapper.get('.pet-message-list')
+    Object.defineProperty(bubbleList.element, 'offsetWidth', { configurable: true, value: 240 })
+    Object.defineProperty(bubbleList.element, 'offsetHeight', { configurable: true, value: 70 })
 
     notifyVisionPetTask({ state: 'working', message: '正在处理任务', duration: 0 })
     await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
 
-    expect(bubble.classes()).toContain('opens-right')
-    expect(bubble.classes()).toContain('opens-below')
-    expect(Number.parseFloat(bubble.element.style.left)).toBeGreaterThanOrEqual(0)
-    expect(Number.parseFloat(bubble.element.style.top)).toBeGreaterThanOrEqual(0)
+    expect(bubbleList.classes()).toContain('opens-right')
+    expect(bubbleList.classes()).toContain('opens-below')
+    expect(Number.parseFloat(bubbleList.element.style.left)).toBeGreaterThanOrEqual(0)
+    expect(Number.parseFloat(bubbleList.element.style.top)).toBeGreaterThanOrEqual(0)
     wrapper.unmount()
   })
 
@@ -255,7 +255,7 @@ describe('VisionPet', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('正在复制数据集文件')
-    expect(useVisionPetStore().progress).toBe(64)
+    expect(useVisionPetStore().tasks[0].progress).toBe(64)
     expect(wrapper.find('[role="progressbar"]').exists()).toBe(true)
 
     task.finish({ message: '派生版本已完成', progress: 100, duration: 1200 })
@@ -281,15 +281,43 @@ describe('VisionPet', () => {
     const secondTask = beginVisionPetTask({ message: '正在执行检测' })
     await wrapper.vm.$nextTick()
     expect(useVisionPetStore().state).toBe('working')
+    expect(wrapper.text()).toContain('正在准备数据')
     expect(wrapper.text()).toContain('正在执行检测')
+    expect(wrapper.findAll('.pet-message')).toHaveLength(2)
 
     firstTask.finish()
     await wrapper.vm.$nextTick()
     expect(useVisionPetStore().state).toBe('working')
+    expect(wrapper.text()).not.toContain('正在准备数据')
     expect(wrapper.text()).toContain('正在执行检测')
+    expect(wrapper.findAll('.pet-message')).toHaveLength(1)
 
     secondTask.finish()
     expect(useVisionPetStore().state).toBe('idle')
+    wrapper.unmount()
+  })
+
+  it('shows the latest two task bubbles and summarizes additional concurrent tasks', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(VisionPet, { global: { plugins: [pinia] } })
+    await wrapper.vm.$nextTick()
+    await Promise.resolve()
+
+    const firstTask = beginVisionPetTask({ message: '任务一' })
+    const secondTask = beginVisionPetTask({ message: '任务二' })
+    const thirdTask = beginVisionPetTask({ message: '任务三' })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).not.toContain('任务一')
+    expect(wrapper.text()).toContain('任务二')
+    expect(wrapper.text()).toContain('任务三')
+    expect(wrapper.text()).toContain('还有 1 个任务正在执行')
+    expect(wrapper.findAll('.pet-message')).toHaveLength(2)
+
+    firstTask.finish()
+    secondTask.finish()
+    thirdTask.finish()
     wrapper.unmount()
   })
 

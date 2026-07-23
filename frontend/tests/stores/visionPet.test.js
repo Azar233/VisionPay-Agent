@@ -41,4 +41,28 @@ describe('visionPet preferences', () => {
     expect(store.visible).toBe(true)
     expect(store.sizePercent).toBe(VISION_PET_DEFAULT_SIZE)
   })
+
+  it('tracks concurrent tasks and aggregates the highest-priority visual state', () => {
+    const store = useVisionPetStore()
+
+    store.startTask({ id: 'task-a', message: '任务 A', state: 'working' })
+    store.startTask({ id: 'task-b', message: '任务 B', state: 'working', progress: 20 })
+
+    expect(store.tasks).toHaveLength(2)
+    expect(store.state).toBe('working')
+
+    store.notify({ state: 'error', message: '系统异常' })
+    expect(store.state).toBe('error')
+
+    store.clearMessage()
+    expect(store.state).toBe('working')
+
+    store.updateTask('task-b', { progress: 75 })
+    expect(store.tasks.find((task) => task.id === 'task-b')?.progress).toBe(75)
+
+    store.finishTask('task-a')
+    store.finishTask('task-b')
+    expect(store.tasks).toHaveLength(0)
+    expect(store.state).toBe('idle')
+  })
 })

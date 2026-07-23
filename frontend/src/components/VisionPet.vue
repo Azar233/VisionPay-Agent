@@ -6,7 +6,7 @@
     data-testid="vision-pet"
     :class="{
       'is-dragging': dragging,
-      'has-message': Boolean(petStore.message),
+      'has-message': bubbleItems.length > 0,
       'is-checkout': petStore.state === 'checkout',
       'is-error': petStore.state === 'error',
     }"
@@ -23,9 +23,9 @@
   >
     <Transition name="pet-bubble">
       <div
-        v-if="petStore.message"
-        ref="petMessage"
-        class="pet-message"
+        v-if="bubbleItems.length"
+        ref="petMessageList"
+        class="pet-message-list"
         :class="{
           'is-positioned': hasBubblePosition,
           'opens-right': bubblePlacement.horizontal === 'right',
@@ -33,23 +33,33 @@
         }"
         :style="bubblePositionStyle"
       >
-        <span class="pet-status-dot" aria-hidden="true" />
-        <div class="pet-message-content">
-          <div class="pet-message-heading">
-            <span>{{ petStore.message }}</span>
-            <strong v-if="petProgress !== null">{{ petProgress }}%</strong>
+        <div
+          v-for="item in bubbleItems"
+          :key="item.id"
+          class="pet-message"
+          :class="[`is-${item.state}`]"
+        >
+          <span class="pet-status-dot" aria-hidden="true" />
+          <div class="pet-message-content">
+            <div class="pet-message-heading">
+              <span>{{ item.message }}</span>
+              <strong v-if="item.progress !== null">{{ item.progress }}%</strong>
+            </div>
+            <div
+              v-if="item.progress !== null"
+              class="pet-progress"
+              role="progressbar"
+              :aria-label="`${item.message}进度`"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-valuenow="item.progress"
+            >
+              <span :style="{ width: `${item.progress}%` }" />
+            </div>
           </div>
-          <div
-            v-if="petProgress !== null"
-            class="pet-progress"
-            role="progressbar"
-            aria-label="任务进度"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            :aria-valuenow="petProgress"
-          >
-            <span :style="{ width: `${petProgress}%` }" />
-          </div>
+        </div>
+        <div v-if="hiddenTaskCount > 0" class="pet-task-summary">
+          还有 {{ hiddenTaskCount }} 个任务正在执行
         </div>
       </div>
     </Transition>
@@ -79,9 +89,10 @@ const MOBILE_WIDTH = 109
 const MOBILE_HEIGHT = 146
 const MOBILE_STAGE_WIDTH = 90
 const MOBILE_STAGE_HEIGHT = 128
+const MAX_VISIBLE_TASKS = 2
 const petStore = useVisionPetStore()
 const petRoot = ref(null)
-const petMessage = ref(null)
+const petMessageList = ref(null)
 const dragging = ref(false)
 const position = ref({ x: 0, y: 0 })
 const activeFrame = ref(0)
@@ -145,13 +156,51 @@ const bubblePositionStyle = computed(() =>
 )
 const hasBubblePosition = computed(() => bubblePosition.value !== null)
 
-// Only dataset background operations provide a numeric progress value.
-// Treat missing legacy/HMR state as no progress so normal chat only shows text.
-const petProgress = computed(() =>
-  petStore.showProgress && Number.isFinite(petStore.progress)
-    ? Math.max(0, Math.min(100, Math.round(petStore.progress)))
-    : null,
+function messageProgress(item) {
+  return item.showProgress && Number.isFinite(item.progress)
+    ? Math.max(0, Math.min(100, Math.round(item.progress)))
+    : null
+}
+
+const visibleTasks = computed(() => petStore.tasks.slice(-MAX_VISIBLE_TASKS))
+const hasPriorityNotification = computed(
+  () =>
+    Boolean(petStore.message) &&
+    (petStore.notificationState === 'error' || petStore.notificationState === 'checkout'),
 )
+const bubbleItems = computed(() => {
+  const taskItems = visibleTasks.value.map((task) => ({
+    ...task,
+    progress: messageProgress(task),
+  }))
+  if (petStore.tasks.length) {
+    if (!hasPriorityNotification.value) return taskItems
+    return [
+      {
+        id: 'notification',
+        state: petStore.notificationState,
+        message: petStore.message,
+        progress: messageProgress(petStore),
+      },
+      ...taskItems.slice(-1),
+    ]
+  }
+  if (!petStore.message) return []
+  return [
+    {
+      id: 'notification',
+      state: petStore.notificationState,
+      message: petStore.message,
+      progress: messageProgress(petStore),
+    },
+  ]
+})
+const visibleTaskCount = computed(() =>
+  petStore.tasks.length && hasPriorityNotification.value
+    ? Math.min(1, petStore.tasks.length)
+    : Math.min(MAX_VISIBLE_TASKS, petStore.tasks.length),
+)
+const hiddenTaskCount = computed(() => Math.max(0, petStore.tasks.length - visibleTaskCount.value))
 
 const spriteStyle = computed(() => {
   const isWorking = petStore.state === 'working'
@@ -170,11 +219,16 @@ const stateLabels = {
   error: '报错',
 }
 
-const ariaLabel = computed(() =>
-  petStore.message
-    ? `Vico：${petStore.message}${petProgress.value !== null ? `，进度 ${petProgress.value}%` : ''}`
-    : `Vico，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`,
-)
+const ariaLabel = computed(() => {
+  if (!bubbleItems.value.length) {
+    return `Vico，当前为${stateLabels[petStore.state] || stateLabels.idle}状态，可拖动`
+  }
+  const messages = bubbleItems.value.map(
+    (item) => `${item.message}${item.progress !== null ? `，进度 ${item.progress}%` : ''}`,
+  )
+  if (hiddenTaskCount.value) messages.push(`还有 ${hiddenTaskCount.value} 个任务正在执行`)
+  return `Vico：${messages.join('；')}`
+})
 
 function petBounds() {
   const rect = petRoot.value?.getBoundingClientRect()
@@ -199,8 +253,8 @@ function clampPosition(nextPosition) {
 }
 
 function updateBubblePosition() {
-  const bubble = petMessage.value
-  if (!bubble || !petStore.message) {
+  const bubble = petMessageList.value
+  if (!bubble || !bubbleItems.value.length) {
     bubblePosition.value = null
     return
   }
@@ -252,9 +306,9 @@ function updateBubblePosition() {
 
 function observeBubbleSize() {
   bubbleResizeObserver?.disconnect()
-  if (!petMessage.value || typeof ResizeObserver === 'undefined') return
+  if (!petMessageList.value || typeof ResizeObserver === 'undefined') return
   bubbleResizeObserver = new ResizeObserver(updateBubblePosition)
-  bubbleResizeObserver.observe(petMessage.value)
+  bubbleResizeObserver.observe(petMessageList.value)
 }
 
 function savePosition() {
@@ -348,6 +402,18 @@ function scheduleMessageDismiss(duration = 4200) {
 
 function handleTaskEvent(event) {
   const detail = event.detail || {}
+  if (detail.action === 'task-start') {
+    petStore.startTask(detail.task)
+    return
+  }
+  if (detail.action === 'task-update') {
+    petStore.updateTask(detail.id, detail.update)
+    return
+  }
+  if (detail.action === 'task-finish') {
+    petStore.finishTask(detail.id)
+    return
+  }
   petStore.notify(detail)
   scheduleMessageDismiss(Number.isFinite(detail.duration) ? detail.duration : 4200)
 }
@@ -479,15 +545,22 @@ onBeforeUnmount(() => {
   filter: blur(5px);
 }
 
-.pet-message {
+.pet-message-list {
   position: absolute;
   right: 10px;
   bottom: var(--pet-bubble-bottom, 164px);
+  display: grid;
+  gap: 7px;
   max-width: min(260px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.pet-message {
   box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
+  width: min(260px, calc(100vw - 32px));
   padding: 10px 13px;
   color: $text-primary;
   background: color-mix(in srgb, var(--vp-surface) 92%, transparent);
@@ -499,19 +572,18 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
-  pointer-events: none;
 }
 
-.pet-message.opens-right {
+.pet-message-list.opens-right .pet-message {
   border-radius: 14px 14px 14px 4px;
 }
-.pet-message.opens-below {
+.pet-message-list.opens-below .pet-message {
   border-radius: 4px 14px 14px 14px;
 }
-.pet-message.opens-right.opens-below {
+.pet-message-list.opens-right.opens-below .pet-message {
   border-radius: 14px 4px 14px 14px;
 }
-.pet-message.is-positioned {
+.pet-message-list.is-positioned {
   right: auto;
   bottom: auto;
 }
@@ -561,17 +633,35 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-success) 16%, transparent);
 }
 
-.vision-pet.is-checkout .pet-message {
+.vision-pet.is-checkout .pet-message,
+.pet-message.is-checkout {
   border-color: color-mix(in srgb, var(--vp-success) 42%, var(--vp-border));
 }
 
-.vision-pet.is-error .pet-message {
+.vision-pet.is-error .pet-message,
+.pet-message.is-error {
   border-color: color-mix(in srgb, var(--vp-danger) 42%, var(--vp-border));
 }
 
-.vision-pet.is-error .pet-status-dot {
+.vision-pet.is-error .pet-status-dot,
+.pet-message.is-error .pet-status-dot {
   background: $danger-color;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--vp-danger) 16%, transparent);
+}
+
+.pet-task-summary {
+  justify-self: end;
+  padding: 5px 9px;
+  border: 1px solid $border-color;
+  border-radius: 999px;
+  color: $text-secondary;
+  background: color-mix(in srgb, var(--vp-surface) 94%, transparent);
+  box-shadow: $shadow-sm;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .pet-bubble-enter-active,
@@ -587,7 +677,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .pet-message {
+  .pet-message-list {
     right: 4px;
   }
 }
