@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.config.settings import settings
 from app.database.session import get_db
-from app.entity.schemas import AgentCustomInstructionsUpdate, ChangePassword, UserUpdate
+from app.entity.schemas import (
+    AgentCustomInstructionsUpdate,
+    ChangePassword,
+    CustomerModePassword,
+    UserUpdate,
+)
 from app.services.user_service import user_service
 
 router = APIRouter(prefix="/api/user", tags=["用户管理"])
@@ -150,6 +155,40 @@ def change_password(
         current_user.id,
         old_password=request.old_password,
         new_password=request.new_password,
+    )
+
+
+@router.get("/customer-mode-password", summary="读取顾客展示模式退出密码状态")
+def get_customer_mode_password_status(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return user_service.get_customer_mode_password_status(db, int(current_user.id))
+
+
+@router.put("/customer-mode-password", summary="设置顾客展示模式退出密码")
+def update_customer_mode_password(
+    request: CustomerModePassword,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return user_service.update_customer_mode_password(
+        db,
+        int(current_user.id),
+        password=request.password,
+    )
+
+
+@router.post("/customer-mode-password/verify", summary="验证顾客展示模式退出密码")
+def verify_customer_mode_password(
+    request: CustomerModePassword,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return user_service.verify_customer_mode_password(
+        db,
+        int(current_user.id),
+        password=request.password,
     )
 
 

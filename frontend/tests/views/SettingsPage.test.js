@@ -4,7 +4,13 @@ import ElementPlus from 'element-plus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SettingsPage from '@/views/SettingsPage.vue'
-import { getAgentInstructions, updateAgentInstructions, updateProfile } from '@/api/user'
+import {
+  getAgentInstructions,
+  getCustomerModePasswordStatus,
+  updateAgentInstructions,
+  updateCustomerModePassword,
+  updateProfile,
+} from '@/api/user'
 
 vi.mock('@/api/auth', () => ({
   getUserInfoApi: vi.fn().mockResolvedValue({
@@ -22,7 +28,9 @@ vi.mock('@/api/auth', () => ({
 vi.mock('@/api/user', () => ({
   changePassword: vi.fn(),
   getAgentInstructions: vi.fn(),
+  getCustomerModePasswordStatus: vi.fn(),
   updateAgentInstructions: vi.fn(),
+  updateCustomerModePassword: vi.fn(),
   updateProfile: vi.fn(),
   uploadAvatar: vi.fn(),
 }))
@@ -47,6 +55,15 @@ describe('SettingsPage Agent 自定义指令', () => {
         avatar: '',
         created_at: '2026-01-01T00:00:00',
       },
+    })
+    getCustomerModePasswordStatus.mockReset().mockResolvedValue({
+      configured: false,
+      uses_default: true,
+    })
+    updateCustomerModePassword.mockReset().mockResolvedValue({
+      message: '顾客展示模式退出密码已更新',
+      configured: true,
+      uses_default: false,
     })
   })
 
@@ -95,5 +112,28 @@ describe('SettingsPage Agent 自定义指令', () => {
         email: 'operator@example.com',
       }),
     )
+  })
+
+  it('sets the six-digit customer mode exit password from account security', async () => {
+    const wrapper = mount(SettingsPage, {
+      global: { plugins: [createPinia(), ElementPlus] },
+    })
+    await flushPromises()
+
+    const securityTab = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('账号安全'))
+    await securityTab.trigger('click')
+
+    await wrapper.get('input[placeholder="请输入六位数字"]').setValue('654321')
+    await wrapper.get('input[placeholder="再次输入六位数字"]').setValue('654321')
+    const save = wrapper
+      .findAll('button')
+      .find((button) => button.text().trim() === '保存顾客模式密码')
+    await save.trigger('click')
+    await flushPromises()
+
+    expect(updateCustomerModePassword).toHaveBeenCalledWith('654321')
+    expect(wrapper.text()).toContain('已设置专用密码')
   })
 })

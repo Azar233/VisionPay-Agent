@@ -7,9 +7,15 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import VisionPet from '@/components/VisionPet.vue'
+import { useCustomerModeStore } from '@/stores/customerMode'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
-const showVisionPet = computed(() => route.meta.hideVisionPet !== true)
+const userStore = useUserStore()
+const customerModeStore = useCustomerModeStore()
+const showVisionPet = computed(
+  () => route.meta.hideVisionPet !== true && !customerModeStore.isActiveFor(userStore.user?.id),
+)
 
 // 根组件仅作为路由出口
 </script>

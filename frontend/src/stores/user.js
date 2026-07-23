@@ -5,6 +5,7 @@
 import { defineStore } from 'pinia'
 import { loginApi, getUserInfoApi } from '@/api/auth'
 import { useAgentStore } from '@/stores/agent'
+import { useCustomerModeStore } from '@/stores/customerMode'
 
 const TOKEN_KEY = 'vp_agent_token'
 const USER_KEY = 'vp_agent_user'
@@ -47,6 +48,7 @@ export const useUserStore = defineStore('user', {
       const res = await loginApi(credentials)
       // 每次新的登录会话都从空白对话开始，不恢复上一个账号或上次登录的活动会话。
       useAgentStore().clear()
+      useCustomerModeStore().exit()
       // 保存 Token
       this.token = res.access_token
       localStorage.setItem(TOKEN_KEY, res.access_token)
@@ -72,6 +74,7 @@ export const useUserStore = defineStore('user', {
      */
     logout() {
       useAgentStore().clear()
+      useCustomerModeStore().exit()
       this.token = ''
       this.user = null
       localStorage.removeItem(TOKEN_KEY)

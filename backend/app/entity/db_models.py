@@ -35,6 +35,11 @@ class User(Base):
     nickname = Column(String(50), nullable=True, comment="展示昵称，可重复、可修改")
     email = Column(String(100), unique=True, nullable=False, index=True, comment="邮箱")
     hashed_password = Column(String(255), nullable=False, comment="加密密码")
+    customer_mode_password_hash = Column(
+        String(255),
+        nullable=True,
+        comment="顾客展示模式退出密码哈希；为空时使用系统默认密码",
+    )
     phone = Column(String(20), nullable=True, comment="手机号")
     avatar = Column(String(500), nullable=True, comment="头像 URL")
     agent_custom_instructions = Column(

@@ -20,6 +20,15 @@
     </div>
 
     <div class="header-right">
+      <el-button
+        v-if="canEnterCustomerMode"
+        class="customer-mode-entry"
+        type="primary"
+        :icon="FullScreen"
+        @click="enterCustomerMode"
+      >
+        进入顾客模式
+      </el-button>
       <el-dropdown
         trigger="click"
         placement="bottom-end"
@@ -58,18 +67,36 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDown, InfoFilled, Moon, Sunny, User, SwitchButton } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  FullScreen,
+  InfoFilled,
+  Moon,
+  Sunny,
+  SwitchButton,
+  User,
+} from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
+import { useCustomerModeStore } from '@/stores/customerMode'
 import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const customerModeStore = useCustomerModeStore()
 const { isDark, themeLabel, toggleTheme } = useTheme()
 
 const pageTitle = computed(() => route.meta?.title || 'VisionPay')
 const pageDescription = computed(() => route.meta?.description || '')
+const canEnterCustomerMode = computed(
+  () => route.name === 'CustomerCheckout' && !customerModeStore.isActiveFor(userStore.user?.id),
+)
+
+async function enterCustomerMode() {
+  customerModeStore.enter(userStore.user?.id)
+  await document.documentElement.requestFullscreen?.().catch(() => {})
+}
 
 function handleCommand(command) {
   if (command === 'theme') {
@@ -154,6 +181,17 @@ function handleCommand(command) {
 .user-info {
   display: flex;
   align-items: center;
+}
+
+.header-right {
+  gap: 12px;
+}
+
+.customer-mode-entry {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 700;
 }
 
 .user-info {

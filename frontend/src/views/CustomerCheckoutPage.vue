@@ -1,12 +1,17 @@
 <template>
-  <div class="checkout-page">
+  <div :class="['checkout-page', { 'is-customer-mode': customerModeActive }]">
     <header class="checkout-header">
       <div class="brand">
         <span class="brand-mark"><img src="/favicon.svg" alt="VisionPay" /></span>
         <div><strong>VisionPay</strong><span>自助视觉结算</span></div>
       </div>
       <div class="header-actions">
-        <button type="button" class="history-button" @click="router.push('/checkout/history')">
+        <button
+          v-if="!customerModeActive"
+          type="button"
+          class="history-button"
+          @click="router.push('/checkout/history')"
+        >
           <el-icon><List /></el-icon>订单历史
         </button>
         <div class="header-status"><i></i><span>设备就绪</span></div>
@@ -207,8 +212,13 @@ import {
 } from '@element-plus/icons-vue'
 import { calculateCheckoutApi, createMockPaymentOrderApi, detectCheckoutApi } from '@/api/checkout'
 import IpCameraDetectionPanel from '@/components/IpCameraDetectionPanel.vue'
+import { useCustomerModeStore } from '@/stores/customerMode'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const userStore = useUserStore()
+const customerModeStore = useCustomerModeStore()
+const customerModeActive = computed(() => customerModeStore.isActiveFor(userStore.user?.id))
 const sourceMode = ref('camera')
 const uploadInputRef = ref(null)
 const selectedUploadFile = ref(null)
@@ -547,6 +557,10 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid $border-color;
   background: $surface-color;
   box-shadow: $shadow-sm;
+}
+
+.checkout-page.is-customer-mode .checkout-header {
+  padding-right: 220px;
 }
 
 .brand {

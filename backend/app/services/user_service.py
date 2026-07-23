@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.security import create_access_token, hash_password, verify_password
 from app.entity.db_models import Role, User, UserRole
 
+DEFAULT_CUSTOMER_MODE_PASSWORD = "123456"
+
 
 class UserService:
     """用户服务"""
@@ -242,6 +244,38 @@ class UserService:
         user.hashed_password = hash_password(new_password)
         db.commit()
         return {"message": "密码修改成功"}
+
+    @staticmethod
+    def get_customer_mode_password_status(db: Session, user_id: int) -> dict:
+        user = UserService.get_user_by_id(db, user_id)
+        configured = bool(user.customer_mode_password_hash)
+        return {
+            "configured": configured,
+            "uses_default": not configured,
+        }
+
+    @staticmethod
+    def update_customer_mode_password(db: Session, user_id: int, *, password: str) -> dict:
+        user = UserService.get_user_by_id(db, user_id)
+        user.customer_mode_password_hash = hash_password(password)
+        db.commit()
+        return {
+            "message": "顾客展示模式退出密码已更新",
+            "configured": True,
+            "uses_default": False,
+        }
+
+    @staticmethod
+    def verify_customer_mode_password(db: Session, user_id: int, *, password: str) -> dict:
+        user = UserService.get_user_by_id(db, user_id)
+        password_valid = (
+            verify_password(password, user.customer_mode_password_hash)
+            if user.customer_mode_password_hash
+            else password == DEFAULT_CUSTOMER_MODE_PASSWORD
+        )
+        if not password_valid:
+            raise HTTPException(status_code=400, detail="退出密码不正确")
+        return {"valid": True}
 
 
 # 全局单例

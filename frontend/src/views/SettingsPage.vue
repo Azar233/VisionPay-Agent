@@ -295,6 +295,61 @@
               </ul>
             </aside>
           </div>
+
+          <div class="customer-mode-password-card">
+            <div class="customer-mode-password-copy">
+              <div>
+                <strong>顾客模式退出密码</strong>
+                <span>用于实体结算机退出全屏顾客界面，仅支持六位数字。</span>
+              </div>
+              <span
+                :class="['password-status', { configured: customerModePasswordStatus.configured }]"
+              >
+                {{
+                  customerModePasswordStatus.configured
+                    ? '已设置专用密码'
+                    : '当前使用默认密码 123456'
+                }}
+              </span>
+            </div>
+            <el-form
+              ref="customerModePasswordFormRef"
+              :model="customerModePasswordForm"
+              :rules="customerModePasswordRules"
+              label-position="top"
+              class="customer-mode-password-form"
+            >
+              <el-form-item label="新的六位数字密码" prop="password">
+                <el-input
+                  v-model="customerModePasswordForm.password"
+                  type="password"
+                  show-password
+                  inputmode="numeric"
+                  maxlength="6"
+                  autocomplete="new-password"
+                  placeholder="请输入六位数字"
+                />
+              </el-form-item>
+              <el-form-item label="确认退出密码" prop="confirm_password">
+                <el-input
+                  v-model="customerModePasswordForm.confirm_password"
+                  type="password"
+                  show-password
+                  inputmode="numeric"
+                  maxlength="6"
+                  autocomplete="new-password"
+                  placeholder="再次输入六位数字"
+                />
+              </el-form-item>
+              <el-button
+                type="primary"
+                :loading="customerModePasswordLoading"
+                @click="saveCustomerModePassword"
+              >
+                保存顾客模式密码
+              </el-button>
+            </el-form>
+          </div>
         </section>
 
         <section
@@ -369,7 +424,9 @@ import { getUserInfoApi } from '@/api/auth'
 import {
   changePassword as changePasswordApi,
   getAgentInstructions as getAgentInstructionsApi,
+  getCustomerModePasswordStatus as getCustomerModePasswordStatusApi,
   updateAgentInstructions as updateAgentInstructionsApi,
+  updateCustomerModePassword as updateCustomerModePasswordApi,
   updateProfile as updateProfileApi,
   uploadAvatar as uploadAvatarApi,
 } from '@/api/user'
@@ -380,8 +437,10 @@ const userStore = useUserStore()
 const petStore = useVisionPetStore()
 const profileFormRef = ref()
 const passwordFormRef = ref()
+const customerModePasswordFormRef = ref()
 const profileLoading = ref(false)
 const passwordLoading = ref(false)
+const customerModePasswordLoading = ref(false)
 const avatarLoading = ref(false)
 const instructionsLoading = ref(false)
 const activeSettingsSection = ref('profile')
@@ -396,6 +455,8 @@ const profileForm = reactive({
   created_at: null,
 })
 const passwordForm = reactive({ old_password: '', new_password: '', confirm_password: '' })
+const customerModePasswordForm = reactive({ password: '', confirm_password: '' })
+const customerModePasswordStatus = reactive({ configured: false, uses_default: true })
 const avatarInitial = computed(
   () => (profileForm.nickname || profileForm.username)?.charAt(0)?.toUpperCase() || 'U',
 )
@@ -456,6 +517,26 @@ const passwordRules = {
     },
   ],
 }
+const customerModePasswordRules = {
+  password: [
+    { required: true, message: '请输入退出密码', trigger: 'blur' },
+    {
+      pattern: /^\d{6}$/,
+      message: '退出密码必须是六位数字',
+      trigger: ['blur', 'change'],
+    },
+  ],
+  confirm_password: [
+    { required: true, message: '请再次输入退出密码', trigger: 'blur' },
+    {
+      validator: (_rule, value, callback) =>
+        value !== customerModePasswordForm.password
+          ? callback(new Error('两次输入的退出密码不一致'))
+          : callback(),
+      trigger: ['blur', 'change'],
+    },
+  ],
+}
 
 function formatDate(value) {
   if (!value) return '—'
@@ -509,6 +590,14 @@ async function loadAgentInstructions() {
     ElMessage.error('自定义指令加载失败')
   } finally {
     instructionsLoading.value = false
+  }
+}
+
+async function loadCustomerModePasswordStatus() {
+  try {
+    Object.assign(customerModePasswordStatus, await getCustomerModePasswordStatusApi())
+  } catch {
+    ElMessage.error('顾客模式密码状态加载失败')
   }
 }
 
@@ -604,7 +693,23 @@ async function savePassword() {
   }
 }
 
-onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
+async function saveCustomerModePassword() {
+  if (!(await customerModePasswordFormRef.value.validate().catch(() => false))) return
+  customerModePasswordLoading.value = true
+  try {
+    const data = await updateCustomerModePasswordApi(customerModePasswordForm.password)
+    Object.assign(customerModePasswordStatus, data)
+    Object.assign(customerModePasswordForm, { password: '', confirm_password: '' })
+    customerModePasswordFormRef.value.clearValidate()
+    ElMessage.success(data.message || '顾客模式退出密码已更新')
+  } finally {
+    customerModePasswordLoading.value = false
+  }
+}
+
+onMounted(() =>
+  Promise.all([loadProfile(), loadAgentInstructions(), loadCustomerModePasswordStatus()]),
+)
 </script>
 
 <style lang="scss" scoped>
@@ -1049,6 +1154,69 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   }
 }
 
+.customer-mode-password-card {
+  max-width: 888px;
+  margin-top: 28px;
+  padding: 22px;
+  border: 1px solid $border-color;
+  border-radius: 14px;
+  background: $surface-muted;
+}
+
+.customer-mode-password-copy {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  strong {
+    color: $text-primary;
+    font-size: 15px;
+  }
+
+  span {
+    color: $text-secondary;
+    font-size: 12px;
+  }
+
+  .password-status {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    border-radius: 999px;
+    color: $warning-color;
+    background: var(--vp-warning-bg);
+    font-weight: 600;
+
+    &.configured {
+      color: $success-color;
+      background: var(--vp-success-bg);
+    }
+  }
+}
+
+.customer-mode-password-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 16px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
+
+  > .el-button {
+    min-height: 40px;
+    margin: 0;
+  }
+}
+
 .pet-settings-grid {
   display: grid;
   grid-template-columns: 280px minmax(0, 560px);
@@ -1239,6 +1407,13 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   .pet-settings-grid {
     grid-template-columns: 1fr;
   }
+  .customer-mode-password-form {
+    grid-template-columns: 1fr;
+
+    :deep(.el-form-item) {
+      margin-bottom: 4px;
+    }
+  }
   .pet-preview {
     min-height: 210px;
   }
@@ -1280,6 +1455,9 @@ onMounted(() => Promise.all([loadProfile(), loadAgentInstructions()]))
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .customer-mode-password-copy {
+    flex-direction: column;
   }
   .pet-controls {
     padding: 0 16px;

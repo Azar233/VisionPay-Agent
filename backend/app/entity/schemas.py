@@ -100,6 +100,18 @@ class ChangePassword(ProjectBaseModel):
     new_password: str = Field(..., min_length=6, max_length=100, description="新密码")
 
 
+class CustomerModePassword(ProjectBaseModel):
+    """设置或验证顾客展示模式的六位数字退出密码。"""
+
+    password: str = Field(
+        ...,
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        description="六位数字退出密码",
+    )
+
+
 # --- 角色权限 ---
 
 class RoleResponse(ProjectBaseModel):
