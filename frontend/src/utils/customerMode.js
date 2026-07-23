@@ -42,6 +42,13 @@ export function resolveCustomerModeNavigation(
   token = globalThis.localStorage?.getItem('vp_agent_token'),
   active = isPersistedCustomerModeActive(),
 ) {
-  if (!token || !active || CUSTOMER_MODE_ALLOWED_PATHS.has(to.path)) return true
+  if (
+    !token ||
+    !active ||
+    to.meta?.customerModeAllowed === true ||
+    CUSTOMER_MODE_ALLOWED_PATHS.has(to.path)
+  ) {
+    return true
+  }
   return '/checkout'
 }

@@ -104,7 +104,12 @@ const routes = [
     path: '/mock-pay/:token',
     name: 'MockPayment',
     component: () => import('@/views/MockPaymentPage.vue'),
-    meta: { title: '模拟付款', requiresAuth: false },
+    meta: {
+      title: '模拟付款',
+      requiresAuth: false,
+      hideVisionPet: true,
+      customerModeAllowed: true,
+    },
   },
   {
     path: '/:pathMatch(.*)*',

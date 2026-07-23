@@ -17,6 +17,12 @@ describe('customer mode navigation lock', () => {
 
     expect(resolveCustomerModeNavigation({ path: '/checkout' })).toBe(true)
     expect(resolveCustomerModeNavigation({ path: '/checkout/payment' })).toBe(true)
+    expect(
+      resolveCustomerModeNavigation({
+        path: '/mock-pay/payment-token',
+        meta: { customerModeAllowed: true },
+      }),
+    ).toBe(true)
     expect(resolveCustomerModeNavigation({ path: '/dashboard' })).toBe('/checkout')
     expect(resolveCustomerModeNavigation({ path: '/checkout/history' })).toBe('/checkout')
   })
